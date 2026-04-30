@@ -7,7 +7,16 @@ import { Table, type Column } from "@/components/ui/Table";
 
 type Row = Student & Record<string, unknown>;
 
-export function StudentTable({ students, loading }: { students: Student[]; loading?: boolean }) {
+export function StudentTable({
+  students,
+  loading,
+  profileBasePath,
+}: {
+  students: Student[];
+  loading?: boolean;
+  /** e.g. `/admin/students` — links become `{profileBasePath}/{id}` */
+  profileBasePath: string;
+}) {
   const columns: Column<Row>[] = [
     { key: "studentNumber", header: "Student #" },
     { key: "fullName", header: "Name" },
@@ -20,7 +29,7 @@ export function StudentTable({ students, loading }: { students: Student[]; loadi
       key: "id",
       header: "",
       render: (r) => (
-        <Link className="text-brand underline" href={`/students/${r.id}`}>
+        <Link className="text-brand underline" href={`${profileBasePath.replace(/\/$/, "")}/${r.id}`}>
           View
         </Link>
       ),

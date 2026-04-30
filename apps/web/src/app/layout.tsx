@@ -5,6 +5,11 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "Uganda CBC School Management",
   description: "O-Level CBC & A-Level UNEB — students, fees, assessments",
+  icons: {
+    icon: "/images/Logo.jpeg",
+    shortcut: "/images/Logo.jpeg",
+    apple: "/images/Logo.jpeg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/authStore";
 export function Providers({ children }: { children: React.ReactNode }) {
   const hydrate = useAuthStore((s) => s.hydrate);
   useEffect(() => {
-    hydrate();
+    void hydrate();
   }, [hydrate]);
   return <>{children}</>;
 }

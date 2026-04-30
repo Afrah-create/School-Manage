@@ -1,52 +1,144 @@
-import type { Role, UserPublic } from "@uganda-cbc-sms/shared";
+import type { Role } from "@uganda-cbc-sms/shared";
 import { create } from "zustand";
-import { clearAuth, getStoredUser, getToken, setAuth } from "@/lib/auth";
+import {
+  deleteSmsTokenCookie,
+  getSmsTokenFromCookie,
+  setSmsTokenCookie,
+} from "@/lib/cookies";
+import { jwtCookieMaxAge } from "@/lib/jwtPayload";
 
-type AuthState = {
-  token: string | null;
-  user: UserPublic | null;
-  hydrated: boolean;
-  setSession: (token: string, user: UserPublic) => void;
-  logout: () => void;
-  hydrate: () => void;
-  hasRole: (roles: Role | Role[]) => boolean;
+export type AuthUser = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: Role;
 };
 
-function parseUser(u: unknown): UserPublic | null {
-  if (!u || typeof u !== "object") return null;
-  const o = u as Record<string, unknown>;
+type AuthState = {
+  user: AuthUser | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  hydrated: boolean;
+  login: (user: AuthUser, token: string) => void;
+  logout: () => void;
+  hydrate: () => Promise<void>;
+  setToken: (token: string | null) => void;
+  hasRole: (role: Role | Role[]) => boolean;
+};
+
+const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
+
+function parseUser(data: unknown): AuthUser | null {
+  if (!data || typeof data !== "object") return null;
+  const o = data as Record<string, unknown>;
+  const role = o.role as string | undefined;
   if (
     typeof o.id === "string" &&
     typeof o.email === "string" &&
-    typeof o.role === "string" &&
-    typeof (o as { fullName?: string }).fullName === "string"
+    typeof o.fullName === "string" &&
+    typeof role === "string"
   ) {
-    return o as unknown as UserPublic;
+    return {
+      id: o.id,
+      fullName: o.fullName,
+      email: o.email,
+      role: role as Role,
+    };
   }
   return null;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null,
   user: null,
+  token: null,
+  isAuthenticated: false,
   hydrated: false,
-  setSession: (token, user) => {
-    setAuth(token, JSON.stringify(user));
-    set({ token, user });
+
+  hasRole: (role) => {
+    const u = get().user;
+    if (!u) return false;
+    const roles = Array.isArray(role) ? role : [role];
+    return roles.includes(u.role);
   },
+
+  setToken: (token) => set({ token }),
+
+  login: (user, token) => {
+    const maxAge = jwtCookieMaxAge(token);
+    setSmsTokenCookie(token, maxAge);
+    set({
+      user,
+      token,
+      isAuthenticated: true,
+      hydrated: true,
+    });
+  },
+
   logout: () => {
-    clearAuth();
-    set({ token: null, user: null });
+    deleteSmsTokenCookie();
+    set({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      hydrated: true,
+    });
   },
-  hydrate: () => {
-    const t = getToken();
-    const u = parseUser(getStoredUser());
-    set({ token: t, user: u, hydrated: true });
-  },
-  hasRole: (roles) => {
-    const { user } = get();
-    if (!user) return false;
-    const r = Array.isArray(roles) ? roles : [roles];
-    return r.includes(user.role as Role);
+
+  hydrate: async () => {
+    const token = getSmsTokenFromCookie();
+    if (!token) {
+      set({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        hydrated: true,
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch(`${baseUrl.replace(/\/$/, "")}/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        deleteSmsTokenCookie();
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          hydrated: true,
+        });
+        return;
+      }
+      const envelope = (await res.json()) as {
+        success?: boolean;
+        data?: unknown;
+      };
+      const user = parseUser(envelope.data);
+      if (!user || envelope.success === false) {
+        deleteSmsTokenCookie();
+        set({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          hydrated: true,
+        });
+        return;
+      }
+      set({
+        token,
+        user,
+        isAuthenticated: true,
+        hydrated: true,
+      });
+    } catch {
+      deleteSmsTokenCookie();
+      set({
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        hydrated: true,
+      });
+    }
   },
 }));
