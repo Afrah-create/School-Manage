@@ -16,13 +16,13 @@ export function Button({
   ...rest
 }: Props) {
   const base =
-    "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50";
+    "inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-medium transition-ui focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50";
   const styles =
     variant === "primary"
       ? "bg-brand text-white hover:bg-brand-dark"
       : variant === "secondary"
         ? "border border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground"
-        : "text-brand hover:bg-accent hover:text-accent-foreground dark:text-brand-light dark:hover:bg-accent";
+        : "text-foreground hover:bg-accent hover:text-accent-foreground";
   return (
     <button
       type={type}

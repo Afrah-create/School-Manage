@@ -32,4 +32,6 @@ export type DashboardMetric = {
   label: string;
   value: string;
   helper?: string;
+  delta?: string;
+  deltaTone?: "positive" | "negative" | "neutral";
 };

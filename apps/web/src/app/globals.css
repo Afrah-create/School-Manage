@@ -17,10 +17,16 @@
   --sidebar-border: #e2e8f0;
   --accent: #f1f5f9;
   --accent-foreground: #0f172a;
-  --nav-active: #2563eb;
-  --nav-active-foreground: #ffffff;
+  --nav-active: #dbeafe;
+  --nav-active-foreground: #0f172a;
   --ring: #1b6b3a;
   --ring-offset: #f8fafc;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --sidebar-width: 256px;
+  --header-height: 56px;
+  --content-max-w: 1280px;
 }
 
 .dark {
@@ -36,16 +42,21 @@
   --sidebar-border: #334155;
   --accent: #1e293b;
   --accent-foreground: #f8fafc;
-  --nav-active: #3b82f6;
-  --nav-active-foreground: #ffffff;
+  --nav-active: #1d4ed8;
+  --nav-active-foreground: #f8fafc;
   --ring: #4ade80;
   --ring-offset: #020617;
+}
+
+.transition-ui {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .font-heading {

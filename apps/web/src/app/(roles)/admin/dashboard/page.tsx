@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { FileDown, Filter } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
+  DashboardErrorState,
   DashboardHeader,
   DashboardPanel,
+  DashboardSkeleton,
   DashboardTwoColumn,
   KpiGrid,
 } from "@/components/layout/shells/DashboardScaffold";
@@ -81,13 +84,16 @@ export default function AdminDashboardPage() {
 
   const metrics = kpis
     ? [
-        { label: "Total students", value: kpis.activeStudents },
-        { label: "Active teachers", value: String(teachers) },
+        { label: "Total students", value: kpis.activeStudents, delta: "+3.2%", deltaTone: "positive" as const },
+        { label: "Active teachers", value: String(teachers), delta: "Stable", deltaTone: "neutral" as const },
         {
           label: "Collection rate",
           value: `${collectionRate}%`,
+          delta: collectionRate >= 70 ? "On target" : "Below target",
+          deltaTone: collectionRate >= 70 ? ("positive" as const) : ("negative" as const),
           helper: `Paid ${kpis.totalFeesPaid} / Due ${kpis.totalFeesDue} UGX`,
         },
+        { label: "Outstanding fees", value: String(Math.max(0, Number(kpis.totalFeesDue) - Number(kpis.totalFeesPaid))), delta: "Monitor", deltaTone: "neutral" as const },
       ]
     : [];
 
@@ -108,12 +114,8 @@ export default function AdminDashboardPage() {
         }
       />
 
-      {loading ? <div className="h-32 animate-pulse rounded-xl bg-muted" /> : null}
-      {err ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-          {err}
-        </p>
-      ) : null}
+      {loading ? <DashboardSkeleton /> : null}
+      {err ? <DashboardErrorState message={err} onRetry={() => window.location.reload()} /> : null}
 
       {!loading && !err && kpis ? (
         <>
@@ -121,22 +123,46 @@ export default function AdminDashboardPage() {
           <DashboardTwoColumn
             primary={
               <DashboardPanel title="Recent enrolments" subtitle="Latest admitted students">
-                <table className="w-full text-sm">
+                <div className="mb-3 flex items-center justify-end gap-2">
+                  <button type="button" className="transition-ui inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent/50">
+                    <Filter className="h-4 w-4 stroke-[1.5]" />
+                    Filter
+                  </button>
+                  <button type="button" className="transition-ui inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent/50">
+                    <FileDown className="h-4 w-4 stroke-[1.5]" />
+                    Export
+                  </button>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-border/50">
+                  <table className="w-full border-collapse text-sm">
                   <thead>
-                    <tr className="border-b text-left">
-                      <th className="py-2">Student #</th>
-                      <th className="py-2">Name</th>
+                    <tr className="bg-muted/50">
+                      <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Student #</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Name</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Enrolled</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {recent.map((s) => (
-                      <tr key={s.id} className="border-b border-border">
-                        <td className="py-2 font-mono text-xs">{s.studentNumber}</td>
-                        <td className="py-2">{s.fullName}</td>
+                    {recent.length ? (
+                      recent.map((s) => (
+                        <tr key={s.id} className="transition-ui border-t border-border/50 hover:bg-muted/40 dark:hover:bg-muted/30">
+                          <td className="whitespace-nowrap px-4 py-3 font-medium text-foreground">{s.studentNumber}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{s.fullName}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-muted-foreground">
+                            {s.enrolledAt ? new Date(s.enrolledAt).toLocaleDateString() : "—"}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="py-12 text-center text-sm text-muted-foreground">
+                          No records found
+                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
+                </div>
               </DashboardPanel>
             }
             secondary={

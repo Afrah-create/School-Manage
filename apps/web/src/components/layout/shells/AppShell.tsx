@@ -15,7 +15,7 @@ export function AppShell({ config, children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background transition-colors">
+    <div className="flex h-screen overflow-hidden bg-background transition-ui">
       <ShellSidebar config={config} />
       {mobileOpen ? (
         <div
@@ -24,7 +24,7 @@ export function AppShell({ config, children }: Props) {
           aria-hidden
         >
           <div
-            className="h-full w-72 border-r border-sidebar-border bg-sidebar shadow-xl"
+            className="h-full w-[var(--sidebar-width)] border-r border-sidebar-border bg-sidebar shadow-xl transition-ui"
             onClick={(e) => e.stopPropagation()}
           >
             <ShellSidebar config={config} mobile />

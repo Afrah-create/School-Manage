@@ -38,6 +38,11 @@ const config: Config = {
         ring: "var(--ring)",
         "ring-offset": "var(--ring-offset)",
       },
+      borderRadius: {
+        sm: "var(--radius-sm)",
+        md: "var(--radius-md)",
+        lg: "var(--radius-lg)",
+      },
       ringOffsetColor: {
         background: "var(--ring-offset)",
       },

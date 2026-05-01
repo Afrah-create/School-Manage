@@ -214,7 +214,7 @@ export default function LoginPage() {
   };
 
   const inputBase =
-    "font-body w-full rounded-xl border border-border bg-card/90 px-11 py-2.5 text-sm text-foreground shadow-sm outline-none transition duration-200 placeholder:text-muted-foreground focus:border-[#2563EB] focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)] dark:bg-card/70";
+    "font-body h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-ui placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background";
 
   const renderFormCard = () => {
     const isLogin = view === "login";
@@ -236,7 +236,7 @@ export default function LoginPage() {
               variants={fieldContainer}
               initial="hidden"
               animate="visible"
-              className="rounded-3xl border border-border bg-card/90 p-5 shadow-lg backdrop-blur-xl dark:bg-card/95 sm:p-6"
+              className="rounded-3xl bg-card/90 p-5 shadow-lg backdrop-blur-xl dark:bg-card/95 sm:p-6"
             >
               <motion.div variants={fieldItem} className="mb-5">
                 <p className="font-heading text-2xl font-semibold text-foreground">Welcome back</p>
@@ -248,7 +248,7 @@ export default function LoginPage() {
               <motion.div variants={fieldItem} className="mb-3">
                 <label className="font-body mb-2 block text-sm font-medium text-foreground">Email</label>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Mail className="hidden" />
                   <input
                     type="email"
                     value={loginState.email}
@@ -266,7 +266,7 @@ export default function LoginPage() {
               <motion.div variants={fieldItem} className="mb-2.5">
                 <label className="font-body mb-2 block text-sm font-medium text-foreground">Password</label>
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Lock className="hidden" />
                   <input
                     type={showLoginPassword ? "text" : "password"}
                     value={loginState.password}
@@ -312,7 +312,7 @@ export default function LoginPage() {
                   type="submit"
                   whileTap={{ scale: 0.98 }}
                   disabled={loginLoading}
-                  className="font-body w-full rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)]"
+                  className="font-body h-10 w-full rounded-lg bg-[#2563EB] text-sm font-medium text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)]"
                   animate={loginShake ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
                 >
                   {loginLoading ? "Signing in..." : "Sign In"}
@@ -368,7 +368,7 @@ export default function LoginPage() {
               variants={fieldContainer}
               initial="hidden"
               animate="visible"
-              className="rounded-3xl border border-border bg-card/90 p-5 shadow-lg backdrop-blur-xl dark:bg-card/95 sm:p-6"
+              className="rounded-3xl bg-card/90 p-5 shadow-lg backdrop-blur-xl dark:bg-card/95 sm:p-6"
             >
               <motion.div variants={fieldItem} className="mb-5">
                 <p className="font-heading text-2xl font-semibold text-foreground">Create account</p>
@@ -380,7 +380,7 @@ export default function LoginPage() {
               <motion.div variants={fieldItem} className="mb-3">
                 <label className="font-body mb-2 block text-sm font-medium text-foreground">Full Name</label>
                 <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <User className="hidden" />
                   <input
                     type="text"
                     value={registerState.name}
@@ -401,7 +401,7 @@ export default function LoginPage() {
               <motion.div variants={fieldItem} className="mb-3">
                 <label className="font-body mb-2 block text-sm font-medium text-foreground">Email</label>
                 <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Mail className="hidden" />
                   <input
                     type="email"
                     value={registerState.email}
@@ -422,7 +422,7 @@ export default function LoginPage() {
               <motion.div variants={fieldItem} className="mb-3">
                 <label className="font-body mb-2 block text-sm font-medium text-foreground">Password</label>
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Lock className="hidden" />
                   <input
                     type={showRegisterPassword ? "text" : "password"}
                     value={registerState.password}
@@ -465,7 +465,7 @@ export default function LoginPage() {
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <ShieldCheck className="hidden" />
                   <input
                     type={showConfirmPassword ? "text" : "password"}
                     value={registerState.confirmPassword}
@@ -522,7 +522,7 @@ export default function LoginPage() {
                 <motion.button
                   type="submit"
                   whileTap={{ scale: 0.98 }}
-                  className="font-body w-full rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)]"
+                  className="font-body h-10 w-full rounded-lg bg-[#2563EB] text-sm font-medium text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)]"
                   animate={registerShake ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
                 >
                   Create Account
@@ -610,7 +610,7 @@ export default function LoginPage() {
           <div className="absolute right-6 top-6 z-10 xl:right-10 xl:top-8">
             <ThemeToggle />
           </div>
-          <div className="w-full max-w-xl">{renderFormCard()}</div>
+          <div className="w-full max-w-sm">{renderFormCard()}</div>
         </section>
       </div>
 
@@ -629,7 +629,7 @@ export default function LoginPage() {
           <ThemeToggle buttonClassName="border-white/40 bg-white/15 text-white hover:bg-white/25 focus-visible:ring-offset-[#1E3A8A]" />
         </div>
         <div className="bg-background px-4 py-6">
-          <div className="mx-auto w-full max-w-xl">{renderFormCard()}</div>
+          <div className="mx-auto w-full max-w-sm">{renderFormCard()}</div>
         </div>
       </div>
     </div>
