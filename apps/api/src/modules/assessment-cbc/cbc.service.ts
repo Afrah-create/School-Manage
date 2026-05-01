@@ -1,7 +1,9 @@
-import { cbcScoresBulkSchema } from "@uganda-cbc-sms/shared";
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import type { z } from "zod";
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
+
+const { cbcScoresBulkSchema } = sharedSchemas;
 
 type BulkIn = z.infer<typeof cbcScoresBulkSchema>;
 

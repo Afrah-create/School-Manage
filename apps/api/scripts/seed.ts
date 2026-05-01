@@ -1,28 +1,46 @@
 import "dotenv/config";
 import bcrypt from "bcrypt";
+import type { Role } from "@uganda-cbc-sms/shared";
 import { pool } from "../src/config/db";
 
+const SAMPLE_USERS: Array<{ fullName: string; email: string; role: Role }> = [
+  { fullName: "System Administrator", email: "admin@school.local", role: "admin" },
+  { fullName: "School Headteacher", email: "headteacher@school.local", role: "headteacher" },
+  { fullName: "Class Teacher", email: "classteacher@school.local", role: "class_teacher" },
+  { fullName: "Subject Teacher", email: "subjectteacher@school.local", role: "subject_teacher" },
+  { fullName: "Bursar Officer", email: "bursar@school.local", role: "bursar" },
+];
+
 async function main(): Promise<void> {
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  if (!email || !password) {
-    console.error("Set ADMIN_EMAIL and ADMIN_PASSWORD in .env");
+  const sharedPassword = process.env.SAMPLE_USERS_PASSWORD ?? process.env.ADMIN_PASSWORD;
+  if (!sharedPassword) {
+    console.error("Set SAMPLE_USERS_PASSWORD (or ADMIN_PASSWORD) in .env");
     process.exit(1);
   }
+
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
   const rounds = Number(process.env.BCRYPT_ROUNDS ?? 10);
-  const { rows } = await pool.query(`SELECT id FROM users LIMIT 1`);
-  if (rows.length > 0) {
-    console.log("Users already exist — skipping seed.");
-    await pool.end();
-    return;
-  }
-  const hash = await bcrypt.hash(password, rounds);
-  await pool.query(
-    `INSERT INTO users (full_name, email, password_hash, role)
-     VALUES ($1, $2, $3, 'admin')`,
-    ["System Administrator", email, hash],
+  const hash = await bcrypt.hash(sharedPassword, rounds);
+  const usersToSeed = SAMPLE_USERS.map((item) =>
+    item.role === "admin" && adminEmail ? { ...item, email: adminEmail } : item,
   );
-  console.log(`Created admin user: ${email}`);
+
+  for (const user of usersToSeed) {
+    await pool.query(
+      `INSERT INTO users (full_name, email, password_hash, role, is_active)
+       VALUES ($1, $2, $3, $4, true)
+       ON CONFLICT (email)
+       DO UPDATE SET
+         full_name = EXCLUDED.full_name,
+         role = EXCLUDED.role,
+         is_active = true,
+         password_hash = EXCLUDED.password_hash,
+         updated_at = NOW()`,
+      [user.fullName, user.email.toLowerCase().trim(), hash, user.role],
+    );
+    console.log(`Seeded user: ${user.email} (${user.role})`);
+  }
+
   await pool.end();
 }
 

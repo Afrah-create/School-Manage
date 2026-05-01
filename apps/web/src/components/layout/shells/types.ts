@@ -1,11 +1,22 @@
-import type { LucideIcon } from "lucide-react";
-
 export type RoleKey = "admin" | "headteacher" | "class-teacher" | "subject-teacher" | "bursar";
+
+/** Serializable nav icon id — resolved to Lucide components inside client ShellSidebar only */
+export type NavIconId =
+  | "home"
+  | "users"
+  | "bookOpen"
+  | "clipboardCheck"
+  | "fileBarChart2"
+  | "creditCard"
+  | "graduationCap"
+  | "barChart3"
+  | "school"
+  | "receipt";
 
 export type NavItem = {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: NavIconId;
   activePrefix?: string;
   exactMatch?: boolean;
 };

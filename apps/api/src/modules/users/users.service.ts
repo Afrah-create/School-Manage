@@ -48,10 +48,17 @@ export async function resetUserPassword(id: string, input: ResetPasswordInput) {
     const rounds = Number(process.env.BCRYPT_ROUNDS ?? 10);
     const hash = await bcrypt.hash(input.newPassword, rounds);
     const r = await query(
-      `UPDATE users SET password_hash = $1, failed_login_attempts = 0, locked_at = NULL, updated_at = NOW() WHERE id = $2`,
+      `UPDATE users
+       SET password_hash = $1,
+           failed_login_attempts = 0,
+           locked_at = NULL,
+           last_password_reset_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $2`,
       [hash, id],
     );
     if (r.rowCount === 0) throw new HttpError(404, "User not found");
+    await query(`UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, [id]);
   } catch (e) {
     if (e instanceof HttpError) throw e;
     throw new Error(e instanceof Error ? e.message : "Could not reset password");

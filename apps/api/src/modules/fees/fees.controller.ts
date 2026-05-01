@@ -1,10 +1,8 @@
 import type { Request, Response } from "express";
-import {
-  feeInvoiceSchema,
-  feePaymentSchema,
-  feeStructureSchema,
-} from "@uganda-cbc-sms/shared";
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import * as svc from "./fees.service";
+
+const { feeInvoiceSchema, feePaymentSchema, feeStructureSchema } = sharedSchemas;
 
 export async function postStructure(req: Request, res: Response): Promise<void> {
   const body = feeStructureSchema.parse(req.body);

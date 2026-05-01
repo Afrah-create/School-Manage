@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { Role } from "@uganda-cbc-sms/shared";
 import {
   Eye,
   EyeOff,
@@ -13,6 +14,9 @@ import {
   ShieldCheck,
   User,
 } from "lucide-react";
+import { apiPost } from "@/lib/api";
+import type { AuthUser } from "@/store/authStore";
+import { useAuthStore } from "@/store/authStore";
 
 type AuthView = "login" | "register";
 type StrengthLevel = "weak" | "fair" | "strong";
@@ -84,14 +88,34 @@ function cx(...values: Array<string | false | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+function dashboardForRole(role: Role): string {
+  switch (role) {
+    case "admin":
+      return "/admin/dashboard";
+    case "headteacher":
+      return "/headteacher/dashboard";
+    case "class_teacher":
+      return "/class-teacher/dashboard";
+    case "subject_teacher":
+      return "/subject-teacher/dashboard";
+    case "bursar":
+      return "/bursar/dashboard";
+    default:
+      return "/login";
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const loginToStore = useAuthStore((s) => s.login);
   const [view, setView] = useState<AuthView>("login");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loginShake, setLoginShake] = useState(false);
   const [registerShake, setRegisterShake] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const [loginState, setLoginState] = useState<LoginState>({
     email: "",
@@ -147,14 +171,28 @@ export default function LoginPage() {
   const loginInvalid = Object.values(loginErrors).some(Boolean);
   const registerInvalid = Object.values(registerErrors).some(Boolean);
 
-  const loginSubmit = (event: React.FormEvent) => {
+  const loginSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoginTouched({ email: true, password: true });
+    setLoginError(null);
     if (loginInvalid) {
       triggerShake("login");
       return;
     }
-    console.log("login submit", loginState);
+    try {
+      setLoginLoading(true);
+      const data = await apiPost<{ token: string; user: AuthUser }>("/auth/login", {
+        email: loginState.email,
+        password: loginState.password,
+      });
+      loginToStore(data.user, data.token);
+      router.replace(dashboardForRole(data.user.role));
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Login failed");
+      triggerShake("login");
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const registerSubmit = (event: React.FormEvent) => {
@@ -272,12 +310,18 @@ export default function LoginPage() {
                 <motion.button
                   type="submit"
                   whileTap={{ scale: 0.98 }}
+                  disabled={loginLoading}
                   className="font-body w-full rounded-xl bg-[#2563EB] py-3 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)]"
                   animate={loginShake ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
                 >
-                  Sign In
+                  {loginLoading ? "Signing in..." : "Sign In"}
                 </motion.button>
               </motion.div>
+              {loginError ? (
+                <motion.p variants={fieldItem} className="mt-2 text-sm text-red-600">
+                  {loginError}
+                </motion.p>
+              ) : null}
 
               <motion.div variants={fieldItem} className="my-3.5 flex items-center gap-3">
                 <div className="h-px flex-1 bg-slate-200" />

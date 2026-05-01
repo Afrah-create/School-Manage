@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
-import { createUserSchema, resetPasswordSchema } from "@uganda-cbc-sms/shared";
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import * as svc from "./users.service";
+
+const { createUserSchema, resetPasswordSchema } = sharedSchemas;
 
 export async function create(req: Request, res: Response): Promise<void> {
   const body = createUserSchema.parse(req.body);

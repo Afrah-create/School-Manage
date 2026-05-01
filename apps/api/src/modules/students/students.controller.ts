@@ -1,12 +1,10 @@
 import type { Request, Response } from "express";
-import {
-  createStudentSchema,
-  promoteStudentsSchema,
-  withdrawStudentSchema,
-} from "@uganda-cbc-sms/shared";
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import path from "path";
 import * as svc from "./students.service";
 import { getUploadRoot } from "./students.upload";
+
+const { createStudentSchema, promoteStudentsSchema, withdrawStudentSchema } = sharedSchemas;
 
 export async function create(req: Request, res: Response): Promise<void> {
   const body = createStudentSchema.parse(req.body);

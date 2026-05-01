@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
-import { attendanceSchema } from "@uganda-cbc-sms/shared";
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import * as svc from "./attendance.service";
+
+const { attendanceSchema } = sharedSchemas;
 
 export async function postAttendance(req: Request, res: Response): Promise<void> {
   if (!req.user) {

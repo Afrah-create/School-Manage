@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
@@ -15,6 +15,10 @@ import { feesRouter } from "./modules/fees/fees.routes";
 import { reportsRouter } from "./modules/reports/reports.routes";
 import { studentsRouter } from "./modules/students/students.routes";
 import { usersRouter } from "./modules/users/users.routes";
+
+// Load API-local env first, then workspace root env as fallback.
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
 
 const app = express();
 const uploadRoot = process.env.UPLOAD_DIR ?? "./uploads";

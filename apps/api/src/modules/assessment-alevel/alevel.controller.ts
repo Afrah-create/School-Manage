@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
-import { alevelScoreUpsertSchema } from "@uganda-cbc-sms/shared";
+import * as assessmentSchemas from "@uganda-cbc-sms/shared/schemas/assessment.schema";
 import * as svc from "./alevel.service";
+
+const { alevelScoreUpsertSchema } = assessmentSchemas;
 
 export async function postAlevel(req: Request, res: Response): Promise<void> {
   if (!req.user) {

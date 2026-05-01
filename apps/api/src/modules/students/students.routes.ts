@@ -6,16 +6,17 @@ import * as c from "./students.controller";
 import { studentPhotoUpload } from "./students.upload";
 
 const admin = requireRoles("admin");
+const staffReader = requireRoles("admin", "headteacher", "class_teacher", "subject_teacher", "bursar");
 
 export const studentsRouter = Router();
 
 studentsRouter.use(requireAuth);
 
-studentsRouter.get("/search", asyncHandler(c.search));
+studentsRouter.get("/search", staffReader, asyncHandler(c.search));
 studentsRouter.post("/", admin, asyncHandler(c.create));
-studentsRouter.get("/", asyncHandler(c.list));
+studentsRouter.get("/", staffReader, asyncHandler(c.list));
 studentsRouter.post("/promote", admin, asyncHandler(c.promote));
-studentsRouter.get("/:id", asyncHandler(c.getOne));
+studentsRouter.get("/:id", staffReader, asyncHandler(c.getOne));
 studentsRouter.post(
   "/:id/photo",
   admin,

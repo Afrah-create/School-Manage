@@ -1,9 +1,8 @@
 import type { Request, Response } from "express";
-import {
-  alevelReportGenerateSchema,
-  cbcReportGenerateSchema,
-} from "@uganda-cbc-sms/shared";
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import * as svc from "./reports.service";
+
+const { alevelReportGenerateSchema, cbcReportGenerateSchema } = sharedSchemas;
 
 export async function generateCbc(req: Request, res: Response): Promise<void> {
   const body = cbcReportGenerateSchema.parse(req.body);

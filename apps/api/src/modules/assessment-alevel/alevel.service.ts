@@ -1,7 +1,9 @@
-import { alevelScoreUpsertSchema } from "@uganda-cbc-sms/shared";
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import type { z } from "zod";
 import { query } from "../../config/db";
 import { getDivision, getUnebGrade } from "../../utils/grading";
+
+const { alevelScoreUpsertSchema } = sharedSchemas;
 
 type ScoreIn = z.infer<typeof alevelScoreUpsertSchema>;
 

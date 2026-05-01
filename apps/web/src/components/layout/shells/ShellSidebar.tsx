@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NAV_ICON_MAP } from "./navIconMap";
 import type { RoleShellConfig } from "./types";
 
 function isActive(pathname: string, href: string, activePrefix?: string, exactMatch?: boolean): boolean {
@@ -24,7 +25,7 @@ export function ShellSidebar({ config, mobile = false }: { config: RoleShellConf
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {config.items.map((item) => {
           const active = isActive(pathname, item.href, item.activePrefix, item.exactMatch);
-          const Icon = item.icon;
+          const Icon = NAV_ICON_MAP[item.icon];
           return (
             <Link
               key={item.href}

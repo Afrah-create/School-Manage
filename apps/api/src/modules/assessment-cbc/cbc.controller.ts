@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
-import { cbcScoresBulkSchema } from "@uganda-cbc-sms/shared";
+import * as assessmentSchemas from "@uganda-cbc-sms/shared/schemas/assessment.schema";
 import * as svc from "./cbc.service";
+
+const { cbcScoresBulkSchema } = assessmentSchemas;
 
 export async function postCbc(req: Request, res: Response): Promise<void> {
   if (!req.user) {

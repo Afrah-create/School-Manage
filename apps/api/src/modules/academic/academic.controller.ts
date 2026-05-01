@@ -1,5 +1,8 @@
 import type { Request, Response } from "express";
-import {
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
+import * as svc from "./academic.service";
+
+const {
   academicYearSchema,
   classSchema,
   classSubjectSchema,
@@ -7,8 +10,7 @@ import {
   cbcStrandSchema,
   subjectSchema,
   termSchema,
-} from "@uganda-cbc-sms/shared";
-import * as svc from "./academic.service";
+} = sharedSchemas;
 
 export async function postYear(req: Request, res: Response): Promise<void> {
   const body = academicYearSchema.parse(req.body);

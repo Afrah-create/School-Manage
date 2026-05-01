@@ -1,6 +1,9 @@
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
-import {
+import * as sharedSchemas from "@uganda-cbc-sms/shared";
+import type { z } from "zod";
+
+const {
   academicYearSchema,
   termSchema,
   classSchema,
@@ -8,8 +11,7 @@ import {
   classSubjectSchema,
   combinationSchema,
   cbcStrandSchema,
-} from "@uganda-cbc-sms/shared";
-import type { z } from "zod";
+} = sharedSchemas;
 
 type YearIn = z.infer<typeof academicYearSchema>;
 type TermIn = z.infer<typeof termSchema>;
