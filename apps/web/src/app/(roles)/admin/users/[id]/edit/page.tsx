@@ -11,8 +11,8 @@ import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { apiGet, apiPatch } from "@/lib/api";
 
@@ -85,45 +85,48 @@ export default function AdminUsersEditPage() {
   };
 
   return (
-    <PageWrapper title="Edit user" description="Update staff account details">
-      <div className="mb-3"><Button variant="secondary" onClick={() => router.push(`/admin/users/${id}`)}>Back to profile</Button></div>
+    <PageWrapper title="Users" description="Staff accounts">
       {loading ? <p className="text-muted-foreground">Loading…</p> : null}
       {err ? <Alert tone="error">{err}</Alert> : null}
       {ok ? <Alert tone="success">{ok}</Alert> : null}
       {!loading ? (
-        <Card title="Account details">
+        <Modal open title="Edit user account" onClose={() => router.push(`/admin/users/${id}`)}>
           {systemAccount ? <div className="mb-3"><Badge tone="warning">System account: destructive actions are restricted.</Badge></div> : null}
-          <form className="max-w-lg space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
-            <Input
-              label="Full name"
-              {...form.register("fullName")}
-              error={form.formState.errors.fullName?.message}
-            />
-            <Input
-              label="Email"
-              type="email"
-              {...form.register("email")}
-              error={form.formState.errors.email?.message}
-            />
-            <Select
-              label="Role"
-              options={ROLES.map((r) => ({
-                value: r,
-                label: r.replace(/_/g, " "),
-              }))}
-              {...form.register("role")}
-              error={form.formState.errors.role?.message}
-            />
-            <Select
-              label="Status"
-              options={[
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ]}
-              value={form.watch("isActive") ? "active" : "inactive"}
-              onChange={(e) => form.setValue("isActive", e.target.value === "active")}
-              disabled={systemAccount}
-            />
+          <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Input
+                label="Full name"
+                {...form.register("fullName")}
+                error={form.formState.errors.fullName?.message}
+              />
+              <Input
+                label="Email"
+                type="email"
+                {...form.register("email")}
+                error={form.formState.errors.email?.message}
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Select
+                label="Role"
+                options={ROLES.map((r) => ({
+                  value: r,
+                  label: r.replace(/_/g, " "),
+                }))}
+                {...form.register("role")}
+                error={form.formState.errors.role?.message}
+              />
+              <Select
+                label="Status"
+                options={[
+                  { value: "active", label: "Active" },
+                  { value: "inactive", label: "Inactive" },
+                ]}
+                value={form.watch("isActive") ? "active" : "inactive"}
+                onChange={(e) => form.setValue("isActive", e.target.value === "active")}
+                disabled={systemAccount}
+              />
+            </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Admin notes</label>
               <textarea
@@ -133,14 +136,16 @@ export default function AdminUsersEditPage() {
                 onChange={(e) => setNotes(e.target.value)}
               />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button type="submit">Save changes</Button>
-              <Button type="button" variant="secondary" onClick={() => router.push("/admin/users")}>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => router.push(`/admin/users/${id}`)}>
                 Cancel
+              </Button>
+              <Button type="submit" loading={form.formState.isSubmitting}>
+                Save changes
               </Button>
             </div>
           </form>
-        </Card>
+        </Modal>
       ) : null}
     </PageWrapper>
   );

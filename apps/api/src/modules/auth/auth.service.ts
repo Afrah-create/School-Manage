@@ -62,7 +62,11 @@ export async function login(
       `SELECT * FROM users WHERE email = $1`,
       [normalizeEmail(input.email)],
     );
-    const generic = () => new HttpError(401, "Invalid credentials");
+    const generic = () =>
+      new HttpError(
+        401,
+        "The email or password you entered isn't correct. Please try again.",
+      );
 
     if (rows.length === 0) throw generic();
     const user = rows[0]!;
@@ -192,7 +196,7 @@ export async function changePassword(
     );
     if (rows.length === 0) throw new HttpError(404, "User not found");
     const ok = await bcrypt.compare(input.currentPassword, rows[0]!.password_hash);
-    if (!ok) throw new HttpError(400, "Current password is incorrect");
+    if (!ok) throw new HttpError(400, "That doesn't match your current password. Try again.");
     const rounds = Number(process.env.BCRYPT_ROUNDS ?? 10);
     const hash = await bcrypt.hash(input.newPassword, rounds);
     await query(
@@ -254,12 +258,20 @@ export async function verifyPasswordResetCode(input: VerifyOtpInput): Promise<vo
        FOR UPDATE`,
       [email],
     );
-    if (rows.length === 0) throw new HttpError(400, "No active reset code found");
+    if (rows.length === 0)
+      throw new HttpError(
+        400,
+        "We don't have an active reset code for this email. Request a new code from the Forgot password page.",
+      );
     const row = rows[0]!;
-    if (row.expires_at.getTime() < Date.now()) throw new HttpError(400, "Reset code has expired");
+    if (row.expires_at.getTime() < Date.now())
+      throw new HttpError(400, "That reset code has expired. Request a new one and try again.");
     if (row.code_hash !== codeHash) {
       await client.query(`UPDATE password_reset_codes SET attempt_count = attempt_count + 1 WHERE id = $1`, [row.id]);
-      throw new HttpError(400, "Invalid reset code");
+      throw new HttpError(
+        400,
+        "That reset code isn't valid. Double-check the numbers or request a fresh code.",
+      );
     }
   });
 }
@@ -280,11 +292,20 @@ export async function resetPasswordWithCode(input: ResetPasswordWithOtpInput): P
        FOR UPDATE`,
       [email],
     );
-    if (rows.length === 0) throw new HttpError(400, "No active reset code found");
+    if (rows.length === 0)
+      throw new HttpError(
+        400,
+        "We don't have an active reset code for this email. Start the reset flow again.",
+      );
     const codeRow = rows[0]!;
-    if (codeRow.expires_at.getTime() < Date.now()) throw new HttpError(400, "Reset code has expired");
-    if (codeRow.code_hash !== codeHash) throw new HttpError(400, "Invalid reset code");
-    if (!codeRow.user_id) throw new HttpError(404, "User not found");
+    if (codeRow.expires_at.getTime() < Date.now())
+      throw new HttpError(400, "That reset code has expired. Request a new reset link.");
+    if (codeRow.code_hash !== codeHash)
+      throw new HttpError(
+        400,
+        "That reset code isn't valid. Check the email we sent you or request a new code.",
+      );
+    if (!codeRow.user_id) throw new HttpError(404, "No user account matched this reset request.");
 
     await client.query(`UPDATE password_reset_codes SET used_at = NOW() WHERE id = $1`, [codeRow.id]);
     await client.query(
@@ -342,14 +363,25 @@ export async function verifyEmailCode(input: VerifyOtpInput): Promise<void> {
        FOR UPDATE`,
       [email],
     );
-    if (rows.length === 0) throw new HttpError(400, "No active verification code found");
+    if (rows.length === 0)
+      throw new HttpError(
+        400,
+        "There is no active verification code for this email. Send a new code and try again.",
+      );
     const row = rows[0]!;
-    if (row.expires_at.getTime() < Date.now()) throw new HttpError(400, "Verification code has expired");
+    if (row.expires_at.getTime() < Date.now())
+      throw new HttpError(
+        400,
+        "That verification code has expired. Request a new code from your email inbox flow.",
+      );
     if (row.code_hash !== codeHash) {
       await client.query(`UPDATE email_verification_codes SET attempt_count = attempt_count + 1 WHERE id = $1`, [row.id]);
-      throw new HttpError(400, "Invalid verification code");
+      throw new HttpError(
+        400,
+        "That verification code doesn't match. Re-enter it carefully or request a new one.",
+      );
     }
-    if (!row.user_id) throw new HttpError(404, "User not found");
+    if (!row.user_id) throw new HttpError(404, "No user account matched this verification request.");
 
     await client.query(`UPDATE email_verification_codes SET used_at = NOW() WHERE id = $1`, [row.id]);
     await client.query(`UPDATE users SET email_verified_at = NOW(), updated_at = NOW() WHERE id = $1`, [row.user_id]);

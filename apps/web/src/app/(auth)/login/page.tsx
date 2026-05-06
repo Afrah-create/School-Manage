@@ -15,7 +15,7 @@ import {
   User,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { apiPost } from "@/lib/api";
+import { apiPost, getApiErrorMessage } from "@/lib/api";
 import type { AuthUser } from "@/store/authStore";
 import { useAuthStore } from "@/store/authStore";
 
@@ -189,7 +189,7 @@ export default function LoginPage() {
       loginToStore(data.user, data.token);
       router.replace(dashboardForRole(data.user.role));
     } catch (error) {
-      setLoginError(error instanceof Error ? error.message : "Login failed");
+      setLoginError(getApiErrorMessage(error));
       triggerShake("login");
     } finally {
       setLoginLoading(false);

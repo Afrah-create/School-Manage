@@ -8,8 +8,8 @@ import type { z } from "zod";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { apiPost } from "@/lib/api";
 import { useState } from "react";
@@ -32,26 +32,30 @@ export default function AdminUsersCreatePage() {
   };
 
   return (
-    <PageWrapper title="Create user" description="New staff account">
-      <Card title="Account details">
-        <form className="max-w-lg space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
+    <PageWrapper title="Users" description="Staff accounts">
+      <Modal open title="Create user account" onClose={() => router.push("/admin/users")}>
+        <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? <Alert tone="error">{error}</Alert> : null}
-          <Input label="Full name" {...form.register("fullName")} error={form.formState.errors.fullName?.message} />
-          <Input label="Email" {...form.register("email")} error={form.formState.errors.email?.message} />
-          <Input
-            label="Temporary password"
-            type="password"
-            {...form.register("password")}
-            error={form.formState.errors.password?.message}
-          />
-          <Select
-            label="Role"
-            options={ROLES.map((r) => ({
-              value: r,
-              label: r.replace(/_/g, " "),
-            }))}
-            {...form.register("role")}
-          />
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Input label="Full name" {...form.register("fullName")} error={form.formState.errors.fullName?.message} />
+            <Input label="Email" {...form.register("email")} error={form.formState.errors.email?.message} />
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Input
+              label="Temporary password"
+              type="password"
+              {...form.register("password")}
+              error={form.formState.errors.password?.message}
+            />
+            <Select
+              label="Role"
+              options={ROLES.map((r) => ({
+                value: r,
+                label: r.replace(/_/g, " "),
+              }))}
+              {...form.register("role")}
+            />
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" {...form.register("forcePasswordChange")} />
             Force password change on first login
@@ -64,9 +68,16 @@ export default function AdminUsersCreatePage() {
               {...form.register("notes")}
             />
           </div>
-          <Button type="submit">Create</Button>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => router.push("/admin/users")}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={form.formState.isSubmitting}>
+              Create user
+            </Button>
+          </div>
         </form>
-      </Card>
+      </Modal>
     </PageWrapper>
   );
 }

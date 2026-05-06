@@ -13,6 +13,11 @@ const LINKS = [
   { href: "/admin/academic/classes", title: "Classes", desc: "Streams, levels, class teachers" },
   { href: "/admin/academic/subjects", title: "Subjects", desc: "Subject catalogue" },
   { href: "/admin/academic/class-subjects", title: "Class-subject assignments", desc: "Assign subjects to classes" },
+  {
+    href: "/admin/academic/teacher-assignments",
+    title: "Teacher workload",
+    desc: "Subject teaching load and unassigned slots by teacher",
+  },
   { href: "/admin/academic/combinations", title: "Subject combinations", desc: "Manage O-Level and A-Level combinations" },
   { href: "/admin/academic/cbc-strands", title: "CBC strands", desc: "Manage strands and sub-strands" },
 ];

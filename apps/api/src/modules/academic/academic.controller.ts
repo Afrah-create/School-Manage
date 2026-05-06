@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
+import { HttpError } from "../../utils/httpError";
+import { getUserById } from "../users/users.service";
 import * as svc from "./academic.service";
 
 const schemas = (sharedSchemas as Record<string, unknown>).default
@@ -11,6 +13,8 @@ const {
   classSchema,
   classSubjectSchema,
   classSubjectBulkSchema,
+  bulkAssignTeacherSchema,
+  teacherAssignmentsQuerySchema,
   updateClassSubjectSchema,
   combinationSchema,
   updateCombinationSchema,
@@ -30,6 +34,8 @@ const {
   classSchema: { parse: (v: unknown) => unknown };
   classSubjectSchema: { parse: (v: unknown) => unknown };
   classSubjectBulkSchema: { parse: (v: unknown) => unknown };
+  bulkAssignTeacherSchema: { parse: (v: unknown) => unknown };
+  teacherAssignmentsQuerySchema: { parse: (v: unknown) => unknown };
   updateClassSubjectSchema: { parse: (v: unknown) => unknown };
   combinationSchema: { parse: (v: unknown) => unknown };
   updateCombinationSchema: { parse: (v: unknown) => unknown };
@@ -169,6 +175,52 @@ export async function postClassSubjectsBulk(req: Request, res: Response): Promis
   const body = classSubjectBulkSchema.parse(req.body);
   const rows = await svc.bulkAssignSubjectsToClass(body);
   res.status(201).json({ success: true, data: rows, message: "Subjects assigned to class." });
+}
+
+const SUBJECT_TEACHER_ROLES = new Set(["subject_teacher", "headteacher", "admin"]);
+
+export async function postBulkAssignTeacher(req: Request, res: Response): Promise<void> {
+  const body = bulkAssignTeacherSchema.parse(req.body) as {
+    teacherId: string | null;
+    classSubjectIds: string[];
+  };
+  if (body.teacherId) {
+    const teacher = await getUserById(body.teacherId);
+    if (!SUBJECT_TEACHER_ROLES.has(teacher.role)) {
+      throw new HttpError(
+        400,
+        `User role '${teacher.role}' cannot be assigned as a subject teacher`,
+      );
+    }
+  }
+  const updated = await svc.bulkAssignTeacher(body.teacherId, body.classSubjectIds);
+  res.json({
+    success: true,
+    data: { updated, count: updated.length },
+    message: "Teacher assignment updated for selected subjects.",
+  });
+}
+
+export async function getTeacherWorkload(req: Request, res: Response): Promise<void> {
+  const queryParams = teacherAssignmentsQuerySchema.parse(req.query);
+  const teacherId = req.params["teacherId"]!;
+  const assignments = await svc.getTeacherAssignments(teacherId, queryParams.academicYearId);
+  const totalCount = await svc.getTeacherAssignmentCount(teacherId, queryParams.academicYearId);
+  res.json({
+    success: true,
+    data: { assignments, totalCount },
+    message: "Teacher assignments loaded.",
+  });
+}
+
+export async function getUnassignedClassSubjects(req: Request, res: Response): Promise<void> {
+  const queryParams = teacherAssignmentsQuerySchema.parse(req.query);
+  const unassigned = await svc.getUnassignedClassSubjects(queryParams.academicYearId);
+  res.json({
+    success: true,
+    data: { unassigned, count: unassigned.length },
+    message: "Unassigned class subjects loaded.",
+  });
 }
 
 export async function postCombination(req: Request, res: Response): Promise<void> {

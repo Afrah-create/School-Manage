@@ -122,6 +122,19 @@ export const classSubjectBulkSchema = z.object({
   termId: z.string().uuid().optional().nullable(),
 });
 
+/** Bulk assign one teacher (or unassign with null) to many class_subjects rows */
+export const bulkAssignTeacherSchema = z.object({
+  teacherId: z.union([z.string().uuid(), z.null()]),
+  classSubjectIds: z.array(z.string().uuid()).min(1, "Select at least one class-subject row"),
+});
+
+/** Query: teacher assignments or unassigned list */
+export const teacherAssignmentsQuerySchema = z.object({
+  academicYearId: z.string().uuid(),
+});
+
+export type BulkAssignTeacherIn = z.infer<typeof bulkAssignTeacherSchema>;
+
 export const updateCombinationSchema = z
   .object({
     code: z.string().min(1).max(20).optional(),

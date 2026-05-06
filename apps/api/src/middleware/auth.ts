@@ -6,7 +6,10 @@ import { verifyToken } from "../utils/jwt";
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) {
-    res.status(401).json({ success: false, error: "Unauthorized" });
+    res.status(401).json({
+      success: false,
+      error: "Please sign in to continue. Your session token is missing or invalid.",
+    });
     return;
   }
   const token = header.slice(7);
@@ -24,12 +27,18 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       [payload.sid, payload.sub, tokenHash],
     );
     if (session.rowCount === 0) {
-      res.status(401).json({ success: false, error: "Session expired or revoked" });
+      res.status(401).json({
+        success: false,
+        error: "Your session has expired or you signed out elsewhere. Please sign in again.",
+      });
       return;
     }
     req.user = { id: payload.sub, role: payload.role, sessionId: payload.sid };
     next();
   } catch {
-    res.status(401).json({ success: false, error: "Invalid or expired token" });
+    res.status(401).json({
+      success: false,
+      error: "Your login session is no longer valid. Please sign in again.",
+    });
   }
 }

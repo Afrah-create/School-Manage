@@ -573,6 +573,118 @@ export async function deleteClassSubject(id: string) {
   if (r.rowCount === 0) throw new HttpError(404, "Class subject assignment not found");
 }
 
+export type BulkUpdatedClassSubject = { id: string; teacherId: string | null };
+
+export async function bulkAssignTeacher(
+  teacherId: string | null,
+  classSubjectIds: string[],
+): Promise<BulkUpdatedClassSubject[]> {
+  const { rows } = await query(
+    `UPDATE class_subjects
+     SET teacher_id = $1, updated_at = NOW()
+     WHERE id = ANY($2::uuid[])
+     RETURNING id, teacher_id`,
+    [teacherId, classSubjectIds],
+  );
+  return rows.map((r) => {
+    const x = r as { id: string; teacher_id: string | null };
+    return { id: String(x.id), teacherId: x.teacher_id ? String(x.teacher_id) : null };
+  });
+}
+
+export type TeacherAssignmentRow = {
+  classSubjectId: string;
+  className: string;
+  classStream: string;
+  subjectName: string;
+  termName: string | null;
+  academicYear: string;
+};
+
+export async function getTeacherAssignments(
+  teacherId: string,
+  academicYearId: string,
+): Promise<TeacherAssignmentRow[]> {
+  const { rows } = await query(
+    `SELECT
+       cs.id AS class_subject_id,
+       c.name AS class_name,
+       c.stream AS class_stream,
+       s.name AS subject_name,
+       CASE WHEN t.id IS NULL THEN NULL ELSE ('Term ' || t.term_number::text) END AS term_name,
+       ay.name AS academic_year
+     FROM class_subjects cs
+     JOIN classes c ON c.id = cs.class_id
+     JOIN subjects s ON s.id = cs.subject_id
+     LEFT JOIN terms t ON t.id = cs.term_id
+     JOIN academic_years ay ON ay.id = cs.academic_year_id
+     WHERE cs.teacher_id = $1
+       AND cs.academic_year_id = $2
+     ORDER BY c.name, c.stream, s.name`,
+    [teacherId, academicYearId],
+  );
+  return rows.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      classSubjectId: String(x["class_subject_id"]),
+      className: String(x["class_name"]),
+      classStream: String(x["class_stream"]),
+      subjectName: String(x["subject_name"]),
+      termName: x["term_name"] != null ? String(x["term_name"]) : null,
+      academicYear: String(x["academic_year"]),
+    };
+  });
+}
+
+export async function getTeacherAssignmentCount(teacherId: string, academicYearId: string): Promise<number> {
+  const { rows } = await query(
+    `SELECT COUNT(*)::text AS count
+     FROM class_subjects
+     WHERE teacher_id = $1
+       AND academic_year_id = $2`,
+    [teacherId, academicYearId],
+  );
+  const row = rows[0] as { count: string } | undefined;
+  return Number(row?.count ?? 0);
+}
+
+export type UnassignedClassSubjectRow = {
+  id: string;
+  className: string;
+  classStream: string;
+  subjectName: string;
+  termName: string | null;
+};
+
+export async function getUnassignedClassSubjects(academicYearId: string): Promise<UnassignedClassSubjectRow[]> {
+  const { rows } = await query(
+    `SELECT
+       cs.id,
+       c.name AS class_name,
+       c.stream AS class_stream,
+       s.name AS subject_name,
+       CASE WHEN t.id IS NULL THEN NULL ELSE ('Term ' || t.term_number::text) END AS term_name
+     FROM class_subjects cs
+     JOIN classes c ON c.id = cs.class_id
+     JOIN subjects s ON s.id = cs.subject_id
+     LEFT JOIN terms t ON t.id = cs.term_id
+     WHERE cs.teacher_id IS NULL
+       AND cs.academic_year_id = $1
+     ORDER BY c.name, c.stream, s.name`,
+    [academicYearId],
+  );
+  return rows.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      id: String(x["id"]),
+      className: String(x["class_name"]),
+      classStream: String(x["class_stream"]),
+      subjectName: String(x["subject_name"]),
+      termName: x["term_name"] != null ? String(x["term_name"]) : null,
+    };
+  });
+}
+
 export async function bulkAssignSubjectsToClass(input: ClassSubjectBulkIn) {
   const values = input.subjectIds
     .map((_: string, idx: number) => `($1, $${idx + 4}, $2, $3, NOW(), NOW())`)

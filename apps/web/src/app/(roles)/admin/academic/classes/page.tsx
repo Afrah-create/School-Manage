@@ -19,6 +19,11 @@ import { Table, type Column } from "@/components/ui/Table";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 
 type Form = z.infer<typeof classSchema>;
+type UsersListResponse =
+  | UserPublic[]
+  | {
+      items: UserPublic[];
+    };
 
 type Row = SchoolClass & Record<string, unknown>;
 const ACTION_BTN =
@@ -61,11 +66,12 @@ export default function AdminAcademicClassesPage() {
 
   const load = async () => {
     try {
-      const [c, y, u] = await Promise.all([
+      const [c, y, usersResponse] = await Promise.all([
         apiGet<SchoolClass[]>("/academic/classes"),
         apiGet<AcademicYear[]>("/academic/years"),
-        apiGet<UserPublic[]>("/users"),
+        apiGet<UsersListResponse>("/users"),
       ]);
+      const u = Array.isArray(usersResponse) ? usersResponse : (usersResponse.items ?? []);
       setClasses(c);
       setYears(y);
       setUsers(u);

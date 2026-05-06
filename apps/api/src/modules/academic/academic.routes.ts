@@ -29,7 +29,10 @@ academicRouter.patch("/subjects/:id", academicLeads, asyncHandler(c.patchSubject
 academicRouter.delete("/subjects/:id", academicLeads, asyncHandler(c.deleteSubject));
 academicRouter.post("/class-subjects", academicLeads, asyncHandler(c.postClassSubject));
 academicRouter.post("/class-subjects/bulk", academicLeads, asyncHandler(c.postClassSubjectsBulk));
+academicRouter.post("/class-subjects/bulk-assign-teacher", academicLeads, asyncHandler(c.postBulkAssignTeacher));
 academicRouter.get("/class-subjects", teachingReaders, asyncHandler(c.getClassSubjects));
+academicRouter.get("/class-subjects/unassigned", teachingReaders, asyncHandler(c.getUnassignedClassSubjects));
+academicRouter.get("/teachers/:teacherId/assignments", teachingReaders, asyncHandler(c.getTeacherWorkload));
 academicRouter.get("/class-subjects/:id", teachingReaders, asyncHandler(c.getClassSubjectById));
 academicRouter.put("/class-subjects/:id", academicLeads, asyncHandler(c.putClassSubject));
 academicRouter.delete("/class-subjects/:id", academicLeads, asyncHandler(c.deleteClassSubject));

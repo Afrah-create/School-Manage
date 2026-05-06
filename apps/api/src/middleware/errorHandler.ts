@@ -2,6 +2,20 @@ import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { HttpError } from "../utils/httpError";
 
+function friendlyZodMessage(err: ZodError): string {
+  return err.errors
+    .map((issue) => {
+      const last = issue.path.length ? issue.path[issue.path.length - 1] : null;
+      const key =
+        typeof last === "string" ? last : typeof last === "number" ? String(last) : "";
+      const spaced = key ? key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim() : "";
+      const label = spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : "";
+      const prefix = label ? `${label}: ` : "";
+      return `${prefix}${issue.message}`;
+    })
+    .join(" ");
+}
+
 export function errorHandler(
   err: unknown,
   _req: Request,
@@ -9,8 +23,7 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   if (err instanceof ZodError) {
-    const zErr = err as ZodError;
-    const msg = zErr.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
+    const msg = friendlyZodMessage(err);
     res.status(400).json({ success: false, error: msg });
     return;
   }

@@ -41,7 +41,10 @@ export async function login(req: Request, res: Response): Promise<void> {
 
 export async function logout(req: Request, res: Response): Promise<void> {
   if (!req.user) {
-    res.status(401).json({ success: false, error: "Unauthorized" });
+    res.status(401).json({
+      success: false,
+      error: "We couldn't sign you out because you're not signed in.",
+    });
     return;
   }
   await authService.logout(req.user.sessionId);
@@ -50,7 +53,10 @@ export async function logout(req: Request, res: Response): Promise<void> {
 
 export async function changePassword(req: Request, res: Response): Promise<void> {
   if (!req.user) {
-    res.status(401).json({ success: false, error: "Unauthorized" });
+    res.status(401).json({
+      success: false,
+      error: "Please sign in again to change your password.",
+    });
     return;
   }
   const body = changePasswordSchema.parse(req.body) as ChangePasswordInput;
