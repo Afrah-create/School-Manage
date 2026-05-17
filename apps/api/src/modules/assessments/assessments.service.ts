@@ -45,6 +45,12 @@ export async function teacherAssignedToStudentSubject(
        AND (
          cs.teacher_id = $1
          OR c.class_teacher_id = $1
+         OR EXISTS (
+           SELECT 1 FROM class_teacher_assignments cta
+           WHERE cta.class_id = st.class_id
+             AND cta.teacher_id = $1
+             AND cta.academic_year_id = $4
+         )
        )
      LIMIT 1`,
     [teacherId, studentId, subjectId, yearId],

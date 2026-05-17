@@ -68,7 +68,7 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
       { href: "/class-teacher/dashboard", label: "Dashboard", icon: "home" },
       {
         href: "/class-teacher/students",
-        label: "My Class",
+        label: "My classes",
         icon: "school",
         activePrefix: "/class-teacher/students",
       },
@@ -104,6 +104,12 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
     productLabel: PRODUCT_LABEL,
     items: [
       { href: "/subject-teacher/dashboard", label: "Dashboard", icon: "home" },
+      {
+        href: "/subject-teacher/students",
+        label: "My classes",
+        icon: "users",
+        activePrefix: "/subject-teacher/students",
+      },
       {
         href: "/subject-teacher/attendance",
         label: "Attendance",

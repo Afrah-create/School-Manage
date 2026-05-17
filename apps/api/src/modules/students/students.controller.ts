@@ -28,7 +28,8 @@ export async function list(req: Request, res: Response): Promise<void> {
     res.status(401).json({ success: false, error: "Unauthorized" });
     return;
   }
-  const rows = await svc.listStudents(req.user.role, req.user.id);
+  const classId = typeof req.query["classId"] === "string" ? req.query["classId"] : undefined;
+  const rows = await svc.listStudents(req.user.role, req.user.id, classId);
   res.json({ success: true, data: rows });
 }
 

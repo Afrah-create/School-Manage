@@ -32,6 +32,13 @@ academicRouter.post("/class-subjects/bulk", academicLeads, asyncHandler(c.postCl
 academicRouter.post("/class-subjects/bulk-assign-teacher", academicLeads, asyncHandler(c.postBulkAssignTeacher));
 academicRouter.get("/class-subjects", teachingReaders, asyncHandler(c.getClassSubjects));
 academicRouter.get("/class-subjects/unassigned", teachingReaders, asyncHandler(c.getUnassignedClassSubjects));
+academicRouter.get("/my-classes", teachingReaders, asyncHandler(c.getMyClasses));
+academicRouter.get("/class-teacher-assignments", teachingReaders, asyncHandler(c.getClassTeacherAssignments));
+academicRouter.put(
+  "/classes/:classId/teacher-assignments",
+  academicLeads,
+  asyncHandler(c.putClassTeacherAssignments),
+);
 academicRouter.get("/teaching-staff", teachingReaders, asyncHandler(c.getTeachingStaff));
 academicRouter.get("/teaching-staff/eligible", teachingReaders, asyncHandler(c.getEligibleTeachers));
 academicRouter.get("/teachers/:teacherId/specializations", teachingReaders, asyncHandler(c.getTeacherSpecializations));

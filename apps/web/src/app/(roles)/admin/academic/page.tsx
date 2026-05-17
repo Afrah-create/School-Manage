@@ -14,6 +14,11 @@ const LINKS = [
   { href: "/admin/academic/subjects", title: "Subjects", desc: "Subject catalogue" },
   { href: "/admin/academic/class-subjects", title: "Class-subject assignments", desc: "Assign subjects to classes" },
   {
+    href: "/admin/academic/class-teachers",
+    title: "Class teachers",
+    desc: "Assign multiple teachers per class (homeroom head + others)",
+  },
+  {
     href: "/admin/academic/teacher-assignments",
     title: "Teacher workload",
     desc: "Allocate teachers to class subjects by year (teachable-subject matching)",

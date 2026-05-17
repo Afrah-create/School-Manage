@@ -1,4 +1,5 @@
 import { query } from "../config/db";
+import { teacherAssignedToClass } from "./classTeacherAssignments";
 
 /** Roles that may be assigned to teach a class–subject slot (subject marks + attendance). */
 export const TEACHING_ASSIGNMENT_ROLES = new Set([
@@ -29,6 +30,12 @@ export async function teacherCanTeachClassSubject(
        AND (
          cs.teacher_id = $1
          OR c.class_teacher_id = $1
+         OR EXISTS (
+           SELECT 1 FROM class_teacher_assignments cta
+           WHERE cta.class_id = $2
+             AND cta.teacher_id = $1
+             AND cta.academic_year_id = $4
+         )
        )
      LIMIT 1`,
     [teacherId, classId, subjectId, academicYearId],
@@ -42,12 +49,8 @@ export async function teacherCanAccessClassForAttendance(
   role: string,
 ): Promise<boolean> {
   if (role === "admin" || role === "headteacher") return true;
-  if (role === "class_teacher") {
-    const { rows } = await query(
-      `SELECT 1 FROM classes WHERE id = $1 AND class_teacher_id = $2`,
-      [classId, teacherId],
-    );
-    return rows.length > 0;
+  if (role === "class_teacher" || role === "subject_teacher") {
+    if (await teacherAssignedToClass(teacherId, classId)) return true;
   }
   if (role === "subject_teacher") {
     const { rows } = await query(
@@ -83,6 +86,12 @@ export function teacherEligibilitySql(teacherParam: string): string {
             u.role = 'class_teacher'
             AND (
               c.class_teacher_id = u.id
+              OR EXISTS (
+                SELECT 1 FROM class_teacher_assignments cta
+                WHERE cta.class_id = c.id
+                  AND cta.teacher_id = u.id
+                  AND cta.academic_year_id = cs.academic_year_id
+              )
               OR (
                 NOT EXISTS (SELECT 1 FROM teacher_subject_specializations tss WHERE tss.teacher_id = u.id)
                 OR EXISTS (

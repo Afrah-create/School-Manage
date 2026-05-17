@@ -147,6 +147,24 @@ export const teacherSpecializationsSchema = z.object({
   subjectIds: z.array(z.string().uuid()),
 });
 
+export const classTeacherAssignmentsQuerySchema = z.object({
+  classId: z.string().uuid().optional(),
+  teacherId: z.string().uuid().optional(),
+  academicYearId: z.string().uuid().optional(),
+});
+
+export const setClassTeacherAssignmentsSchema = z.object({
+  academicYearId: z.string().uuid(),
+  teachers: z
+    .array(
+      z.object({
+        teacherId: z.string().uuid(),
+        isHomeroom: z.boolean().optional().default(false),
+      }),
+    )
+    .default([]),
+});
+
 export type BulkAssignTeacherIn = z.infer<typeof bulkAssignTeacherSchema>;
 
 export const updateCombinationSchema = z

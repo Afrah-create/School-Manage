@@ -167,8 +167,20 @@ export default function AdminAcademicClassesPage() {
     },
     {
       key: "classTeacherId",
-      header: "Teacher",
+      header: "Homeroom",
       render: (r) => users.find((u) => u.id === r.classTeacherId)?.fullName ?? "—",
+    },
+    {
+      key: "manage",
+      header: "",
+      render: (r) => (
+        <Link
+          href={`/admin/academic/class-teachers?classId=${encodeURIComponent(r.id)}&academicYearId=${encodeURIComponent(r.academicYearId)}`}
+          className="text-sm font-medium text-brand hover:underline"
+        >
+          Teachers
+        </Link>
+      ),
     },
     {
       key: "actions",

@@ -19,6 +19,8 @@ const {
   teacherAssignmentsQuerySchema,
   eligibleTeachersQuerySchema,
   teacherSpecializationsSchema,
+  classTeacherAssignmentsQuerySchema,
+  setClassTeacherAssignmentsSchema,
   updateClassSubjectSchema,
   combinationSchema,
   updateCombinationSchema,
@@ -43,6 +45,8 @@ const {
   teacherAssignmentsQuerySchema: { parse: (v: unknown) => unknown };
   eligibleTeachersQuerySchema: { parse: (v: unknown) => unknown };
   teacherSpecializationsSchema: { parse: (v: unknown) => unknown };
+  classTeacherAssignmentsQuerySchema: { parse: (v: unknown) => unknown };
+  setClassTeacherAssignmentsSchema: { parse: (v: unknown) => unknown };
   updateClassSubjectSchema: { parse: (v: unknown) => unknown };
   combinationSchema: { parse: (v: unknown) => unknown };
   updateCombinationSchema: { parse: (v: unknown) => unknown };
@@ -262,6 +266,35 @@ export async function putTeacherSpecializations(req: Request, res: Response): Pr
   const body = teacherSpecializationsSchema.parse(req.body) as { subjectIds: string[] };
   const rows = await svc.setTeacherSpecializations(req.params["teacherId"]!, body.subjectIds);
   res.json({ success: true, data: rows, message: "Teacher specializations updated." });
+}
+
+export async function getClassTeacherAssignments(req: Request, res: Response): Promise<void> {
+  const queryParams = classTeacherAssignmentsQuerySchema.parse(req.query) as {
+    classId?: string;
+    teacherId?: string;
+    academicYearId?: string;
+  };
+  const rows = await svc.listClassTeacherAssignments(queryParams);
+  res.json({ success: true, data: rows, message: "Class teacher assignments loaded." });
+}
+
+export async function putClassTeacherAssignments(req: Request, res: Response): Promise<void> {
+  const body = setClassTeacherAssignmentsSchema.parse(req.body) as {
+    academicYearId: string;
+    teachers: { teacherId: string; isHomeroom?: boolean }[];
+  };
+  const rows = await svc.setClassTeacherAssignments(req.params["classId"]!, body);
+  res.json({ success: true, data: rows, message: "Class teachers updated." });
+}
+
+export async function getMyClasses(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return;
+  }
+  const academicYearId = req.query["academicYearId"] as string | undefined;
+  const rows = await svc.listTeacherClasses(req.user.id, academicYearId);
+  res.json({ success: true, data: rows, message: "Your classes loaded." });
 }
 
 export async function postCombination(req: Request, res: Response): Promise<void> {

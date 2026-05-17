@@ -97,36 +97,78 @@ export async function createStudent(input: CreateStudentInput) {
   }
 }
 
-function listWhereClause(role: Role, userId: string): { sql: string; params: string[] } {
+const TEACHER_STUDENT_ACCESS_SQL = ` AND (
+    EXISTS (
+      SELECT 1 FROM class_teacher_assignments cta
+      WHERE cta.class_id = s.class_id AND cta.teacher_id = $1
+    )
+    OR EXISTS (
+      SELECT 1 FROM class_subjects cs
+      WHERE cs.class_id = s.class_id AND cs.teacher_id = $1
+    )
+    OR EXISTS (
+      SELECT 1 FROM classes c
+      WHERE c.id = s.class_id AND c.class_teacher_id = $1
+    )
+  )`;
+
+function listWhereClause(
+  role: Role,
+  userId: string,
+  classId?: string,
+): { sql: string; params: string[] } {
   if (role === "admin" || role === "headteacher" || role === "bursar") {
+    if (classId) return { sql: " AND s.class_id = $1", params: [classId] };
     return { sql: "", params: [] };
   }
-  if (role === "class_teacher") {
-    return {
-      sql: ` AND EXISTS (SELECT 1 FROM classes c WHERE c.id = s.class_id AND c.class_teacher_id = $1)`,
-      params: [userId],
-    };
-  }
-  if (role === "subject_teacher") {
-    return {
-      sql: ` AND EXISTS (
-        SELECT 1 FROM class_subjects cs WHERE cs.class_id = s.class_id AND cs.teacher_id = $1
-      )`,
-      params: [userId],
-    };
+  if (role === "class_teacher" || role === "subject_teacher") {
+    const params = [userId];
+    let sql = TEACHER_STUDENT_ACCESS_SQL;
+    if (classId) {
+      sql += ` AND s.class_id = $2`;
+      params.push(classId);
+    }
+    return { sql, params };
   }
   return { sql: " AND false", params: [] };
 }
 
-export async function listStudents(role: Role, userId: string) {
-  try {
-    const { sql: extra, params } = listWhereClause(role, userId);
+async function teacherMayViewClass(role: Role, userId: string, classId: string): Promise<boolean> {
+  if (role === "admin" || role === "headteacher" || role === "bursar") return true;
+  if (role === "class_teacher" || role === "subject_teacher") {
     const { rows } = await query(
-      `SELECT s.* FROM students s WHERE 1=1 ${extra} ORDER BY s.student_number`,
+      `SELECT 1
+       WHERE EXISTS (
+         SELECT 1 FROM class_teacher_assignments cta
+         WHERE cta.class_id = $2 AND cta.teacher_id = $1
+       )
+       OR EXISTS (
+         SELECT 1 FROM class_subjects cs
+         WHERE cs.class_id = $2 AND cs.teacher_id = $1
+       )
+       OR EXISTS (
+         SELECT 1 FROM classes c WHERE c.id = $2 AND c.class_teacher_id = $1
+       )`,
+      [userId, classId],
+    );
+    return rows.length > 0;
+  }
+  return false;
+}
+
+export async function listStudents(role: Role, userId: string, classId?: string) {
+  try {
+    if (classId && !(await teacherMayViewClass(role, userId, classId))) {
+      throw new HttpError(403, "You are not assigned to this class");
+    }
+    const { sql: extra, params } = listWhereClause(role, userId, classId);
+    const { rows } = await query(
+      `SELECT s.* FROM students s WHERE s.status = 'active' ${extra} ORDER BY s.student_number`,
       params,
     );
     return rows.map((r) => mapStudent(r as never));
   } catch (e) {
+    if (e instanceof HttpError) throw e;
     throw new Error(e instanceof Error ? e.message : "Could not list students");
   }
 }
@@ -136,20 +178,24 @@ export async function canViewStudent(id: string, role: Role, userId: string): Pr
     const { rows } = await query(`SELECT 1 FROM students WHERE id = $1`, [id]);
     return rows.length > 0;
   }
-  if (role === "class_teacher") {
+  if (role === "class_teacher" || role === "subject_teacher") {
     const { rows } = await query(
       `SELECT 1 FROM students s
-       JOIN classes c ON c.id = s.class_id
-       WHERE s.id = $1 AND c.class_teacher_id = $2`,
-      [id, userId],
-    );
-    return rows.length > 0;
-  }
-  if (role === "subject_teacher") {
-    const { rows } = await query(
-      `SELECT 1 FROM students s
-       JOIN class_subjects cs ON cs.class_id = s.class_id AND cs.teacher_id = $2
-       WHERE s.id = $1`,
+       WHERE s.id = $1
+         AND (
+           EXISTS (
+             SELECT 1 FROM class_teacher_assignments cta
+             WHERE cta.class_id = s.class_id AND cta.teacher_id = $2
+           )
+           OR EXISTS (
+             SELECT 1 FROM class_subjects cs
+             WHERE cs.class_id = s.class_id AND cs.teacher_id = $2
+           )
+           OR EXISTS (
+             SELECT 1 FROM classes c
+             WHERE c.id = s.class_id AND c.class_teacher_id = $2
+           )
+         )`,
       [id, userId],
     );
     return rows.length > 0;

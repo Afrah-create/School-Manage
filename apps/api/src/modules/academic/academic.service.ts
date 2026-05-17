@@ -1,5 +1,6 @@
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
+import { syncHomeroomOnClass } from "../../utils/classTeacherAssignments";
 import { teacherEligibilitySql } from "../../utils/teacherTeachingAccess";
 import { validateGradingScaleRows } from "../../utils/gradingScales";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
@@ -315,7 +316,14 @@ export async function createClass(input: ClassIn) {
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [input.name, input.stream, normalizeLevel(input.level), input.academicYearId, input.classTeacherId ?? null],
     );
-    return mapClass(rows[0]! as never);
+    const created = mapClass(rows[0]! as never);
+    if (input.classTeacherId) {
+      await setClassTeacherAssignments(created.id, {
+        academicYearId: input.academicYearId,
+        teachers: [{ teacherId: input.classTeacherId, isHomeroom: true }],
+      });
+    }
+    return created;
   } catch (e) {
     throw new Error(e instanceof Error ? e.message : "Could not create class");
   }
@@ -357,7 +365,23 @@ export async function updateClass(id: string, input: ClassUpdateIn) {
   values.push(id);
   const { rows } = await query(`UPDATE classes SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`, values);
   if (!rows[0]) throw new HttpError(404, "Class not found");
-  return mapClass(rows[0] as never);
+  const updated = mapClass(rows[0] as never);
+  if (input.classTeacherId !== undefined) {
+    const yearId = input.academicYearId ?? updated.academicYearId;
+    if (input.classTeacherId) {
+      const existing = await listClassTeacherAssignments({ classId: id, academicYearId: yearId });
+      const others = existing
+        .filter((a) => a.teacherId !== input.classTeacherId)
+        .map((a) => ({ teacherId: a.teacherId, isHomeroom: false }));
+      await setClassTeacherAssignments(id, {
+        academicYearId: yearId,
+        teachers: [{ teacherId: input.classTeacherId, isHomeroom: true }, ...others],
+      });
+    } else {
+      await syncHomeroomOnClass(id, yearId);
+    }
+  }
+  return updated;
 }
 
 export async function deleteClass(id: string) {
@@ -809,9 +833,15 @@ export async function getEligibleTeachers(filters: {
     ) = $2
   )`;
   const homeroomSql = filters.classId
-    ? `EXISTS (
-         SELECT 1 FROM classes hc
-         WHERE hc.id = $3 AND hc.class_teacher_id = u.id
+    ? `(
+         EXISTS (
+           SELECT 1 FROM class_teacher_assignments cta
+           WHERE cta.class_id = $3 AND cta.teacher_id = u.id AND cta.is_homeroom = true
+         )
+         OR EXISTS (
+           SELECT 1 FROM classes hc
+           WHERE hc.id = $3 AND hc.class_teacher_id = u.id
+         )
        )`
     : "FALSE";
   const queryParams: unknown[] = [uniqueSubjectIds, uniqueSubjectIds.length];
@@ -940,6 +970,219 @@ export async function getUnassignedClassSubjects(
       classStream: String(x["class_stream"]),
       subjectName: String(x["subject_name"]),
       termName: x["term_name"] != null ? String(x["term_name"]) : null,
+    };
+  });
+}
+
+export type ClassTeacherAssignmentRow = {
+  id: string;
+  classId: string;
+  className: string;
+  classStream: string;
+  teacherId: string;
+  teacherName: string;
+  teacherRole: string;
+  academicYearId: string;
+  academicYearName: string;
+  isHomeroom: boolean;
+};
+
+export type TeacherClassRow = {
+  classId: string;
+  className: string;
+  classStream: string;
+  level: string;
+  academicYearId: string;
+  academicYearName: string;
+  isHomeroom: boolean;
+  studentCount: number;
+};
+
+export async function listClassTeacherAssignments(filters: {
+  classId?: string;
+  teacherId?: string;
+  academicYearId?: string;
+}): Promise<ClassTeacherAssignmentRow[]> {
+  const where: string[] = ["1=1"];
+  const values: unknown[] = [];
+  let i = 1;
+  if (filters.classId) {
+    where.push(`cta.class_id = $${i++}`);
+    values.push(filters.classId);
+  }
+  if (filters.teacherId) {
+    where.push(`cta.teacher_id = $${i++}`);
+    values.push(filters.teacherId);
+  }
+  if (filters.academicYearId) {
+    where.push(`cta.academic_year_id = $${i++}`);
+    values.push(filters.academicYearId);
+  }
+  const { rows } = await query(
+    `SELECT
+       cta.id,
+       cta.class_id,
+       c.name AS class_name,
+       c.stream AS class_stream,
+       cta.teacher_id,
+       u.full_name AS teacher_name,
+       u.role AS teacher_role,
+       cta.academic_year_id,
+       ay.name AS academic_year_name,
+       cta.is_homeroom
+     FROM class_teacher_assignments cta
+     JOIN classes c ON c.id = cta.class_id
+     JOIN users u ON u.id = cta.teacher_id
+     JOIN academic_years ay ON ay.id = cta.academic_year_id
+     WHERE ${where.join(" AND ")}
+     ORDER BY c.name, c.stream, cta.is_homeroom DESC, u.full_name`,
+    values,
+  );
+  return rows.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      id: String(x["id"]),
+      classId: String(x["class_id"]),
+      className: String(x["class_name"]),
+      classStream: String(x["class_stream"]),
+      teacherId: String(x["teacher_id"]),
+      teacherName: String(x["teacher_name"]),
+      teacherRole: String(x["teacher_role"]),
+      academicYearId: String(x["academic_year_id"]),
+      academicYearName: String(x["academic_year_name"]),
+      isHomeroom: Boolean(x["is_homeroom"]),
+    };
+  });
+}
+
+export async function setClassTeacherAssignments(
+  classId: string,
+  input: { academicYearId: string; teachers: { teacherId: string; isHomeroom?: boolean }[] },
+) {
+  const { rows: classRows } = await query<{ academic_year_id: string }>(
+    `SELECT academic_year_id FROM classes WHERE id = $1`,
+    [classId],
+  );
+  if (!classRows[0]) throw new HttpError(404, "Class not found");
+  if (classRows[0].academic_year_id !== input.academicYearId) {
+    throw new HttpError(400, "Academic year does not match this class");
+  }
+
+  const unique = new Map<string, boolean>();
+  for (const t of input.teachers) {
+    if (unique.has(t.teacherId)) {
+      unique.set(t.teacherId, unique.get(t.teacherId)! || Boolean(t.isHomeroom));
+    } else {
+      unique.set(t.teacherId, Boolean(t.isHomeroom));
+    }
+  }
+  let homeroomCount = 0;
+  for (const isH of unique.values()) {
+    if (isH) homeroomCount += 1;
+  }
+  if (homeroomCount > 1) {
+    throw new HttpError(400, "Only one homeroom (class head) teacher is allowed per class");
+  }
+
+  const teacherIds = [...unique.keys()];
+  if (teacherIds.length > 0) {
+    const { rows: users } = await query(
+      `SELECT id, role FROM users WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL AND is_active = true`,
+      [teacherIds],
+    );
+    if (users.length !== teacherIds.length) {
+      throw new HttpError(400, "One or more teachers were not found or are inactive");
+    }
+    for (const u of users as { role: string }[]) {
+      if (!TEACHING_STAFF_ROLES.includes(u.role as (typeof TEACHING_STAFF_ROLES)[number])) {
+        throw new HttpError(400, `User role '${u.role}' cannot be assigned to a class`);
+      }
+    }
+  }
+
+  await query(
+    `DELETE FROM class_teacher_assignments WHERE class_id = $1 AND academic_year_id = $2`,
+    [classId, input.academicYearId],
+  );
+
+  for (const [teacherId, isHomeroom] of unique) {
+    await query(
+      `INSERT INTO class_teacher_assignments (class_id, teacher_id, academic_year_id, is_homeroom)
+       VALUES ($1, $2, $3, $4)`,
+      [classId, teacherId, input.academicYearId, isHomeroom],
+    );
+  }
+
+  await syncHomeroomOnClass(classId, input.academicYearId);
+  return listClassTeacherAssignments({ classId, academicYearId: input.academicYearId });
+}
+
+export async function listTeacherClasses(
+  teacherId: string,
+  academicYearId?: string,
+): Promise<TeacherClassRow[]> {
+  const values: unknown[] = [teacherId];
+  let yearClauseCta = "";
+  let yearClauseCs = "";
+  if (academicYearId) {
+    yearClauseCta = " AND cta.academic_year_id = $2";
+    yearClauseCs = " AND cs.academic_year_id = $2";
+    values.push(academicYearId);
+  }
+  const { rows } = await query(
+    `WITH my_classes AS (
+       SELECT
+         c.id AS class_id,
+         c.name AS class_name,
+         c.stream AS class_stream,
+         c.level,
+         cta.academic_year_id,
+         ay.name AS academic_year_name,
+         cta.is_homeroom
+       FROM class_teacher_assignments cta
+       JOIN classes c ON c.id = cta.class_id
+       JOIN academic_years ay ON ay.id = cta.academic_year_id
+       WHERE cta.teacher_id = $1${yearClauseCta}
+       UNION
+       SELECT
+         c.id,
+         c.name,
+         c.stream,
+         c.level,
+         cs.academic_year_id,
+         ay.name,
+         false AS is_homeroom
+       FROM class_subjects cs
+       JOIN classes c ON c.id = cs.class_id
+       JOIN academic_years ay ON ay.id = cs.academic_year_id
+       WHERE cs.teacher_id = $1${yearClauseCs}
+     )
+     SELECT
+       mc.class_id,
+       mc.class_name,
+       mc.class_stream,
+       mc.level,
+       mc.academic_year_id,
+       mc.academic_year_name,
+       BOOL_OR(mc.is_homeroom) AS is_homeroom,
+       COUNT(st.id)::int AS student_count
+     FROM my_classes mc
+     LEFT JOIN students st ON st.class_id = mc.class_id AND st.status = 'active'
+     GROUP BY mc.class_id, mc.class_name, mc.class_stream, mc.level, mc.academic_year_id, mc.academic_year_name
+     ORDER BY mc.class_name, mc.class_stream`,
+    values,
+  );
+  return rows.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      classId: String(x["class_id"]),
+      className: String(x["class_name"]),
+      classStream: String(x["class_stream"]),
+      level: String(x["level"]),
+      academicYearId: String(x["academic_year_id"]),
+      academicYearName: String(x["academic_year_name"]),
+      isHomeroom: Boolean(x["is_homeroom"]),
+      studentCount: Number(x["student_count"] ?? 0),
     };
   });
 }
