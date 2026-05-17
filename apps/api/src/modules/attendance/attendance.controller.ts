@@ -10,7 +10,7 @@ export async function postAttendance(req: Request, res: Response): Promise<void>
     return;
   }
   const body = attendanceSchema.parse(req.body);
-  await svc.recordAttendance(body, req.user.id);
+  await svc.recordAttendance(body, req.user.id, req.user.role);
   res.status(201).json({ success: true, data: { saved: true } });
 }
 

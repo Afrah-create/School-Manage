@@ -372,7 +372,8 @@ export default function AdminAcademicClassSubjectsPage() {
       >
         <p className="mb-3 text-sm text-muted-foreground">
           Applies to {selectedIds.length} row(s) for {selectedClass ? `${selectedClass.name} ${selectedClass.stream}` : "this class"}.
-          Only teachers who can teach the selected subject(s) at this class level are listed.
+          Lists teachers qualified for these subjects. The homeroom class teacher can be assigned any subject in
+          their class; subject teachers need matching teachable subjects.
         </p>
         {eligibleError ? <Alert tone="error">{eligibleError}</Alert> : null}
         <Select

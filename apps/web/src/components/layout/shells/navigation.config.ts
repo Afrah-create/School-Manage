@@ -79,8 +79,20 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
         activePrefix: "/class-teacher/attendance",
       },
       {
+        href: "/class-teacher/assessment/cbc",
+        label: "CBC Assessment",
+        icon: "bookOpen",
+        activePrefix: "/class-teacher/assessment/cbc",
+      },
+      {
+        href: "/class-teacher/assessment/alevel",
+        label: "A-Level Assessment",
+        icon: "graduationCap",
+        activePrefix: "/class-teacher/assessment/alevel",
+      },
+      {
         href: "/class-teacher/comments",
-        label: "Comments",
+        label: "Report comments",
         icon: "fileBarChart2",
         activePrefix: "/class-teacher/comments",
       },
@@ -92,6 +104,12 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
     productLabel: PRODUCT_LABEL,
     items: [
       { href: "/subject-teacher/dashboard", label: "Dashboard", icon: "home" },
+      {
+        href: "/subject-teacher/attendance",
+        label: "Attendance",
+        icon: "clipboardCheck",
+        activePrefix: "/subject-teacher/attendance",
+      },
       {
         href: "/subject-teacher/assessment/cbc",
         label: "CBC Assessment",

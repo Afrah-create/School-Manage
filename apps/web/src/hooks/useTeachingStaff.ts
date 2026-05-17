@@ -12,9 +12,14 @@ export type TeachingStaffMember = {
 };
 
 function staffLabel(t: TeachingStaffMember): string {
+  const roleLabel = t.role === "class_teacher" ? "class teacher (homeroom)" : t.role.replace(/_/g, " ");
   const spec =
-    t.specializationCount > 0 ? ` · ${t.specializationCount} subject(s)` : " · any subject (not specialized)";
-  return `${t.fullName} (${t.role.replace(/_/g, " ")})${spec}`;
+    t.role === "class_teacher"
+      ? ""
+      : t.specializationCount > 0
+        ? ` · ${t.specializationCount} subject(s)`
+        : " · any subject (not specialized)";
+  return `${t.fullName} (${roleLabel})${spec}`;
 }
 
 export function useTeachingStaff() {

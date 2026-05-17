@@ -7,5 +7,9 @@ import * as c from "./attendance.controller";
 export const attendanceRouter = Router();
 
 attendanceRouter.use(requireAuth);
-attendanceRouter.post("/", requireRoles("class_teacher", "admin"), asyncHandler(c.postAttendance));
+attendanceRouter.post(
+  "/",
+  requireRoles("class_teacher", "subject_teacher", "admin", "headteacher"),
+  asyncHandler(c.postAttendance),
+);
 attendanceRouter.get("/", asyncHandler(c.getAttendance));

@@ -27,7 +27,12 @@ type AlevelUpsertItem = {
   score: number;
 };
 
-export async function teacherAssignedToStudentSubject(teacherId: string, studentId: string, subjectId: string, yearId: string) {
+export async function teacherAssignedToStudentSubject(
+  teacherId: string,
+  studentId: string,
+  subjectId: string,
+  yearId: string,
+) {
   const { rows } = await query<{ ok: number }>(
     `SELECT 1 AS ok
      FROM students st
@@ -35,8 +40,12 @@ export async function teacherAssignedToStudentSubject(teacherId: string, student
        ON cs.class_id = st.class_id
       AND cs.subject_id = $3
       AND cs.academic_year_id = $4
-      AND cs.teacher_id = $1
+     JOIN classes c ON c.id = st.class_id
      WHERE st.id = $2
+       AND (
+         cs.teacher_id = $1
+         OR c.class_teacher_id = $1
+       )
      LIMIT 1`,
     [teacherId, studentId, subjectId, yearId],
   );
@@ -505,7 +514,7 @@ export async function alevelStatus(classId: string, termId: string, yearId: stri
 }
 
 export async function subjectsAssigned(teacherId: string, classId?: string, termId?: string, yearId?: string) {
-  const where: string[] = ["cs.teacher_id = $1"];
+  const where: string[] = ["(cs.teacher_id = $1 OR c.class_teacher_id = $1)"];
   const values: unknown[] = [teacherId];
   let i = 2;
   if (classId) {
@@ -528,6 +537,7 @@ export async function subjectsAssigned(teacherId: string, classId?: string, term
       cs.class_id AS "classId"
      FROM class_subjects cs
      JOIN subjects s ON s.id = cs.subject_id
+     JOIN classes c ON c.id = cs.class_id
      WHERE ${where.join(" AND ")}
      ORDER BY s.code`,
     values,

@@ -160,8 +160,9 @@ export default function AdminUsersEditPage() {
               <div className="rounded-md border border-border p-3">
                 <p className="mb-2 text-sm font-medium text-foreground">Teachable subjects</p>
                 <p className="mb-3 text-xs text-muted-foreground">
-                  Select subjects this teacher may be assigned to on class timetables. Leave empty to allow any
-                  subject at matching level until specializations are set.
+                  Subject teachers: subjects they may teach across classes. Class teachers: optional subjects
+                  outside their homeroom class — they can always teach any subject offered to the class they head.
+                  Leave empty to allow any subject at the matching level until specializations are set.
                 </p>
                 {specLoading ? (
                   <p className="text-sm text-muted-foreground">Loading specializations…</p>

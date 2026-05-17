@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import { HttpError } from "../../utils/httpError";
+import { TEACHING_ASSIGNMENT_ROLES } from "../../utils/teacherTeachingAccess";
 import { getUserById } from "../users/users.service";
 import * as gradingMaintenance from "./gradingScaleMaintenance";
 import * as svc from "./academic.service";
@@ -184,8 +185,6 @@ export async function postClassSubjectsBulk(req: Request, res: Response): Promis
   res.status(201).json({ success: true, data: rows, message: "Subjects assigned to class." });
 }
 
-const SUBJECT_TEACHER_ROLES = new Set(["subject_teacher", "headteacher", "admin"]);
-
 export async function postBulkAssignTeacher(req: Request, res: Response): Promise<void> {
   const body = bulkAssignTeacherSchema.parse(req.body) as {
     teacherId: string | null;
@@ -193,10 +192,10 @@ export async function postBulkAssignTeacher(req: Request, res: Response): Promis
   };
   if (body.teacherId) {
     const teacher = await getUserById(body.teacherId);
-    if (!SUBJECT_TEACHER_ROLES.has(teacher.role)) {
+    if (!TEACHING_ASSIGNMENT_ROLES.has(teacher.role)) {
       throw new HttpError(
         400,
-        `User role '${teacher.role}' cannot be assigned as a subject teacher`,
+        `User role '${teacher.role}' cannot be assigned to teach a class subject`,
       );
     }
   }

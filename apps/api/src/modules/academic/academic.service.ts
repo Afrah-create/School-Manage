@@ -1,5 +1,6 @@
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
+import { teacherEligibilitySql } from "../../utils/teacherTeachingAccess";
 import { validateGradingScaleRows } from "../../utils/gradingScales";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import type { z } from "zod";
@@ -766,34 +767,6 @@ export async function setTeacherSpecializations(teacherId: string, subjectIds: s
   return getTeacherSpecializations(teacherId);
 }
 
-/** SQL fragment: teacher $paramIndex is eligible to teach subject cs.subject_id in class c */
-function teacherEligibilitySql(teacherParam: string): string {
-  return `(
-    EXISTS (
-      SELECT 1 FROM users u
-      WHERE u.id = ${teacherParam}
-        AND u.deleted_at IS NULL
-        AND u.is_active = true
-        AND (
-          u.role IN ('admin', 'headteacher')
-          OR (
-            u.role IN ('subject_teacher', 'class_teacher')
-            AND (
-              NOT EXISTS (
-                SELECT 1 FROM teacher_subject_specializations tss WHERE tss.teacher_id = u.id
-              )
-              OR EXISTS (
-                SELECT 1 FROM teacher_subject_specializations tss
-                WHERE tss.teacher_id = u.id AND tss.subject_id = cs.subject_id
-              )
-            )
-          )
-        )
-    )
-    AND s.level = c.level
-  )`;
-}
-
 export async function getEligibleTeachers(filters: {
   subjectIds: string[];
   classId?: string;
@@ -826,6 +799,24 @@ export async function getEligibleTeachers(filters: {
     }
   }
 
+  const specMatchSql = `(
+    NOT EXISTS (SELECT 1 FROM teacher_subject_specializations tss WHERE tss.teacher_id = u.id)
+    OR (
+      SELECT COUNT(DISTINCT tss.subject_id)
+      FROM teacher_subject_specializations tss
+      WHERE tss.teacher_id = u.id
+        AND tss.subject_id = ANY($1::uuid[])
+    ) = $2
+  )`;
+  const homeroomSql = filters.classId
+    ? `EXISTS (
+         SELECT 1 FROM classes hc
+         WHERE hc.id = $3 AND hc.class_teacher_id = u.id
+       )`
+    : "FALSE";
+  const queryParams: unknown[] = [uniqueSubjectIds, uniqueSubjectIds.length];
+  if (filters.classId) queryParams.push(filters.classId);
+
   const { rows } = await query(
     `SELECT DISTINCT
        u.id,
@@ -843,21 +834,11 @@ export async function getEligibleTeachers(filters: {
        AND u.is_active = true
        AND (
          u.role IN ('admin', 'headteacher')
-         OR (
-           u.role IN ('subject_teacher', 'class_teacher')
-           AND (
-             NOT EXISTS (SELECT 1 FROM teacher_subject_specializations tss WHERE tss.teacher_id = u.id)
-             OR (
-               SELECT COUNT(DISTINCT tss.subject_id)
-               FROM teacher_subject_specializations tss
-               WHERE tss.teacher_id = u.id
-                 AND tss.subject_id = ANY($1::uuid[])
-             ) = $2
-           )
-         )
+         OR (u.role = 'subject_teacher' AND ${specMatchSql})
+         OR (u.role = 'class_teacher' AND (${homeroomSql} OR ${specMatchSql}))
        )
      ORDER BY u.full_name`,
-    [uniqueSubjectIds, uniqueSubjectIds.length],
+    queryParams,
   );
   return rows.map((r) => {
     const x = r as Record<string, unknown>;
@@ -878,7 +859,9 @@ export async function assertTeacherCanTeachClassSubjects(
   const { rows } = await query(
     `SELECT
        cs.id,
+       cs.class_id,
        cs.subject_id,
+       cs.academic_year_id,
        s.name AS subject_name,
        s.level AS subject_level,
        c.level AS class_level,
@@ -893,26 +876,29 @@ export async function assertTeacherCanTeachClassSubjects(
   if (rows.length !== classSubjectIds.length) {
     throw new HttpError(400, "One or more class-subject rows were not found");
   }
-  const subjectIds = [...new Set(rows.map((r) => String((r as { subject_id: string }).subject_id)))];
-  const eligible = await getEligibleTeachers({ subjectIds });
-  const eligibleIds = new Set(eligible.map((t) => t.id));
-  if (!eligibleIds.has(teacherId)) {
-    const { rows: userRows } = await query<{ full_name: string; role: string }>(
-      `SELECT full_name, role FROM users WHERE id = $1`,
-      [teacherId],
-    );
-    const name = userRows[0]?.full_name ?? "Teacher";
-    const mismatched = rows.filter((r) => {
-      const x = r as { subject_level: string; class_level: string };
-      return x.subject_level !== x.class_level;
-    });
-    if (mismatched.length > 0) {
+  const byClass = new Map<string, { subjectIds: string[]; yearId: string }>();
+  for (const r of rows) {
+    const x = r as { class_id: string; subject_id: string; academic_year_id: string; subject_level: string; class_level: string };
+    if (x.subject_level !== x.class_level) {
       throw new HttpError(400, "Cannot assign: subject level does not match class level for one or more rows");
     }
-    throw new HttpError(
-      400,
-      `${name} is not registered to teach all selected subject(s). Update teachable subjects on the user profile or choose another teacher.`,
-    );
+    const bucket = byClass.get(x.class_id) ?? { subjectIds: [], yearId: x.academic_year_id };
+    bucket.subjectIds.push(x.subject_id);
+    byClass.set(x.class_id, bucket);
+  }
+  for (const [classId, { subjectIds }] of byClass) {
+    const eligible = await getEligibleTeachers({ subjectIds: [...new Set(subjectIds)], classId });
+    if (!eligible.some((t) => t.id === teacherId)) {
+      const { rows: userRows } = await query<{ full_name: string }>(
+        `SELECT full_name FROM users WHERE id = $1`,
+        [teacherId],
+      );
+      const name = userRows[0]?.full_name ?? "Teacher";
+      throw new HttpError(
+        400,
+        `${name} cannot be assigned to teach all selected subject(s) in this class. Class teachers may teach any subject in their homeroom class; other teachers need matching teachable subjects.`,
+      );
+    }
   }
 }
 
