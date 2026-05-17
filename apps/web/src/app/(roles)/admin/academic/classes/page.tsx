@@ -5,7 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { classSchema } from "@uganda-cbc-sms/shared";
-import type { AcademicYear, SchoolClass, UserPublic } from "@uganda-cbc-sms/shared";
+import type { AcademicYear, SchoolClass } from "@uganda-cbc-sms/shared";
+import type { TeachingStaffMember } from "@/hooks/useTeachingStaff";
 import type { z } from "zod";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
@@ -19,12 +20,6 @@ import { Table, type Column } from "@/components/ui/Table";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 
 type Form = z.infer<typeof classSchema>;
-type UsersListResponse =
-  | UserPublic[]
-  | {
-      items: UserPublic[];
-    };
-
 type Row = SchoolClass & Record<string, unknown>;
 const ACTION_BTN =
   "inline-flex items-center rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-ui hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50";
@@ -34,7 +29,7 @@ const ACTION_DANGER_BTN =
 export default function AdminAcademicClassesPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [years, setYears] = useState<AcademicYear[]>([]);
-  const [users, setUsers] = useState<UserPublic[]>([]);
+  const [users, setUsers] = useState<TeachingStaffMember[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,15 +61,14 @@ export default function AdminAcademicClassesPage() {
 
   const load = async () => {
     try {
-      const [c, y, usersResponse] = await Promise.all([
+      const [c, y, staff] = await Promise.all([
         apiGet<SchoolClass[]>("/academic/classes"),
         apiGet<AcademicYear[]>("/academic/years"),
-        apiGet<UsersListResponse>("/users"),
+        apiGet<TeachingStaffMember[]>("/academic/teaching-staff"),
       ]);
-      const u = Array.isArray(usersResponse) ? usersResponse : (usersResponse.items ?? []);
       setClasses(c);
       setYears(y);
-      setUsers(u);
+      setUsers(staff);
       if (y[0] && !form.getValues("academicYearId")) {
         form.setValue("academicYearId", y[0].id);
       }

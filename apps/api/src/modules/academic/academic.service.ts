@@ -583,6 +583,9 @@ export async function bulkAssignTeacher(
   teacherId: string | null,
   classSubjectIds: string[],
 ): Promise<BulkUpdatedClassSubject[]> {
+  if (teacherId) {
+    await assertTeacherCanTeachClassSubjects(teacherId, classSubjectIds);
+  }
   const { rows } = await query(
     `UPDATE class_subjects
      SET teacher_id = $1, updated_at = NOW()
@@ -660,7 +663,274 @@ export type UnassignedClassSubjectRow = {
   termName: string | null;
 };
 
-export async function getUnassignedClassSubjects(academicYearId: string): Promise<UnassignedClassSubjectRow[]> {
+const TEACHING_STAFF_ROLES = ["subject_teacher", "headteacher", "admin", "class_teacher"] as const;
+
+export type TeachingStaffRow = {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  specializationCount: number;
+};
+
+export async function listTeachingStaff(): Promise<TeachingStaffRow[]> {
+  const { rows } = await query(
+    `SELECT
+       u.id,
+       u.full_name,
+       u.email,
+       u.role,
+       COALESCE(spec.cnt, 0)::int AS specialization_count
+     FROM users u
+     LEFT JOIN (
+       SELECT teacher_id, COUNT(*)::int AS cnt
+       FROM teacher_subject_specializations
+       GROUP BY teacher_id
+     ) spec ON spec.teacher_id = u.id
+     WHERE u.deleted_at IS NULL
+       AND u.is_active = true
+       AND u.role = ANY($1::text[])
+     ORDER BY u.full_name`,
+    [TEACHING_STAFF_ROLES],
+  );
+  return rows.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      id: String(x["id"]),
+      fullName: String(x["full_name"]),
+      email: String(x["email"]),
+      role: String(x["role"]),
+      specializationCount: Number(x["specialization_count"] ?? 0),
+    };
+  });
+}
+
+export type TeacherSpecializationRow = {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  level: string;
+};
+
+export async function getTeacherSpecializations(teacherId: string): Promise<TeacherSpecializationRow[]> {
+  const { rows } = await query(
+    `SELECT
+       s.id AS subject_id,
+       s.name AS subject_name,
+       s.code AS subject_code,
+       s.level
+     FROM teacher_subject_specializations tss
+     JOIN subjects s ON s.id = tss.subject_id
+     WHERE tss.teacher_id = $1
+     ORDER BY s.code`,
+    [teacherId],
+  );
+  return rows.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      subjectId: String(x["subject_id"]),
+      subjectName: String(x["subject_name"]),
+      subjectCode: String(x["subject_code"]),
+      level: String(x["level"]),
+    };
+  });
+}
+
+export async function setTeacherSpecializations(teacherId: string, subjectIds: string[]) {
+  const { rows: userRows } = await query<{ role: string }>(
+    `SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL`,
+    [teacherId],
+  );
+  if (!userRows[0]) throw new HttpError(404, "User not found");
+  if (!["subject_teacher", "class_teacher"].includes(userRows[0].role)) {
+    throw new HttpError(400, "Specializations apply only to subject and class teachers");
+  }
+  const uniqueIds = [...new Set(subjectIds)];
+  if (uniqueIds.length > 0) {
+    const { rows: subjectRows } = await query(
+      `SELECT id FROM subjects WHERE id = ANY($1::uuid[])`,
+      [uniqueIds],
+    );
+    if (subjectRows.length !== uniqueIds.length) {
+      throw new HttpError(400, "One or more subjects were not found");
+    }
+  }
+  await query(`DELETE FROM teacher_subject_specializations WHERE teacher_id = $1`, [teacherId]);
+  if (uniqueIds.length > 0) {
+    const placeholders = uniqueIds.map((_, i) => `($1, $${i + 2})`).join(", ");
+    await query(
+      `INSERT INTO teacher_subject_specializations (teacher_id, subject_id) VALUES ${placeholders}`,
+      [teacherId, ...uniqueIds],
+    );
+  }
+  return getTeacherSpecializations(teacherId);
+}
+
+/** SQL fragment: teacher $paramIndex is eligible to teach subject cs.subject_id in class c */
+function teacherEligibilitySql(teacherParam: string): string {
+  return `(
+    EXISTS (
+      SELECT 1 FROM users u
+      WHERE u.id = ${teacherParam}
+        AND u.deleted_at IS NULL
+        AND u.is_active = true
+        AND (
+          u.role IN ('admin', 'headteacher')
+          OR (
+            u.role IN ('subject_teacher', 'class_teacher')
+            AND (
+              NOT EXISTS (
+                SELECT 1 FROM teacher_subject_specializations tss WHERE tss.teacher_id = u.id
+              )
+              OR EXISTS (
+                SELECT 1 FROM teacher_subject_specializations tss
+                WHERE tss.teacher_id = u.id AND tss.subject_id = cs.subject_id
+              )
+            )
+          )
+        )
+    )
+    AND s.level = c.level
+  )`;
+}
+
+export async function getEligibleTeachers(filters: {
+  subjectIds: string[];
+  classId?: string;
+}): Promise<TeachingStaffRow[]> {
+  const uniqueSubjectIds = [...new Set(filters.subjectIds)];
+  if (uniqueSubjectIds.length === 0) return listTeachingStaff();
+
+  let classLevel: string | null = null;
+  if (filters.classId) {
+    const { rows: classRows } = await query<{ level: string }>(
+      `SELECT level FROM classes WHERE id = $1`,
+      [filters.classId],
+    );
+    if (!classRows[0]) throw new HttpError(404, "Class not found");
+    classLevel = classRows[0].level;
+    const { rows: subjectRows } = await query(
+      `SELECT id, level FROM subjects WHERE id = ANY($1::uuid[])`,
+      [uniqueSubjectIds],
+    );
+    if (subjectRows.length !== uniqueSubjectIds.length) {
+      throw new HttpError(400, "One or more subjects were not found");
+    }
+    for (const s of subjectRows as { id: string; level: string }[]) {
+      if (s.level !== classLevel) {
+        throw new HttpError(
+          400,
+          "All selected subjects must match the class level (O-Level or A-Level)",
+        );
+      }
+    }
+  }
+
+  const { rows } = await query(
+    `SELECT DISTINCT
+       u.id,
+       u.full_name,
+       u.email,
+       u.role,
+       COALESCE(spec.cnt, 0)::int AS specialization_count
+     FROM users u
+     LEFT JOIN (
+       SELECT teacher_id, COUNT(*)::int AS cnt
+       FROM teacher_subject_specializations
+       GROUP BY teacher_id
+     ) spec ON spec.teacher_id = u.id
+     WHERE u.deleted_at IS NULL
+       AND u.is_active = true
+       AND (
+         u.role IN ('admin', 'headteacher')
+         OR (
+           u.role IN ('subject_teacher', 'class_teacher')
+           AND (
+             NOT EXISTS (SELECT 1 FROM teacher_subject_specializations tss WHERE tss.teacher_id = u.id)
+             OR (
+               SELECT COUNT(DISTINCT tss.subject_id)
+               FROM teacher_subject_specializations tss
+               WHERE tss.teacher_id = u.id
+                 AND tss.subject_id = ANY($1::uuid[])
+             ) = $2
+           )
+         )
+       )
+     ORDER BY u.full_name`,
+    [uniqueSubjectIds, uniqueSubjectIds.length],
+  );
+  return rows.map((r) => {
+    const x = r as Record<string, unknown>;
+    return {
+      id: String(x["id"]),
+      fullName: String(x["full_name"]),
+      email: String(x["email"]),
+      role: String(x["role"]),
+      specializationCount: Number(x["specialization_count"] ?? 0),
+    };
+  });
+}
+
+export async function assertTeacherCanTeachClassSubjects(
+  teacherId: string,
+  classSubjectIds: string[],
+): Promise<void> {
+  const { rows } = await query(
+    `SELECT
+       cs.id,
+       cs.subject_id,
+       s.name AS subject_name,
+       s.level AS subject_level,
+       c.level AS class_level,
+       c.name AS class_name,
+       c.stream AS class_stream
+     FROM class_subjects cs
+     JOIN subjects s ON s.id = cs.subject_id
+     JOIN classes c ON c.id = cs.class_id
+     WHERE cs.id = ANY($1::uuid[])`,
+    [classSubjectIds],
+  );
+  if (rows.length !== classSubjectIds.length) {
+    throw new HttpError(400, "One or more class-subject rows were not found");
+  }
+  const subjectIds = [...new Set(rows.map((r) => String((r as { subject_id: string }).subject_id)))];
+  const eligible = await getEligibleTeachers({ subjectIds });
+  const eligibleIds = new Set(eligible.map((t) => t.id));
+  if (!eligibleIds.has(teacherId)) {
+    const { rows: userRows } = await query<{ full_name: string; role: string }>(
+      `SELECT full_name, role FROM users WHERE id = $1`,
+      [teacherId],
+    );
+    const name = userRows[0]?.full_name ?? "Teacher";
+    const mismatched = rows.filter((r) => {
+      const x = r as { subject_level: string; class_level: string };
+      return x.subject_level !== x.class_level;
+    });
+    if (mismatched.length > 0) {
+      throw new HttpError(400, "Cannot assign: subject level does not match class level for one or more rows");
+    }
+    throw new HttpError(
+      400,
+      `${name} is not registered to teach all selected subject(s). Update teachable subjects on the user profile or choose another teacher.`,
+    );
+  }
+}
+
+export async function getUnassignedClassSubjects(
+  academicYearId: string,
+  filters?: { classId?: string; teacherId?: string },
+): Promise<UnassignedClassSubjectRow[]> {
+  const values: unknown[] = [academicYearId];
+  const where: string[] = ["cs.teacher_id IS NULL", "cs.academic_year_id = $1"];
+  let i = 2;
+  if (filters?.classId) {
+    where.push(`cs.class_id = $${i++}`);
+    values.push(filters.classId);
+  }
+  if (filters?.teacherId) {
+    where.push(teacherEligibilitySql(`$${i++}`));
+    values.push(filters.teacherId);
+  }
   const { rows } = await query(
     `SELECT
        cs.id,
@@ -672,10 +942,9 @@ export async function getUnassignedClassSubjects(academicYearId: string): Promis
      JOIN classes c ON c.id = cs.class_id
      JOIN subjects s ON s.id = cs.subject_id
      LEFT JOIN terms t ON t.id = cs.term_id
-     WHERE cs.teacher_id IS NULL
-       AND cs.academic_year_id = $1
+     WHERE ${where.join(" AND ")}
      ORDER BY c.name, c.stream, s.name`,
-    [academicYearId],
+    values,
   );
   return rows.map((r) => {
     const x = r as Record<string, unknown>;

@@ -16,6 +16,8 @@ const {
   classSubjectBulkSchema,
   bulkAssignTeacherSchema,
   teacherAssignmentsQuerySchema,
+  eligibleTeachersQuerySchema,
+  teacherSpecializationsSchema,
   updateClassSubjectSchema,
   combinationSchema,
   updateCombinationSchema,
@@ -38,6 +40,8 @@ const {
   classSubjectBulkSchema: { parse: (v: unknown) => unknown };
   bulkAssignTeacherSchema: { parse: (v: unknown) => unknown };
   teacherAssignmentsQuerySchema: { parse: (v: unknown) => unknown };
+  eligibleTeachersQuerySchema: { parse: (v: unknown) => unknown };
+  teacherSpecializationsSchema: { parse: (v: unknown) => unknown };
   updateClassSubjectSchema: { parse: (v: unknown) => unknown };
   combinationSchema: { parse: (v: unknown) => unknown };
   updateCombinationSchema: { parse: (v: unknown) => unknown };
@@ -217,13 +221,48 @@ export async function getTeacherWorkload(req: Request, res: Response): Promise<v
 }
 
 export async function getUnassignedClassSubjects(req: Request, res: Response): Promise<void> {
-  const queryParams = teacherAssignmentsQuerySchema.parse(req.query) as { academicYearId: string };
-  const unassigned = await svc.getUnassignedClassSubjects(queryParams.academicYearId);
+  const queryParams = teacherAssignmentsQuerySchema.parse(req.query) as {
+    academicYearId: string;
+    classId?: string;
+    teacherId?: string;
+  };
+  const unassigned = await svc.getUnassignedClassSubjects(queryParams.academicYearId, {
+    classId: queryParams.classId,
+    teacherId: queryParams.teacherId,
+  });
   res.json({
     success: true,
     data: { unassigned, count: unassigned.length },
     message: "Unassigned class subjects loaded.",
   });
+}
+
+export async function getTeachingStaff(_req: Request, res: Response): Promise<void> {
+  const staff = await svc.listTeachingStaff();
+  res.json({ success: true, data: staff, message: "Teaching staff loaded." });
+}
+
+export async function getEligibleTeachers(req: Request, res: Response): Promise<void> {
+  const queryParams = eligibleTeachersQuerySchema.parse(req.query) as {
+    subjectIds: string[];
+    classId?: string;
+  };
+  const teachers = await svc.getEligibleTeachers({
+    subjectIds: queryParams.subjectIds,
+    classId: queryParams.classId,
+  });
+  res.json({ success: true, data: teachers, message: "Eligible teachers loaded." });
+}
+
+export async function getTeacherSpecializations(req: Request, res: Response): Promise<void> {
+  const rows = await svc.getTeacherSpecializations(req.params["teacherId"]!);
+  res.json({ success: true, data: rows, message: "Teacher specializations loaded." });
+}
+
+export async function putTeacherSpecializations(req: Request, res: Response): Promise<void> {
+  const body = teacherSpecializationsSchema.parse(req.body) as { subjectIds: string[] };
+  const rows = await svc.setTeacherSpecializations(req.params["teacherId"]!, body.subjectIds);
+  res.json({ success: true, data: rows, message: "Teacher specializations updated." });
 }
 
 export async function postCombination(req: Request, res: Response): Promise<void> {

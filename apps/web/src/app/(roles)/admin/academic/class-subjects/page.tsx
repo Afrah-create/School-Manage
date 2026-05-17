@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { AcademicYear, SchoolClass, Subject, UserPublic } from "@uganda-cbc-sms/shared";
+import type { AcademicYear, SchoolClass, Subject } from "@uganda-cbc-sms/shared";
+import { useEligibleTeachers } from "@/hooks/useTeachingStaff";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -22,12 +23,6 @@ type Assignment = {
   subjectCode: string;
   teacherName: string | null;
 };
-type UsersListResponse =
-  | UserPublic[]
-  | {
-      items: UserPublic[];
-    };
-
 type Row = Assignment & Record<string, unknown>;
 
 const CHECK =
@@ -40,7 +35,6 @@ export default function AdminAcademicClassSubjectsPage() {
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [teachers, setTeachers] = useState<UserPublic[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [academicYearId, setAcademicYearId] = useState("");
   const [classId, setClassId] = useState("");
@@ -63,14 +57,15 @@ export default function AdminAcademicClassSubjectsPage() {
     () => subjects.filter((s) => !selectedClass || s.level === selectedClass.level),
     [subjects, selectedClass],
   );
-  const teacherOptions = useMemo(
-    () => [
-      { value: "", label: "— Unassigned —" },
-      ...teachers
-        .filter((u) => ["subject_teacher", "headteacher", "admin"].includes(u.role))
-        .map((u) => ({ value: u.id, label: `${u.fullName} (${u.role})` })),
-    ],
-    [teachers],
+  const selectedAssignmentSubjectIds = useMemo(() => {
+    const idSet = new Set(selectedIds);
+    return assignments.filter((a) => idSet.has(a.id)).map((a) => a.subjectId);
+  }, [assignments, selectedIds]);
+
+  const { options: teacherOptions, loading: eligibleLoading, error: eligibleError } = useEligibleTeachers(
+    selectedAssignmentSubjectIds,
+    classId || undefined,
+    bulkModalOpen && selectedAssignmentSubjectIds.length > 0,
   );
 
   const assignmentIdSet = useMemo(() => new Set(assignments.map((a) => a.id)), [assignments]);
@@ -80,17 +75,14 @@ export default function AdminAcademicClassSubjectsPage() {
   }, [assignmentIdSet]);
 
   const loadLookups = async () => {
-    const [y, c, s, usersResponse] = await Promise.all([
+    const [y, c, s] = await Promise.all([
       apiGet<AcademicYear[]>("/academic/years"),
       apiGet<SchoolClass[]>("/academic/classes"),
       apiGet<Subject[]>("/academic/subjects"),
-      apiGet<UsersListResponse>("/users"),
     ]);
-    const u = Array.isArray(usersResponse) ? usersResponse : (usersResponse.items ?? []);
     setYears(y);
     setClasses(c);
     setSubjects(s);
-    setTeachers(u);
     if (!academicYearId && y[0]) setAcademicYearId(y[0].id);
     if (!classId && c[0]) setClassId(c[0].id);
   };
@@ -128,6 +120,12 @@ export default function AdminAcademicClassSubjectsPage() {
       setErr(e instanceof Error ? e.message : "Failed to load assignments");
     });
   }, [academicYearId, classId]);
+
+  useEffect(() => {
+    if (bulkTeacherId && !teacherOptions.some((o) => o.value === bulkTeacherId)) {
+      setBulkTeacherId("");
+    }
+  }, [teacherOptions, bulkTeacherId]);
 
   useEffect(() => {
     if (!bulkModalOpen || !academicYearId || !bulkTeacherId) {
@@ -373,14 +371,25 @@ export default function AdminAcademicClassSubjectsPage() {
         }}
       >
         <p className="mb-3 text-sm text-muted-foreground">
-          Applies to {selectedIds.length} row(s) for the current class and academic year.
+          Applies to {selectedIds.length} row(s) for {selectedClass ? `${selectedClass.name} ${selectedClass.stream}` : "this class"}.
+          Only teachers who can teach the selected subject(s) at this class level are listed.
         </p>
+        {eligibleError ? <Alert tone="error">{eligibleError}</Alert> : null}
         <Select
           label="Teacher"
           options={teacherOptions}
           value={bulkTeacherId}
+          disabled={eligibleLoading}
           onChange={(e) => setBulkTeacherId(e.target.value)}
         />
+        {eligibleLoading ? (
+          <p className="mt-2 text-sm text-muted-foreground">Loading eligible teachers…</p>
+        ) : teacherOptions.length <= 1 ? (
+          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+            No eligible teachers found. Register teachable subjects on the teacher&apos;s user profile, or assign a
+            headteacher/admin.
+          </p>
+        ) : null}
         {bulkTeacherId ? (
           <p className="mt-2 text-sm text-muted-foreground">
             {bulkTeacherCountLoading

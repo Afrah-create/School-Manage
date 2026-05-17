@@ -131,6 +131,20 @@ export const bulkAssignTeacherSchema = z.object({
 /** Query: teacher assignments or unassigned list */
 export const teacherAssignmentsQuerySchema = z.object({
   academicYearId: z.string().uuid(),
+  classId: z.string().uuid().optional(),
+  teacherId: z.string().uuid().optional(),
+});
+
+/** Query: teachers eligible to teach given subject(s) in a class context */
+export const eligibleTeachersQuerySchema = z.object({
+  subjectIds: z
+    .union([z.string().uuid(), z.array(z.string().uuid()).min(1)])
+    .transform((v) => (Array.isArray(v) ? v : [v])),
+  classId: z.string().uuid().optional(),
+});
+
+export const teacherSpecializationsSchema = z.object({
+  subjectIds: z.array(z.string().uuid()),
 });
 
 export type BulkAssignTeacherIn = z.infer<typeof bulkAssignTeacherSchema>;

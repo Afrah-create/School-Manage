@@ -16,7 +16,7 @@ const LINKS = [
   {
     href: "/admin/academic/teacher-assignments",
     title: "Teacher workload",
-    desc: "Subject teaching load and unassigned slots by teacher",
+    desc: "Allocate teachers to class subjects by year (teachable-subject matching)",
   },
   { href: "/admin/academic/combinations", title: "Subject combinations", desc: "Manage O-Level and A-Level combinations" },
   { href: "/admin/academic/cbc-strands", title: "CBC strands", desc: "Manage strands and sub-strands" },
