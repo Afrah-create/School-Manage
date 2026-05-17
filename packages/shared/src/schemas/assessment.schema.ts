@@ -172,9 +172,118 @@ export const updateCbcSubStrandSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
+export const gradingScaleLevelSchema = z
+  .enum(["o_level", "a_level", "O_LEVEL", "A_LEVEL"])
+  .transform((v) => (v === "o_level" ? "O_LEVEL" : v === "a_level" ? "A_LEVEL" : v));
+
+export const gradingScaleRowSchema = z
+  .object({
+    grade: z.string().min(1).max(10),
+    minScore: z.coerce.number().min(0).max(100),
+    maxScore: z.coerce.number().min(0).max(100),
+    points: z.coerce.number().int().min(0).max(100),
+    descriptor: z.string().max(255).optional().nullable(),
+    sortOrder: z.coerce.number().int().min(1).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => v.minScore <= v.maxScore, { message: "minScore must be less than or equal to maxScore" });
+
+export const upsertGradingScaleSchema = z.object({
+  level: gradingScaleLevelSchema,
+  rows: z.array(gradingScaleRowSchema).min(1),
+});
+
 export type CbcScoreUpsertInput = z.infer<typeof cbcScoreUpsertSchema>;
 export type AlevelScoreUpsertInput = z.infer<typeof alevelScoreUpsertSchema>;
 export type UpdateAcademicYearInput = z.infer<typeof updateAcademicYearSchema>;
 export type UpdateTermInput = z.infer<typeof updateTermSchema>;
 export type UpdateClassInput = z.infer<typeof updateClassSchema>;
 export type UpdateSubjectInput = z.infer<typeof updateSubjectSchema>;
+
+export const assessmentFilterSchema = z.object({
+  classId: z.string().uuid().optional(),
+  subjectId: z.string().uuid().optional(),
+  strandId: z.string().uuid().optional(),
+  termId: z.string().uuid().optional(),
+  yearId: z.string().uuid().optional(),
+  combinationId: z.string().uuid().optional(),
+});
+
+export const submitAssessmentSchema = z.object({
+  subjectId: z.string().uuid(),
+  classId: z.string().uuid(),
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+});
+
+export const cbcAssessmentUpsertSchema = z.object({
+  studentId: z.string().uuid(),
+  subjectId: z.string().uuid(),
+  strand: z.string().min(1).max(255),
+  competency: z.string().min(1).max(255),
+  rating: cbcRatingSchema,
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+});
+
+export const cbcAssessmentBulkSchema = z.object({
+  assessments: z
+    .array(
+      z.object({
+        studentId: z.string().uuid(),
+        subjectId: z.string().uuid(),
+        strand: z.string().min(1).max(255),
+        competency: z.string().min(1).max(255),
+        rating: cbcRatingSchema,
+      }),
+    )
+    .min(1),
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+});
+
+export const cbcProjectAssessmentSchema = z.object({
+  studentId: z.string().uuid(),
+  subjectId: z.string().uuid(),
+  assessmentTitle: z.string().min(1).max(255),
+  score: z.number().min(0).max(999.99).nullable().optional(),
+  maxScore: z.number().min(1).max(999.99).nullable().optional(),
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+});
+
+export const cbcCommentUpdateSchema = z.object({
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+  classTeacherComment: z.string().max(5000).optional(),
+  headteacherComment: z.string().max(5000).optional(),
+});
+
+export const alevelAssessmentUpsertSchema = z.object({
+  studentId: z.string().uuid(),
+  subjectId: z.string().uuid(),
+  score: z.coerce.number().min(0).max(100),
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+});
+
+export const alevelAssessmentBulkSchema = z.object({
+  assessments: z
+    .array(
+      z.object({
+        studentId: z.string().uuid(),
+        subjectId: z.string().uuid(),
+        score: z.coerce.number().min(0).max(100),
+      }),
+    )
+    .min(1),
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+});
+
+export const alevelCommentUpdateSchema = z.object({
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+  classTeacherComment: z.string().max(5000).optional(),
+  headteacherRemark: z.string().max(5000).optional(),
+});

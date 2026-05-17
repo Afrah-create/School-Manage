@@ -104,7 +104,11 @@ export async function getReportPdfStream(reportId: string): Promise<Readable> {
     const studentId = row.student_id as string;
     const termId = row.term_id as string;
     const scores = await query(
-      `SELECT sub.name AS subject_name, st.strand_name, cs.competency, cs.rating
+      `SELECT
+         sub.name AS subject_name,
+         COALESCE(st.name, st.strand_name) AS strand_name,
+         cs.competency,
+         cs.rating
        FROM cbc_scores cs
        JOIN subjects sub ON sub.id = cs.subject_id
        JOIN cbc_strands st ON st.id = cs.strand_id

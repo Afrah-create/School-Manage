@@ -1,5 +1,6 @@
 export * from "./constants/roles";
 export * from "./constants/grading";
+export * from "./constants/assessmentGradingScales";
 export * from "./constants/fees";
 export * from "./types/index";
 export * from "./schemas/auth.schema";

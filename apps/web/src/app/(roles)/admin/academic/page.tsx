@@ -20,17 +20,27 @@ const LINKS = [
   },
   { href: "/admin/academic/combinations", title: "Subject combinations", desc: "Manage O-Level and A-Level combinations" },
   { href: "/admin/academic/cbc-strands", title: "CBC strands", desc: "Manage strands and sub-strands" },
+  { href: "/admin/academic/grading-scales", title: "Grading scales", desc: "Define grade ranges, points, and descriptors" },
 ];
 
 export default function AdminAcademicHubPage() {
-  const [counts, setCounts] = useState<{ y: number; t: number; c: number; s: number; cs: number; k: number; st: number } | null>(null);
+  const [counts, setCounts] = useState<{
+    y: number;
+    t: number;
+    c: number;
+    s: number;
+    cs: number;
+    k: number;
+    st: number;
+    gs: number;
+  } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void (async () => {
       try {
-        const [y, t, c, s, cs, k, st] = await Promise.all([
+        const [y, t, c, s, cs, k, st, gs] = await Promise.all([
           apiGet<unknown[]>("/academic/years"),
           apiGet<unknown[]>("/academic/terms"),
           apiGet<unknown[]>("/academic/classes"),
@@ -38,8 +48,18 @@ export default function AdminAcademicHubPage() {
           apiGet<unknown[]>("/academic/class-subjects"),
           apiGet<unknown[]>("/academic/combinations"),
           apiGet<unknown[]>("/academic/cbc-strands"),
+          apiGet<unknown[]>("/academic/grading-scales"),
         ]);
-        setCounts({ y: y.length, t: t.length, c: c.length, s: s.length, cs: cs.length, k: k.length, st: st.length });
+        setCounts({
+          y: y.length,
+          t: t.length,
+          c: c.length,
+          s: s.length,
+          cs: cs.length,
+          k: k.length,
+          st: st.length,
+          gs: gs.length,
+        });
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -54,7 +74,7 @@ export default function AdminAcademicHubPage() {
       {err ? <Alert tone="error">{err}</Alert> : null}
       {counts ? (
         <p className="mb-6 mt-3 text-sm text-muted-foreground">
-          {counts.y} years · {counts.t} terms · {counts.c} classes · {counts.s} subjects · {counts.cs} assignments · {counts.k} combinations · {counts.st} strands
+          {counts.y} years · {counts.t} terms · {counts.c} classes · {counts.s} subjects · {counts.cs} assignments · {counts.k} combinations · {counts.st} strands · {counts.gs} grade bands
         </p>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">

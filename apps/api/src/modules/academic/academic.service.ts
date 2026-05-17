@@ -1,5 +1,6 @@
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
+import { validateGradingScaleRows } from "../../utils/gradingScales";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import type { z } from "zod";
 
@@ -26,6 +27,7 @@ const {
   updateTermSchema,
   updateClassSchema,
   updateSubjectSchema,
+  upsertGradingScaleSchema,
 } = schemas as {
   academicYearSchema: z.ZodTypeAny;
   termSchema: z.ZodTypeAny;
@@ -45,6 +47,7 @@ const {
   updateTermSchema: z.ZodTypeAny;
   updateClassSchema: z.ZodTypeAny;
   updateSubjectSchema: z.ZodTypeAny;
+  upsertGradingScaleSchema: z.ZodTypeAny;
 };
 
 type YearIn = z.infer<typeof academicYearSchema>;
@@ -65,6 +68,7 @@ type YearUpdateIn = z.infer<typeof updateAcademicYearSchema>;
 type TermUpdateIn = z.infer<typeof updateTermSchema>;
 type ClassUpdateIn = z.infer<typeof updateClassSchema>;
 type SubjectUpdateIn = z.infer<typeof updateSubjectSchema>;
+type GradingScaleUpsertIn = z.infer<typeof upsertGradingScaleSchema>;
 
 function conflictDeleteMessage(entity: string): string {
   return `Cannot delete ${entity} because it is referenced by other records`;
@@ -835,9 +839,23 @@ export async function removeSubjectFromCombination(combinationId: string, subjec
 export async function createCbcStrand(input: CbcStrandIn) {
   try {
     const { rows } = await query(
-      `INSERT INTO cbc_strands (subject_id, name, code, description, updated_at)
-       VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
-      [input.subjectId, input.name, input.code.toUpperCase(), input.description ?? null],
+      `INSERT INTO cbc_strands (
+         subject_id,
+         name,
+         strand_name,
+         code,
+         description,
+         competencies,
+         updated_at
+       )
+       VALUES ($1, $2, $2, $3, $4, $5::jsonb, NOW()) RETURNING *`,
+      [
+        input.subjectId,
+        input.name,
+        input.code.toUpperCase(),
+        input.description ?? null,
+        JSON.stringify(input.competencies ?? []),
+      ],
     );
     return rows[0];
   } catch (e) {
@@ -853,9 +871,14 @@ export async function getStrands(filters: { subjectId?: string }) {
     `SELECT
       st.id,
       st.subject_id AS "subjectId",
-      st.name,
+      COALESCE(st.name, st.strand_name) AS name,
       st.code,
       st.description,
+      COALESCE(
+        jsonb_agg(DISTINCT ss.name) FILTER (WHERE ss.id IS NOT NULL),
+        st.competencies,
+        '[]'::jsonb
+      ) AS competencies,
       s.name AS "subjectName",
       COUNT(ss.id)::int AS "subStrandsCount"
      FROM cbc_strands st
@@ -878,10 +901,15 @@ export async function getStrandById(id: string) {
     `SELECT
       st.id,
       st.subject_id AS "subjectId",
-      st.name,
+      COALESCE(st.name, st.strand_name) AS name,
       st.code,
       st.description,
       s.name AS "subjectName",
+      COALESCE(
+        jsonb_agg(DISTINCT ss.name) FILTER (WHERE ss.id IS NOT NULL),
+        st.competencies,
+        '[]'::jsonb
+      ) AS competencies,
       COALESCE(
         jsonb_agg(
           jsonb_build_object('id', ss.id, 'name', ss.name, 'code', ss.code, 'description', ss.description)
@@ -910,6 +938,8 @@ export async function updateStrand(id: string, input: CbcStrandUpdateIn) {
   }
   if (input.name !== undefined) {
     sets.push(`name = $${i++}`);
+    values.push(input.name);
+    sets.push(`strand_name = $${i++}`);
     values.push(input.name);
   }
   if (input.code !== undefined) {
@@ -970,4 +1000,69 @@ export async function updateSubStrand(id: string, input: CbcSubStrandUpdateIn) {
 export async function deleteSubStrand(id: string) {
   const r = await query(`DELETE FROM cbc_sub_strands WHERE id = $1`, [id]);
   if (r.rowCount === 0) throw new HttpError(404, "CBC sub-strand not found");
+}
+
+export async function listGradingScales(level?: "O_LEVEL" | "A_LEVEL") {
+  const values: unknown[] = [];
+  const where = level ? "WHERE level = $1" : "";
+  if (level) values.push(level);
+  const { rows } = await query(
+    `SELECT id, level, grade, min_score, max_score, points, descriptor, sort_order, is_active
+     FROM assessment_grading_scales
+     ${where}
+     ORDER BY level, sort_order, min_score DESC`,
+    values,
+  );
+  return (rows as Array<Record<string, unknown>>).map((r) => ({
+    id: r["id"],
+    level: r["level"],
+    grade: r["grade"],
+    minScore: Number(r["min_score"]),
+    maxScore: Number(r["max_score"]),
+    points: Number(r["points"]),
+    descriptor: r["descriptor"] as string | null,
+    sortOrder: Number(r["sort_order"]),
+    isActive: Boolean(r["is_active"]),
+  }));
+}
+
+export async function replaceGradingScale(input: GradingScaleUpsertIn) {
+  const rows = [...input.rows].sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+  const validationError = validateGradingScaleRows(
+    rows.map((r) => ({
+      grade: r.grade,
+      minScore: r.minScore,
+      maxScore: r.maxScore,
+      isActive: r.isActive,
+    })),
+  );
+  if (validationError) throw new HttpError(400, validationError);
+
+  await query("BEGIN");
+  try {
+    await query(`DELETE FROM assessment_grading_scales WHERE level = $1`, [input.level]);
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]!;
+      await query(
+        `INSERT INTO assessment_grading_scales
+          (level, grade, min_score, max_score, points, descriptor, sort_order, is_active, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
+        [
+          input.level,
+          row.grade.toUpperCase(),
+          row.minScore,
+          row.maxScore,
+          row.points,
+          row.descriptor ?? null,
+          row.sortOrder ?? i + 1,
+          row.isActive ?? true,
+        ],
+      );
+    }
+    await query("COMMIT");
+  } catch (error) {
+    await query("ROLLBACK");
+    throw error;
+  }
+  return listGradingScales(input.level);
 }

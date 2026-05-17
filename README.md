@@ -61,7 +61,7 @@ npm run dev
 
 | Role | Typical access |
 |------|----------------|
-| `admin` | Users, academic structure, students, fees setup, all assessments |
+| `admin` | Users, academic structure, **grading scales**, students, fees setup, all assessments |
 | `headteacher` | Students oversight, assessments, reports, analytics, approve report cards |
 | `class_teacher` | Own class students, assessments, **attendance** |
 | `subject_teacher` | CBC & A-Level assessment entry |
@@ -73,7 +73,7 @@ Sidebar navigation in the app is **role-aware** (Zustand `authStore`).
 
 - **Auth:** `POST /auth/login`, `POST /auth/logout`, `PATCH /auth/change-password`
 - **Users:** `POST|GET /users`, `PATCH /users/:id/deactivate`, `PATCH /users/:id/reset-password`, `GET /users/me`
-- **Academic:** `/academic/years|terms|classes|subjects|combinations`, `/academic/cbc-strands`, `/academic/class-subjects`
+- **Academic:** `/academic/years|terms|classes|subjects|combinations`, `/academic/cbc-strands`, `/academic/class-subjects`, `/academic/grading-scales`
 - **Students:** `POST|GET /students`, `GET /students/:id`, `POST /students/:id/photo`, `POST /students/promote`, `PATCH /students/:id/withdraw`, `GET /students/search`
 - **Attendance:** `POST|GET /attendance`
 - **CBC:** `POST|GET /assessments/cbc`, `PATCH /assessments/cbc/:id/submit`, `PATCH /assessments/cbc/:id/unlock` (headteacher)

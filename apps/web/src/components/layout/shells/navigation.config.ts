@@ -12,8 +12,8 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
       { href: "/admin/students", label: "Students", icon: "users", activePrefix: "/admin/students" },
       { href: "/admin/academic", label: "Academic", icon: "bookOpen", activePrefix: "/admin/academic" },
       {
-        href: "/admin/assessment/cbc",
-        label: "Assessment",
+        href: "/admin/assessment",
+        label: "Assessment overview",
         icon: "clipboardCheck",
         activePrefix: "/admin/assessment",
       },

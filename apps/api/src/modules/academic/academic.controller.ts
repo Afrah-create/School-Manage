@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import { HttpError } from "../../utils/httpError";
 import { getUserById } from "../users/users.service";
+import * as gradingMaintenance from "./gradingScaleMaintenance";
 import * as svc from "./academic.service";
 
 const schemas = (sharedSchemas as Record<string, unknown>).default
@@ -29,6 +30,7 @@ const {
   updateClassSchema,
   updateSubjectSchema,
   updateTermSchema,
+  upsertGradingScaleSchema,
 } = schemas as {
   academicYearSchema: { parse: (v: unknown) => unknown };
   classSchema: { parse: (v: unknown) => unknown };
@@ -50,6 +52,7 @@ const {
   updateClassSchema: { parse: (v: unknown) => unknown };
   updateSubjectSchema: { parse: (v: unknown) => unknown };
   updateTermSchema: { parse: (v: unknown) => unknown };
+  upsertGradingScaleSchema: { parse: (v: unknown) => unknown };
 };
 
 export async function postYear(req: Request, res: Response): Promise<void> {
@@ -202,7 +205,7 @@ export async function postBulkAssignTeacher(req: Request, res: Response): Promis
 }
 
 export async function getTeacherWorkload(req: Request, res: Response): Promise<void> {
-  const queryParams = teacherAssignmentsQuerySchema.parse(req.query);
+  const queryParams = teacherAssignmentsQuerySchema.parse(req.query) as { academicYearId: string };
   const teacherId = req.params["teacherId"]!;
   const assignments = await svc.getTeacherAssignments(teacherId, queryParams.academicYearId);
   const totalCount = await svc.getTeacherAssignmentCount(teacherId, queryParams.academicYearId);
@@ -214,7 +217,7 @@ export async function getTeacherWorkload(req: Request, res: Response): Promise<v
 }
 
 export async function getUnassignedClassSubjects(req: Request, res: Response): Promise<void> {
-  const queryParams = teacherAssignmentsQuerySchema.parse(req.query);
+  const queryParams = teacherAssignmentsQuerySchema.parse(req.query) as { academicYearId: string };
   const unassigned = await svc.getUnassignedClassSubjects(queryParams.academicYearId);
   res.json({
     success: true,
@@ -304,4 +307,40 @@ export async function putCbcSubStrand(req: Request, res: Response): Promise<void
 export async function deleteCbcSubStrand(req: Request, res: Response): Promise<void> {
   await svc.deleteSubStrand(req.params["subStrandId"]!);
   res.json({ success: true, data: { deleted: true }, message: "CBC sub-strand deleted." });
+}
+
+export async function getGradingScales(req: Request, res: Response): Promise<void> {
+  const levelRaw = req.query["level"];
+  const level = levelRaw === "O_LEVEL" || levelRaw === "A_LEVEL" ? levelRaw : undefined;
+  const rows = await svc.listGradingScales(level);
+  res.json({ success: true, data: rows, message: "Grading scales loaded." });
+}
+
+export async function putGradingScales(req: Request, res: Response): Promise<void> {
+  const body = upsertGradingScaleSchema.parse(req.body) as {
+    level: "O_LEVEL" | "A_LEVEL";
+    rows: Array<{
+      grade: string;
+      minScore: number;
+      maxScore: number;
+      points: number;
+      descriptor?: string | null;
+      sortOrder?: number;
+      isActive?: boolean;
+    }>;
+  };
+  const rows = await svc.replaceGradingScale(body);
+  res.json({ success: true, data: rows, message: "Grading scale updated." });
+}
+
+export async function recalculateGradingScales(req: Request, res: Response): Promise<void> {
+  const termId = typeof req.body?.termId === "string" ? req.body.termId : undefined;
+  const yearId = typeof req.body?.yearId === "string" ? req.body.yearId : undefined;
+  const studentId = typeof req.body?.studentId === "string" ? req.body.studentId : undefined;
+  const data = await gradingMaintenance.recalculateAlevelGrades({ termId, yearId, studentId });
+  res.json({
+    success: true,
+    data,
+    message: "A-Level stored grades and division summaries were recalculated from the active scale.",
+  });
 }

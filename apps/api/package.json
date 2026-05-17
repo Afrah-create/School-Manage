@@ -9,6 +9,8 @@
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
+    "seed:grading-scales": "tsx scripts/seed-grading-scales.ts",
+    "recalculate:alevel-grades": "tsx scripts/recalculate-alevel-grades.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

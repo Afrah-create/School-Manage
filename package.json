@@ -8,7 +8,9 @@
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "build": "npm run build --workspaces --if-present",
     "migrate": "npm run migrate --workspace=apps/api",
-    "seed": "npm run seed --workspace=apps/api"
+    "seed": "npm run seed --workspace=apps/api",
+    "seed:grading-scales": "npm run seed:grading-scales --workspace=apps/api",
+    "recalculate:alevel-grades": "npm run recalculate:alevel-grades --workspace=apps/api"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

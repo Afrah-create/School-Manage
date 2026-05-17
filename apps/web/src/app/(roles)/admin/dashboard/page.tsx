@@ -113,7 +113,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       <DashboardHeader
         title="Admin Dashboard"
-        description="School overview, operational status, and quick actions."
+        description="School overview plus configuration and oversight actions for the teacher-led assessment flow."
         actions={
           <>
             <Link href="/admin/students/enrol">
@@ -206,13 +206,28 @@ export default function AdminDashboardPage() {
                   <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/academic/years">
                     Manage academic years
                   </Link>
+                  <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/academic/grading-scales">
+                    Define grading scales
+                  </Link>
+                  <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/academic/class-subjects">
+                    Review class-subject assignments
+                  </Link>
+                  <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/academic/teacher-assignments">
+                    Review teacher assignments
+                  </Link>
                   <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/reports">
                     Open reports center
                   </Link>
                   <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/fees/overview">
                     View fees overview
                   </Link>
+                  <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/assessment">
+                    Assessment overview - monitor CBC and A-Level progress
+                  </Link>
                 </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Admin configures grading and academic structure; subject teachers enter marks; class teachers and headteacher complete remarks and approvals.
+                </p>
               </DashboardPanel>
             }
           />

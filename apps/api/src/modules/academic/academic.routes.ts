@@ -51,3 +51,6 @@ academicRouter.delete("/cbc-strands/:id", academicLeads, asyncHandler(c.deleteCb
 academicRouter.post("/cbc-strands/:id/sub-strands", academicLeads, asyncHandler(c.postCbcSubStrand));
 academicRouter.put("/cbc-strands/sub-strands/:subStrandId", academicLeads, asyncHandler(c.putCbcSubStrand));
 academicRouter.delete("/cbc-strands/sub-strands/:subStrandId", academicLeads, asyncHandler(c.deleteCbcSubStrand));
+academicRouter.get("/grading-scales", academicReaders, asyncHandler(c.getGradingScales));
+academicRouter.put("/grading-scales", requireRoles("admin"), asyncHandler(c.putGradingScales));
+academicRouter.post("/grading-scales/recalculate", requireRoles("admin"), asyncHandler(c.recalculateGradingScales));
