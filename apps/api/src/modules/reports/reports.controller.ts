@@ -1,28 +1,58 @@
 import type { Request, Response } from "express";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
+import { HttpError } from "../../utils/httpError";
 import * as svc from "./reports.service";
 
-const { alevelReportGenerateSchema, cbcReportGenerateSchema } = sharedSchemas;
+const {
+  cbcReportGenerateSchema,
+  alevelReportGenerateSchema,
+  reportGenerateSchema,
+} = sharedSchemas;
+
+export async function getReadiness(req: Request, res: Response): Promise<void> {
+  const classId = req.query.classId as string | undefined;
+  const termId = req.query.termId as string | undefined;
+  if (!classId || !termId) {
+    throw new HttpError(400, "Please select a class and term to check report readiness.");
+  }
+  const data = await svc.getReportReadiness(classId, termId);
+  res.json({ success: true, data });
+}
+
+export async function listReports(req: Request, res: Response): Promise<void> {
+  const classId = req.query.classId as string | undefined;
+  const termId = req.query.termId as string | undefined;
+  if (!classId || !termId) {
+    throw new HttpError(400, "Please select a class and term to list reports.");
+  }
+  const data = await svc.listClassReports(classId, termId);
+  res.json({ success: true, data });
+}
+
+export async function generate(req: Request, res: Response): Promise<void> {
+  const body = reportGenerateSchema.parse(req.body);
+  const data = await svc.generateReportsForClass(body.classId, body.termId);
+  res.status(201).json({ success: true, data });
+}
 
 export async function generateCbc(req: Request, res: Response): Promise<void> {
   const body = cbcReportGenerateSchema.parse(req.body);
-  const r = await svc.generateCbcReports(body.classId, body.termId);
-  res.status(201).json({ success: true, data: r });
+  const data = await svc.generateCbcReports(body.classId, body.termId);
+  res.status(201).json({ success: true, data });
 }
 
 export async function generateAlevel(req: Request, res: Response): Promise<void> {
   const body = alevelReportGenerateSchema.parse(req.body);
-  const r = await svc.generateAlevelReports(body.classId, body.termId);
-  res.status(201).json({ success: true, data: r });
+  const data = await svc.generateAlevelReports(body.classId, body.termId);
+  res.status(201).json({ success: true, data });
 }
 
 export async function approve(req: Request, res: Response): Promise<void> {
   if (!req.user) {
-    res.status(401).json({ success: false, error: "Unauthorized" });
-    return;
+    throw new HttpError(401, "Please sign in to continue.");
   }
-  const r = await svc.approveReport(req.params["id"]!, req.user.id);
-  res.json({ success: true, data: r });
+  const data = await svc.approveReport(req.params["id"]!, req.user.id);
+  res.json({ success: true, data, message: "Report card approved." });
 }
 
 export async function getPdf(req: Request, res: Response): Promise<void> {

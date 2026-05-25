@@ -12,6 +12,9 @@ export const reportsRouter = Router();
 
 reportsRouter.use(requireAuth);
 
+reportsRouter.get("/readiness", reporters, asyncHandler(c.getReadiness));
+reportsRouter.get("/list", reporters, asyncHandler(c.listReports));
+reportsRouter.post("/generate", reporters, asyncHandler(c.generate));
 reportsRouter.post("/cbc/generate", reporters, asyncHandler(c.generateCbc));
 reportsRouter.post("/alevel/generate", reporters, asyncHandler(c.generateAlevel));
 reportsRouter.patch("/:id/approve", headteacher, asyncHandler(c.approve));

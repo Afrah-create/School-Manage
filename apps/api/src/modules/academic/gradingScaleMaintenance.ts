@@ -1,6 +1,5 @@
 import type { GradingScaleLevel } from "@uganda-cbc-sms/shared";
 import { query } from "../../config/db";
-import { computeDivision } from "../../utils/grading";
 import { defaultScaleRows, resolveConfiguredGrade } from "../../utils/gradingScales";
 
 type SeedOptions = {
@@ -106,14 +105,14 @@ export async function recalculateAlevelGrades(options: RecalculateOptions = {}) 
 }
 
 async function recalcStudentDivision(studentId: string, termId: string, yearId: string) {
+  const { computeAlevelAggregate } = await import("../../utils/alevelDivision");
   const scoreRows = await query<{ points: number }>(
     `SELECT points
      FROM assessments_alevel
      WHERE student_id = $1 AND term_id = $2 AND academic_year_id = $3 AND points IS NOT NULL`,
     [studentId, termId, yearId],
   );
-  const totalPoints = scoreRows.rows.reduce((sum, row) => sum + row.points, 0);
-  const division = computeDivision(totalPoints);
+  const { totalPoints, division } = computeAlevelAggregate(scoreRows.rows.map((r) => r.points));
   const student = await query<{ combination_id: string | null }>(`SELECT combination_id FROM students WHERE id = $1`, [
     studentId,
   ]);

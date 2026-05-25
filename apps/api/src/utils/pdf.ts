@@ -33,13 +33,22 @@ export function streamCbcReportCard(data: {
   doc.fontSize(11).text("Subject competencies", { underline: true });
   doc.moveDown(0.3);
 
+  if (data.subjects.length === 0) {
+    doc.fontSize(9).fillColor("#666").text("No competency ratings recorded for this term.");
+  }
+
+  let lastSubject = "";
   for (const row of data.subjects) {
     const desc = getCbcDescriptor(row.rating);
+    if (row.name !== lastSubject) {
+      if (lastSubject) doc.moveDown(0.2);
+      doc.fontSize(10).fillColor("#1B6B3A").text(row.name);
+      lastSubject = row.name;
+    }
     doc
       .fontSize(9)
-      .text(
-        `${row.name} — ${row.strand} — ${row.competency}: ${row.rating} (${desc})`,
-      );
+      .fillColor("#000")
+      .text(`  ${row.strand} — ${row.competency}: ${row.rating} (${desc})`);
   }
   doc.moveDown();
 
@@ -80,13 +89,18 @@ export function streamAlevelReportCard(data: {
   doc.text(`Class: ${data.className} | Combination: ${data.combination} | ${data.term} ${data.year}`);
   doc.moveDown();
 
-  for (const s of data.subjects) {
-    doc
-      .fontSize(9)
-      .text(`${s.name}: ${s.score} — Grade ${s.grade} — Points ${s.points}`);
+  if (data.subjects.length === 0) {
+    doc.fontSize(9).fillColor("#666").text("No subject scores recorded for this term.");
+  } else {
+    for (const s of data.subjects) {
+      doc
+        .fontSize(9)
+        .fillColor("#000")
+        .text(`${s.name}: ${s.score} — Grade ${s.grade} — Points ${s.points}`);
+    }
   }
   doc.moveDown(0.5);
-  doc.fontSize(10).text(`Total points (best 3): ${data.totalPoints ?? "—"}`);
+  doc.fontSize(10).fillColor("#000").text(`Total points (best 3 subjects): ${data.totalPoints ?? "—"}`);
   doc.text(`Division: ${data.division ?? "—"}`);
   doc.moveDown();
 

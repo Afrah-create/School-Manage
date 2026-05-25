@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { apiGetBlob } from "@/lib/api";
 
-export function ReportCardPreview({ reportId }: { reportId: string }) {
+export function ReportCardPreview({ reportId, label = "Open PDF" }: { reportId: string; label?: string }) {
   const [err, setErr] = useState<string | null>(null);
 
   const openPdf = async () => {
@@ -22,7 +22,7 @@ export function ReportCardPreview({ reportId }: { reportId: string }) {
   return (
     <div className="flex flex-col gap-2">
       <Button variant="secondary" onClick={() => void openPdf()}>
-        Open PDF (authenticated)
+        {label}
       </Button>
       {err ? <p className="text-xs text-red-600">{err}</p> : null}
     </div>

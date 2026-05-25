@@ -32,6 +32,12 @@ export const alevelReportGenerateSchema = z.object({
   termId: z.string().uuid(),
 });
 
+/** Class-driven report generation (template chosen from class level). */
+export const reportGenerateSchema = z.object({
+  classId: z.string().uuid("Please select a class"),
+  termId: z.string().uuid("Please select a term"),
+});
+
 export const academicYearSchema = z.object({
   name: z.string().min(1).max(50),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

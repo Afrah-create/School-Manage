@@ -11,14 +11,12 @@ import { KpiGrid } from "@/components/layout/shells/DashboardScaffold";
 import { DivisionChart, ReadinessCharts } from "@/components/reports/charts/ReadinessCharts";
 import { PerformanceCharts } from "@/components/reports/charts/PerformanceCharts";
 import { ReportPipelineCharts } from "@/components/reports/charts/ReportPipelineCharts";
-import { ReportCardPreview } from "@/components/reports/ReportCardPreview";
+import { ReportGeneratePanel } from "@/components/reports/ReportGeneratePanel";
 import { ReportsFilters, type ReportsFiltersValue } from "@/components/reports/ReportsFilters";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
 import { useReportsOverview } from "@/hooks/useReportsAnalytics";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet } from "@/lib/api";
 import { queryStatus } from "@/lib/queryStatus";
 
 const CONTEXT_KEY = "sms-admin-reports-context-v1";
@@ -33,9 +31,6 @@ export default function AdminReportsPage() {
     classId: "",
     track: "all",
   });
-  const [reportId, setReportId] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
 
   const yearsQ = useQuery({ queryKey: ["years"], queryFn: () => apiGet<AcademicYear[]>("/academic/years") });
   const termsQ = useQuery({ queryKey: ["terms"], queryFn: () => apiGet<Term[]>("/academic/terms") });
@@ -140,36 +135,6 @@ export default function AdminReportsPage() {
     ];
   }, [data]);
 
-  const genCbc = async () => {
-    setErr(null);
-    setMsg(null);
-    try {
-      const r = await apiPost<{ reportIds: string[] }>("/reports/cbc/generate", {
-        classId: filters.classId,
-        termId: filters.termId,
-      });
-      setMsg(`Generated ${r.reportIds.length} CBC reports`);
-      await overviewQ.refetch();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
-    }
-  };
-
-  const genAl = async () => {
-    setErr(null);
-    setMsg(null);
-    try {
-      const r = await apiPost<{ reportIds: string[] }>("/reports/alevel/generate", {
-        classId: filters.classId,
-        termId: filters.termId,
-      });
-      setMsg(`Generated ${r.reportIds.length} A-Level reports`);
-      await overviewQ.refetch();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
-    }
-  };
-
   const showCbc = filters.track === "all" || filters.track === "cbc";
   const showAlevel = filters.track === "all" || filters.track === "alevel";
 
@@ -271,37 +236,18 @@ export default function AdminReportsPage() {
         </AsyncContent>
       ) : null}
 
-      {tab === "actions" ? (
-        <div className="mt-4 space-y-6">
-          <Card title="Generate report cards">
-            <p className="mb-3 text-sm text-muted-foreground">
-              Creates report records for all active students in the selected class. Headteacher approval is required
-              before PDFs are final.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button disabled={!filtersReady} onClick={() => void genCbc()}>
-                Generate CBC
-              </Button>
-              <Button variant="secondary" disabled={!filtersReady} onClick={() => void genAl()}>
-                Generate A-Level
-              </Button>
-            </div>
-            {msg ? <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-400">{msg}</p> : null}
-            {err ? <p className="mt-3 text-sm text-red-600">{err}</p> : null}
-          </Card>
-
-          <Card title="Preview report PDF">
-            <Input
-              label="Report ID (UUID)"
-              value={reportId}
-              onChange={(e) => setReportId(e.target.value)}
-            />
-            {reportId ? (
-              <div className="mt-3">
-                <ReportCardPreview reportId={reportId} />
-              </div>
-            ) : null}
-          </Card>
+      {tab === "actions" && filtersReady ? (
+        <div className="mt-4">
+          <ReportGeneratePanel
+            classId={filters.classId}
+            termId={filters.termId}
+            classes={classesQ.data ?? []}
+          />
+        </div>
+      ) : null}
+      {tab === "actions" && !filtersReady ? (
+        <div className="mt-4">
+          <Alert tone="info">Select academic year, term, and class to generate report cards.</Alert>
         </div>
       ) : null}
     </PageWrapper>

@@ -1,74 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { AcademicYear, SchoolClass, Term } from "@uganda-cbc-sms/shared";
+import { ReportGeneratePanel } from "@/components/reports/ReportGeneratePanel";
+import { ReportsFilters, type ReportsFiltersValue } from "@/components/reports/ReportsFilters";
 import { PageWrapper } from "@/components/layout/PageWrapper";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { ReportCardPreview } from "@/components/reports/ReportCardPreview";
-import { apiPatch, apiPost } from "@/lib/api";
+import { Alert } from "@/components/ui/Alert";
+import { apiGet } from "@/lib/api";
 
 export default function HeadteacherReportsPage() {
-  const [classId, setClassId] = useState("");
-  const [termId, setTermId] = useState("");
-  const [reportId, setReportId] = useState("");
-  const [approveId, setApproveId] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [filters, setFilters] = useState<ReportsFiltersValue>({
+    yearId: "",
+    termId: "",
+    classId: "",
+    track: "all",
+  });
 
-  const genCbc = async () => {
-    setErr(null);
-    try {
-      const r = await apiPost<{ reportIds: string[] }>("/reports/cbc/generate", { classId, termId });
-      setMsg(`Generated ${r.reportIds.length} CBC reports`);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
-    }
-  };
+  const yearsQ = useQuery({ queryKey: ["years"], queryFn: () => apiGet<AcademicYear[]>("/academic/years") });
+  const termsQ = useQuery({ queryKey: ["terms"], queryFn: () => apiGet<Term[]>("/academic/terms") });
+  const classesQ = useQuery({ queryKey: ["classes"], queryFn: () => apiGet<SchoolClass[]>("/academic/classes") });
 
-  const genAl = async () => {
-    setErr(null);
-    try {
-      const r = await apiPost<{ reportIds: string[] }>("/reports/alevel/generate", { classId, termId });
-      setMsg(`Generated ${r.reportIds.length} A-Level reports`);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
-    }
-  };
+  const years = yearsQ.data ?? [];
+  const terms = (termsQ.data ?? []).filter((t) => !filters.yearId || t.academicYearId === filters.yearId);
+  const classes = (classesQ.data ?? []).filter((c) => !filters.yearId || c.academicYearId === filters.yearId);
 
-  const approve = async () => {
-    setErr(null);
-    try {
-      await apiPatch(`/reports/${encodeURIComponent(approveId)}/approve`, {});
-      setMsg("Approved");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
+  useEffect(() => {
+    if (!filters.yearId && years.length) {
+      const active = years.find((y) => y.isActive) ?? years[0];
+      if (active) setFilters((f) => ({ ...f, yearId: active.id }));
     }
-  };
+  }, [years, filters.yearId]);
+
+  useEffect(() => {
+    if (!filters.termId && terms.length) {
+      const active = terms.find((t) => t.isActive) ?? terms[0];
+      if (active) setFilters((f) => ({ ...f, termId: active.id }));
+    }
+  }, [terms, filters.termId]);
+
+  useEffect(() => {
+    if (!filters.classId && classes.length) {
+      setFilters((f) => ({ ...f, classId: classes[0]!.id }));
+    }
+  }, [classes, filters.classId]);
+
+  const filtersReady = Boolean(filters.classId && filters.termId && filters.yearId);
 
   return (
-    <PageWrapper title="Report cards" description="Generate PDF report cards and approve">
-      <div className="mb-6 grid gap-3 md:grid-cols-2">
-        <Input label="Class ID" value={classId} onChange={(e) => setClassId(e.target.value)} />
-        <Input label="Term ID" value={termId} onChange={(e) => setTermId(e.target.value)} />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void genCbc()}>Generate CBC</Button>
-        <Button variant="secondary" onClick={() => void genAl()}>
-          Generate A-Level
-        </Button>
-      </div>
-      {msg ? <p className="mt-4 text-emerald-700">{msg}</p> : null}
-      {err ? <p className="mt-4 text-red-600">{err}</p> : null}
+    <PageWrapper
+      title="Report cards"
+      description="Generate results from submitted assessments, preview PDFs, and approve final report cards."
+    >
+      <ReportsFilters
+        years={years.map((y) => ({ value: y.id, label: y.name }))}
+        terms={terms.map((t) => ({
+          value: t.id,
+          label: `Term ${t.termNumber}${t.isActive ? " (active)" : ""}`,
+        }))}
+        classes={classes.map((c) => ({
+          value: c.id,
+          label: [c.name, c.stream].filter(Boolean).join(" ") || c.name,
+        }))}
+        value={filters}
+        onChange={(next) => setFilters((f) => ({ ...f, ...next }))}
+      />
 
-      <div className="mt-10 space-y-4">
-        <Input label="Preview report ID (UUID)" value={reportId} onChange={(e) => setReportId(e.target.value)} />
-        {reportId ? <ReportCardPreview reportId={reportId} /> : null}
-      </div>
-
-      <div className="mt-10 flex flex-wrap items-end gap-2">
-        <Input label="Approve report ID" value={approveId} onChange={(e) => setApproveId(e.target.value)} />
-        <Button onClick={() => void approve()}>Approve</Button>
-      </div>
+      {filtersReady ? (
+        <ReportGeneratePanel
+          classId={filters.classId}
+          termId={filters.termId}
+          classes={classesQ.data ?? []}
+        />
+      ) : (
+        <Alert tone="info">Select academic year, term, and class to manage report cards.</Alert>
+      )}
     </PageWrapper>
   );
 }
