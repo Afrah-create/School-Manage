@@ -80,7 +80,7 @@ Sidebar navigation in the app is **role-aware** (Zustand `authStore`).
 - **A-Level:** `POST|GET /assessments/alevel`
 - **Fees:** `/fees/structure`, `/fees/invoices`, `/fees/payments`, `/fees/balance/:studentId`, `/fees/reports`
 - **Reports:** `POST /reports/cbc/generate`, `POST /reports/alevel/generate`, `PATCH /reports/:id/approve`, `GET /reports/:id/pdf`
-- **Analytics:** `GET /analytics/dashboard`, `GET /analytics/class-performance`
+- **Analytics:** `GET /analytics/dashboard`, `GET /analytics/class-performance`, `GET /analytics/report-pipeline`, `GET /analytics/reports-overview`
 
 All JSON responses use `{ success, data?, error? }`. Password hashes are never returned.
 

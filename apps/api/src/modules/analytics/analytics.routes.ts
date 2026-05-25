@@ -10,3 +10,5 @@ const analyticsReaders = requireRoles("admin", "headteacher", "bursar");
 analyticsRouter.use(requireAuth);
 analyticsRouter.get("/dashboard", analyticsReaders, asyncHandler(c.dashboard));
 analyticsRouter.get("/class-performance", analyticsReaders, asyncHandler(c.classPerformance));
+analyticsRouter.get("/report-pipeline", analyticsReaders, asyncHandler(c.reportPipeline));
+analyticsRouter.get("/reports-overview", analyticsReaders, asyncHandler(c.reportsOverview));
