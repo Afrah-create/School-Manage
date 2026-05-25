@@ -202,6 +202,14 @@ export async function apiDelete<T>(url: string): Promise<T> {
   return parseEnvelope(() => api.delete<ApiEnvelope<T>>(url));
 }
 
+export async function apiUpload<T>(url: string, formData: FormData): Promise<T> {
+  return parseEnvelope(() =>
+    api.post<ApiEnvelope<T>>(url, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  );
+}
+
 export async function apiGetBlob(url: string): Promise<Blob> {
   try {
     const res = await api.get(url, { responseType: "blob" });

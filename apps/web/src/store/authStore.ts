@@ -12,6 +12,7 @@ export type AuthUser = {
   fullName: string;
   email: string;
   role: Role;
+  photoUrl?: string | null;
 };
 
 type AuthState = {
@@ -23,6 +24,7 @@ type AuthState = {
   logout: () => void;
   hydrate: () => Promise<void>;
   setToken: (token: string | null) => void;
+  updateUser: (patch: Partial<AuthUser>) => void;
   hasRole: (role: Role | Role[]) => boolean;
 };
 
@@ -43,6 +45,7 @@ function parseUser(data: unknown): AuthUser | null {
       fullName: o.fullName,
       email: o.email,
       role: role as Role,
+      photoUrl: typeof o.photoUrl === "string" ? o.photoUrl : null,
     };
   }
   return null;
@@ -62,6 +65,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setToken: (token) => set({ token }),
+
+  updateUser: (patch) =>
+    set((state) => ({
+      user: state.user ? { ...state.user, ...patch } : null,
+    })),
 
   login: (user, token) => {
     const maxAge = jwtCookieMaxAge(token);

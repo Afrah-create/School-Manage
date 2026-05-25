@@ -3,7 +3,9 @@
 import { Bell, ChevronDown, Menu, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { resolveUploadUrl } from "@/lib/media";
 import { useAuthStore } from "@/store/authStore";
 import type { RoleShellConfig } from "./types";
 
@@ -40,6 +42,8 @@ export function ShellHeader({ config, onToggleMobileNav }: Props) {
       .map((part) => part[0]?.toUpperCase() ?? "")
       .join("");
   }, [user?.fullName]);
+
+  const avatarUrl = useMemo(() => resolveUploadUrl(user?.photoUrl), [user?.photoUrl]);
 
   useEffect(() => {
     function onClickOutside(event: MouseEvent) {
@@ -95,8 +99,12 @@ export function ShellHeader({ config, onToggleMobileNav }: Props) {
             aria-expanded={menuOpen}
             aria-haspopup="menu"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
-              {initials}
+            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-medium text-foreground">
+              {avatarUrl ? (
+                <Image src={avatarUrl} alt="" fill className="object-cover" sizes="32px" unoptimized />
+              ) : (
+                initials
+              )}
             </span>
             <ChevronDown className="hidden h-4 w-4 text-muted-foreground md:block" />
           </button>
@@ -105,11 +113,16 @@ export function ShellHeader({ config, onToggleMobileNav }: Props) {
               role="menu"
               className="absolute right-0 top-10 z-50 min-w-[11rem] rounded-md border border-border bg-card p-1 shadow-lg"
             >
-              <button type="button" role="menuitem" className="transition-ui w-full rounded-sm px-3 py-2 text-left text-sm text-foreground hover:bg-accent/50">
+              <button
+                type="button"
+                role="menuitem"
+                className="transition-ui w-full rounded-sm px-3 py-2 text-left text-sm text-foreground hover:bg-accent/50"
+                onClick={() => {
+                  setMenuOpen(false);
+                  router.push("/profile");
+                }}
+              >
                 Profile
-              </button>
-              <button type="button" role="menuitem" className="transition-ui w-full rounded-sm px-3 py-2 text-left text-sm text-foreground hover:bg-accent/50">
-                Settings
               </button>
               <button
                 type="button"

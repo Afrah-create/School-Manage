@@ -72,7 +72,7 @@ Sidebar navigation in the app is **role-aware** (Zustand `authStore`).
 ## API route map (summary)
 
 - **Auth:** `POST /auth/login`, `POST /auth/logout`, `PATCH /auth/change-password`
-- **Users:** `POST|GET /users`, `PATCH /users/:id/deactivate`, `PATCH /users/:id/reset-password`, `GET /users/me`
+- **Users:** `POST|GET /users`, `PATCH /users/:id/deactivate`, `PATCH /users/:id/reset-password`, `GET /users/me`, `PATCH /users/me`, `POST /users/me/photo`
 - **Academic:** `/academic/years|terms|classes|subjects|combinations`, `/academic/cbc-strands`, `/academic/class-subjects`, `/academic/grading-scales`
 - **Students:** `POST|GET /students`, `GET /students/:id`, `POST /students/:id/photo`, `POST /students/promote`, `PATCH /students/:id/withdraw`, `GET /students/search`
 - **Attendance:** `POST|GET /attendance`

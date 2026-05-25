@@ -1,4 +1,9 @@
-import type { CreateUserInput, ResetPasswordInput, UpdateUserInput } from "@uganda-cbc-sms/shared";
+import type {
+  CreateUserInput,
+  ResetPasswordInput,
+  UpdateProfileInput,
+  UpdateUserInput,
+} from "@uganda-cbc-sms/shared";
 import bcrypt from "bcrypt";
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
@@ -36,6 +41,7 @@ type UserDetailsRow = {
   force_password_change: boolean | null;
   notes: string | null;
   system_account: boolean | null;
+  photo_url: string | null;
 };
 
 function mapUserDetails(row: UserDetailsRow) {
@@ -51,6 +57,7 @@ function mapUserDetails(row: UserDetailsRow) {
     forcePasswordChange: Boolean(row.force_password_change),
     notes: row.notes,
     systemAccount: Boolean(row.system_account),
+    photoUrl: row.photo_url ?? null,
   };
 }
 
@@ -223,7 +230,7 @@ export async function getUserById(id: string) {
     const { rows } = await query<UserDetailsRow>(
       `SELECT id, full_name, email, role, is_active, created_at, updated_at,
               last_login_at, login_attempts, locked_at, locked_until, locked_reason,
-              password_changed_at, force_password_change, notes, system_account
+              password_changed_at, force_password_change, notes, system_account, photo_url
        FROM users
        WHERE id = $1 AND deleted_at IS NULL`,
       [id],
@@ -266,7 +273,7 @@ export async function updateUser(id: string, input: UpdateUserInput, actorId?: s
       `UPDATE users
        SET ${sets.join(", ")}, updated_at = NOW()
        WHERE id = $${i} AND deleted_at IS NULL
-       RETURNING id, full_name, email, role, is_active, created_at`,
+       RETURNING id, full_name, email, role, is_active, created_at, photo_url`,
       values,
     );
     if (rows.length === 0) throw new HttpError(404, "User not found");
@@ -285,6 +292,31 @@ export async function updateUser(id: string, input: UpdateUserInput, actorId?: s
     if (err.code === "23505") throw new HttpError(400, "Email already exists");
     if (e instanceof HttpError) throw e;
     throw new Error(e instanceof Error ? e.message : "Could not update user");
+  }
+}
+
+export async function updateMyProfile(userId: string, input: UpdateProfileInput) {
+  return updateUser(userId, input, userId);
+}
+
+export async function updateUserPhoto(userId: string, relativeUrl: string) {
+  try {
+    const r = await query(
+      `UPDATE users SET photo_url = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL
+       RETURNING id, full_name, email, role, is_active, created_at, photo_url`,
+      [relativeUrl, userId],
+    );
+    if (r.rowCount === 0) throw new HttpError(404, "User not found");
+    await logUserAction({
+      userId,
+      actorId: userId,
+      action: "PROFILE_PHOTO_UPDATED",
+      changedFields: ["photoUrl"],
+    });
+    return toUserPublic(r.rows[0]!);
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
+    throw new Error(e instanceof Error ? e.message : "Could not update profile photo");
   }
 }
 

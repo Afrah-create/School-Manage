@@ -3,12 +3,20 @@ import { requireAuth } from "../../middleware/auth";
 import { requireRoles } from "../../middleware/rbac";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as c from "./users.controller";
+import { userPhotoUpload } from "./users.upload";
 
 const admin = requireRoles("admin");
 
 export const usersRouter = Router();
 
 usersRouter.get("/me", requireAuth, asyncHandler(c.me));
+usersRouter.patch("/me", requireAuth, asyncHandler(c.updateMe));
+usersRouter.post(
+  "/me/photo",
+  requireAuth,
+  userPhotoUpload.single("photo"),
+  asyncHandler(c.uploadMyPhoto),
+);
 usersRouter.post("/", requireAuth, admin, asyncHandler(c.create));
 usersRouter.get("/", requireAuth, admin, asyncHandler(c.list));
 usersRouter.post("/bulk/activate", requireAuth, admin, asyncHandler(c.bulkActivate));

@@ -45,6 +45,17 @@ export const updateUserSchema = z
     message: "At least one field is required",
   });
 
+/** Self-service profile update (no role or status changes). */
+export const updateProfileSchema = z
+  .object({
+    fullName: z.string().min(1).max(255).optional(),
+    email: z.string().email().optional(),
+  })
+  .strict()
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "At least one field is required",
+  });
+
 export const resetPasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
@@ -56,4 +67,5 @@ export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type ResetPasswordWithOtpInput = z.infer<typeof resetPasswordWithOtpSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

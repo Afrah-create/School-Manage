@@ -10,6 +10,7 @@ export interface UserPublic {
   email: string;
   role: Role;
   isActive: boolean;
+  photoUrl?: string | null;
   createdAt?: string;
 }
 

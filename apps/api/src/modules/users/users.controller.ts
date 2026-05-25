@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
+import path from "path";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
-import type { CreateUserInput, ResetPasswordInput, UpdateUserInput } from "@uganda-cbc-sms/shared";
+import type { CreateUserInput, ResetPasswordInput, UpdateProfileInput, UpdateUserInput } from "@uganda-cbc-sms/shared";
 import { z } from "zod";
 import * as svc from "./users.service";
 
@@ -9,10 +10,11 @@ const sharedRuntime =
   ((sharedSchemas as Record<string, unknown>)["module.exports"] as Record<string, unknown> | undefined) ??
   (sharedSchemas as Record<string, unknown>);
 
-const { createUserSchema, resetPasswordSchema, updateUserSchema } = sharedRuntime as {
+const { createUserSchema, resetPasswordSchema, updateUserSchema, updateProfileSchema } = sharedRuntime as {
   createUserSchema: { parse: (value: unknown) => unknown; extend: (shape: unknown) => unknown };
   resetPasswordSchema: { parse: (value: unknown) => unknown; extend: (shape: unknown) => unknown };
   updateUserSchema: { parse: (value: unknown) => unknown };
+  updateProfileSchema: { parse: (value: unknown) => unknown };
 };
 const listUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -92,6 +94,30 @@ export async function me(req: Request, res: Response): Promise<void> {
   }
   const user = await svc.getUserById(req.user.id);
   res.json({ success: true, data: user });
+}
+
+export async function updateMe(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return;
+  }
+  const body = updateProfileSchema.parse(req.body) as UpdateProfileInput;
+  const user = await svc.updateMyProfile(req.user.id, body);
+  res.json({ success: true, data: user, message: "Profile updated" });
+}
+
+export async function uploadMyPhoto(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return;
+  }
+  if (!req.file) {
+    res.status(400).json({ success: false, error: "No file uploaded" });
+    return;
+  }
+  const rel = `/uploads/users/${path.basename(req.file.path)}`;
+  const user = await svc.updateUserPhoto(req.user.id, rel);
+  res.json({ success: true, data: user, message: "Profile photo updated" });
 }
 
 export async function getOne(req: Request, res: Response): Promise<void> {

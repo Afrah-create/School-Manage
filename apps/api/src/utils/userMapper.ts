@@ -8,6 +8,7 @@ type UserRow = {
   role: string;
   is_active: boolean;
   created_at: Date;
+  photo_url?: string | null;
 };
 
 export function toUserPublic(row: UserRow | QueryResultRow): UserPublic {
@@ -18,6 +19,7 @@ export function toUserPublic(row: UserRow | QueryResultRow): UserPublic {
     email: r.email,
     role: r.role as UserPublic["role"],
     isActive: r.is_active,
+    photoUrl: r.photo_url ?? null,
     createdAt: r.created_at ? new Date(r.created_at).toISOString() : undefined,
   };
 }

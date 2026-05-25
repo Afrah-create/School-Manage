@@ -37,6 +37,10 @@ export function middleware(request: NextRequest) {
     return res;
   }
 
+  if (pathname.startsWith("/profile")) {
+    return NextResponse.next();
+  }
+
   const allowedPrefix = ROLE_PREFIX[role];
   if (!pathname.startsWith(allowedPrefix)) {
     return NextResponse.redirect(new URL(dashboardPath(role), request.url));
@@ -52,5 +56,7 @@ export const config = {
     "/class-teacher/:path*",
     "/subject-teacher/:path*",
     "/bursar/:path*",
+    "/profile",
+    "/profile/:path*",
   ],
 };

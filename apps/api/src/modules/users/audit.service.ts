@@ -9,6 +9,7 @@ export type AuditAction =
   | "PASSWORD_RESET"
   | "USER_UNLOCKED"
   | "USER_NOTES_UPDATED"
+  | "PROFILE_PHOTO_UPDATED"
   | "LOGIN_SUCCESS"
   | "LOGIN_FAILED"
   | "LOGOUT";

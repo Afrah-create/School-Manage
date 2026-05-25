@@ -159,6 +159,7 @@ export async function login(
         role: user.role,
         is_active: user.is_active,
         created_at: user.created_at,
+        photo_url: (user as { photo_url?: string | null }).photo_url ?? null,
       }),
     };
   } catch (e) {
