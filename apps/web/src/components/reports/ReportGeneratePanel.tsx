@@ -5,6 +5,7 @@ import type { SchoolClass } from "@uganda-cbc-sms/shared";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { FormSkeleton } from "@/components/feedback/FormSkeleton";
+import { MarksSubmissionTracker } from "@/components/reports/MarksSubmissionTracker";
 import { ReportCardPreview } from "@/components/reports/ReportCardPreview";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -104,43 +105,36 @@ export function ReportGeneratePanel({
 
   return (
     <div className="space-y-6">
-      <Card title="Report readiness">
+      <Card title="Marks submission tracking">
         <p className="mb-3 text-sm text-muted-foreground">
-          Template for this class: <strong>{trackLabel}</strong>. All class subjects must be submitted
-          before report cards can be generated. Results and grades are computed automatically from term
-          assessments.
+          Template: <strong>{trackLabel}</strong>. Track which teachers have submitted marks before you
+          generate report cards.
         </p>
         <AsyncContent
           status={readinessStatus}
-          loading={<FormSkeleton fields={3} />}
+          loading={<FormSkeleton fields={6} />}
           error={
             <ErrorState
               message={
                 readinessQ.error instanceof Error
                   ? readinessQ.error.message
-                  : "Could not check readiness."
+                  : "Could not load submission tracking."
               }
               onRetry={() => void readinessQ.refetch()}
             />
           }
         >
           {readinessQ.data ? (
-            <div className="space-y-2 text-sm">
-              <p>
-                Active students: <strong>{readinessQ.data.activeStudents}</strong>
-              </p>
-              {readinessQ.data.ready ? (
-                <Alert tone="success">All subjects are submitted. You can generate report cards.</Alert>
-              ) : (
+            <div className="space-y-4">
+              {!readinessQ.data.ready ? (
                 <Alert tone="info">
-                  Waiting on subjects:{" "}
-                  <strong>
-                    {readinessQ.data.pendingSubjectCodes.length
-                      ? readinessQ.data.pendingSubjectCodes.join(", ")
-                      : "assign subjects to this class"}
-                  </strong>
+                  {readinessQ.data.pendingCount} subject
+                  {readinessQ.data.pendingCount === 1 ? "" : "s"} still need submitted marks.
                 </Alert>
+              ) : (
+                <Alert tone="success">All subjects submitted — ready to generate report cards.</Alert>
               )}
+              <MarksSubmissionTracker data={readinessQ.data} />
             </div>
           ) : null}
         </AsyncContent>

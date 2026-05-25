@@ -9,6 +9,8 @@ import { ReportsAnalyticsSkeleton } from "@/components/feedback/ReportsAnalytics
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { KpiGrid } from "@/components/layout/shells/DashboardScaffold";
 import { DivisionChart, ReadinessCharts } from "@/components/reports/charts/ReadinessCharts";
+import { MarksSubmissionTracker } from "@/components/reports/MarksSubmissionTracker";
+import { useReportReadiness } from "@/hooks/useReports";
 import { PerformanceCharts } from "@/components/reports/charts/PerformanceCharts";
 import { ReportPipelineCharts } from "@/components/reports/charts/ReportPipelineCharts";
 import { ReportGeneratePanel } from "@/components/reports/ReportGeneratePanel";
@@ -93,6 +95,12 @@ export default function AdminReportsPage() {
 
   const data = overviewQ.data;
   const filtersReady = Boolean(filters.classId && filters.termId && filters.yearId);
+
+  const submissionQ = useReportReadiness(
+    filtersReady ? filters.classId : undefined,
+    filtersReady ? filters.termId : undefined,
+  );
+
   const overviewStatus = filtersReady
     ? queryStatus(overviewQ)
     : ("success" as const);
@@ -141,7 +149,7 @@ export default function AdminReportsPage() {
   const tabs: { id: TabId; label: string }[] = [
     { id: "pipeline", label: "Pipeline" },
     { id: "performance", label: "Performance" },
-    { id: "readiness", label: "Readiness" },
+    { id: "readiness", label: "Submission tracking" },
     { id: "actions", label: "Generate & preview" },
   ];
 
@@ -224,12 +232,39 @@ export default function AdminReportsPage() {
         </div>
       ) : null}
 
-      {tab === "readiness" && data ? (
+      {tab === "readiness" && filtersReady ? (
+        <div className="mt-4 space-y-6">
+          {data ? (
+            <ReadinessCharts
+              cbc={showCbc ? data.readiness.cbc : []}
+              alevel={showAlevel ? data.readiness.alevel : []}
+            />
+          ) : null}
+          <Card title="Teacher submission tracker">
+            <p className="mb-4 text-sm text-muted-foreground">
+              See which subject teachers have submitted marks for every student. Use this list to follow
+              up before generating report cards.
+            </p>
+            {submissionQ.isPending ? (
+              <ReportsAnalyticsSkeleton />
+            ) : submissionQ.isError ? (
+              <ErrorState
+                message={
+                  submissionQ.error instanceof Error
+                    ? submissionQ.error.message
+                    : "Could not load submission tracking."
+                }
+                onRetry={() => void submissionQ.refetch()}
+              />
+            ) : submissionQ.data ? (
+              <MarksSubmissionTracker data={submissionQ.data} />
+            ) : null}
+          </Card>
+        </div>
+      ) : null}
+      {tab === "readiness" && !filtersReady ? (
         <div className="mt-4">
-          <ReadinessCharts
-            cbc={showCbc ? data.readiness.cbc : []}
-            alevel={showAlevel ? data.readiness.alevel : []}
-          />
+          <Alert tone="info">Select academic year, term, and class to track mark submissions.</Alert>
         </div>
       ) : null}
 

@@ -3,6 +3,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPatch, apiPost } from "@/lib/api";
 
+export type SubjectSubmissionTrack = {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  teacherId: string | null;
+  teacherName: string | null;
+  teacherEmail: string | null;
+  activeStudents: number;
+  studentsWithMarks: number;
+  studentsSubmitted: number;
+  status: "not_started" | "in_progress" | "submitted";
+  lastSubmittedAt: string | null;
+};
+
 export type ReportReadiness = {
   track: "cbc" | "alevel";
   classLevel: string;
@@ -15,8 +29,18 @@ export type ReportReadiness = {
     subjectCode: string;
     status: string;
   }>;
+  subjectTracking: SubjectSubmissionTrack[];
+  submittedCount: number;
+  pendingCount: number;
+  totalSubjects: number;
   ready: boolean;
   pendingSubjectCodes: string[];
+  teachersPending: Array<{
+    teacherId: string | null;
+    teacherName: string;
+    teacherEmail: string | null;
+    subjects: string[];
+  }>;
 };
 
 export type ClassReportRow = {

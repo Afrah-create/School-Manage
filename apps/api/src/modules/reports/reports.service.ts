@@ -6,31 +6,70 @@ import {
   compileAlevelReportPayload,
   compileCbcReportPayload,
 } from "./reportCompiler";
-import { assertReportReadiness, getClassContext, listSubjectReadiness } from "./reportReadiness";
+import {
+  assertReportReadiness,
+  getClassContext,
+  listSubjectReadiness,
+  listSubjectSubmissionTracking,
+} from "./reportReadiness";
 import type { AlevelReportPayload, CbcReportPayload, ReportTrack } from "./reportTypes";
 
 export async function getReportReadiness(classId: string, termId: string) {
   const ctx = await getClassContext(classId, termId);
-  const subjects = await listSubjectReadiness(
-    classId,
-    termId,
-    ctx.academicYearId,
-    ctx.track,
-  );
-  const pending = subjects.filter((s) => s.status !== "Submitted");
   const { rows } = await query<{ c: number }>(
     `SELECT COUNT(*)::int AS c FROM students WHERE class_id = $1 AND status = 'active'`,
     [classId],
   );
+  const activeStudents = rows[0]?.c ?? 0;
+
+  const [subjects, subjectTracking] = await Promise.all([
+    listSubjectReadiness(classId, termId, ctx.academicYearId, ctx.track),
+    listSubjectSubmissionTracking(
+      classId,
+      termId,
+      ctx.academicYearId,
+      ctx.track,
+      activeStudents,
+    ),
+  ]);
+
+  const pending = subjectTracking.filter((s) => s.status !== "submitted");
+  const submitted = subjectTracking.filter((s) => s.status === "submitted");
+
+  const teachersPending = new Map<
+    string,
+    { teacherId: string | null; teacherName: string; teacherEmail: string | null; subjects: string[] }
+  >();
+  for (const row of pending) {
+    const key = row.teacherId ?? `unassigned-${row.subjectCode}`;
+    const label = row.teacherName?.trim() || "Unassigned teacher";
+    const existing = teachersPending.get(key);
+    if (existing) {
+      existing.subjects.push(row.subjectCode);
+    } else {
+      teachersPending.set(key, {
+        teacherId: row.teacherId,
+        teacherName: label,
+        teacherEmail: row.teacherEmail,
+        subjects: [row.subjectCode],
+      });
+    }
+  }
+
   return {
     track: ctx.track,
     classLevel: ctx.classLevel,
     className: ctx.className,
     termNumber: ctx.termNumber,
-    activeStudents: rows[0]?.c ?? 0,
+    activeStudents,
     subjects,
-    ready: pending.length === 0 && (rows[0]?.c ?? 0) > 0,
+    subjectTracking,
+    submittedCount: submitted.length,
+    pendingCount: pending.length,
+    totalSubjects: subjectTracking.length,
+    ready: pending.length === 0 && activeStudents > 0 && subjectTracking.length > 0,
     pendingSubjectCodes: pending.map((s) => s.subjectCode),
+    teachersPending: [...teachersPending.values()],
   };
 }
 
