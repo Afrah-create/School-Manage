@@ -7,6 +7,7 @@ const {
   cbcReportGenerateSchema,
   alevelReportGenerateSchema,
   reportGenerateSchema,
+  termReportDefaultSchema,
 } = sharedSchemas;
 
 export async function getReadiness(req: Request, res: Response): Promise<void> {
@@ -40,10 +41,38 @@ export async function listReports(req: Request, res: Response): Promise<void> {
   res.json({ success: true, data });
 }
 
+export async function getTermReportDefault(req: Request, res: Response): Promise<void> {
+  const classId = req.query.classId as string | undefined;
+  const termId = req.query.termId as string | undefined;
+  if (!classId || !termId) {
+    throw new HttpError(400, "Please select a class and term.");
+  }
+  const data = await svc.getTermReportDefault(classId, termId);
+  res.json({ success: true, data });
+}
+
+export async function putTermReportDefault(req: Request, res: Response): Promise<void> {
+  if (!req.user) throw new HttpError(401, "Please sign in to continue.");
+  const body = termReportDefaultSchema.parse(req.body);
+  const data = await svc.setTermReportDefault(
+    body.classId,
+    body.termId,
+    body.examId,
+    req.user.id,
+  );
+  res.json({ success: true, data, message: "Official exam for report cards updated." });
+}
+
 export async function generate(req: Request, res: Response): Promise<void> {
   const body = reportGenerateSchema.parse(req.body);
   const data = await svc.generateReportsForClass(body.classId, body.termId, body.examId);
   res.status(201).json({ success: true, data });
+}
+
+export async function regenerate(req: Request, res: Response): Promise<void> {
+  const body = reportGenerateSchema.parse(req.body);
+  const data = await svc.regenerateReportsForClass(body.classId, body.termId, body.examId);
+  res.status(201).json({ success: true, data, message: "Report cards regenerated." });
 }
 
 export async function generateCbc(req: Request, res: Response): Promise<void> {

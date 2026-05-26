@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPatch, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, apiPut } from "@/lib/api";
 
 export type SubjectSubmissionTrack = {
   subjectId: string;
@@ -25,16 +25,20 @@ export type ReportExamOption = {
   maxScore: number;
   subjectCount: number;
   allSubjectsSubmitted: boolean;
+  readyForReports: boolean;
+  isDefault: boolean;
 };
 
 export type ExamSubjectTrack = {
   subjectId: string;
   subjectName: string;
   subjectCode: string;
+  isCompulsory?: boolean;
+  entrantsCount?: number;
   studentsWithMarks: number;
   activeStudents: number;
   isSubmitted: boolean;
-  status: "not_started" | "in_progress" | "submitted";
+  status: "not_started" | "in_progress" | "submitted" | "not_applicable";
 };
 
 export type ReportReadiness = {
@@ -66,7 +70,11 @@ export type ReportReadiness = {
   examReady?: boolean;
   linkedExamId?: string | null;
   examLinkInvalid?: boolean;
+  examNotClosed?: boolean;
   termReady?: boolean;
+  defaultExamId?: string | null;
+  defaultExamName?: string | null;
+  clearedStaleDefault?: boolean;
 };
 
 export type ClassReportRow = {
@@ -79,6 +87,9 @@ export type ClassReportRow = {
   division?: string | null;
   totalPoints?: number | null;
   examLinkStatus?: ReportExamLinkStatus;
+  reportSourceType?: "term" | "exam" | null;
+  reportSourceLabel?: string;
+  payloadGeneratedAt?: string | null;
 };
 
 export type GenerateReportsResult = {
@@ -87,6 +98,7 @@ export type GenerateReportsResult = {
   count: number;
   warnings: string[];
   skipped: number;
+  sourceType?: "term" | "exam";
   sourceExamId?: string | null;
   sourceExamName?: string | null;
   usedTermAssessmentsFallback?: boolean;
@@ -102,6 +114,7 @@ export function useReportExamOptions(classId: string | undefined, termId: string
         `/reports/exam-options?classId=${encodeURIComponent(classId!)}&termId=${encodeURIComponent(termId!)}`,
       ),
     enabled: Boolean(classId && termId),
+    staleTime: 0,
   });
 }
 
@@ -155,10 +168,26 @@ export function useReportActions() {
     onSuccess: (_d, vars) => void invalidate(vars.classId, vars.termId),
   });
 
+  const regenerate = useMutation({
+    mutationFn: (body: { classId: string; termId: string; examId?: string }) =>
+      apiPost<GenerateReportsResult>("/reports/regenerate", body),
+    onSuccess: (_d, vars) => void invalidate(vars.classId, vars.termId),
+  });
+
+  const setTermDefault = useMutation({
+    mutationFn: (body: { classId: string; termId: string; examId: string | null }) =>
+      apiPut<{ examId: string | null; examName: string | null }>("/reports/term-default", body),
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: ["reports-exam-options", vars.classId, vars.termId] });
+      void qc.invalidateQueries({ queryKey: ["reports-readiness"] });
+      void qc.invalidateQueries({ queryKey: ["reports-term-default", vars.classId, vars.termId] });
+    },
+  });
+
   const approve = useMutation({
     mutationFn: (reportId: string) => apiPatch<{ type: string }>(`/reports/${reportId}/approve`, {}),
     onSuccess: () => void invalidate(),
   });
 
-  return { generate, approve, invalidate };
+  return { generate, regenerate, setTermDefault, approve, invalidate };
 }

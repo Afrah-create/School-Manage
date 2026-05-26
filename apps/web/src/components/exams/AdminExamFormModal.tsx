@@ -3,11 +3,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo } from "react";
 import { useForm, type Control } from "react-hook-form";
+import type { ExamPaperInput } from "@uganda-cbc-sms/shared";
 import { useQuery } from "@tanstack/react-query";
 import { createExamSchema, updateExamSchema } from "@uganda-cbc-sms/shared";
 import type { AcademicYear, CreateExamInput, SchoolClass, Term, UpdateExamInput } from "@uganda-cbc-sms/shared";
 import type { z } from "zod";
-import { ExamSubjectCheckboxList } from "@/components/exams/ExamSubjectCheckboxList";
+import { ExamPaperPicker } from "@/components/exams/ExamPaperPicker";
+import type { ExamSubjectOption } from "@/components/exams/ExamSubjectCheckboxList";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -73,7 +75,7 @@ export function AdminExamFormModal({
       classId: defaultClassId,
       examDate: "",
       maxScore: 100,
-      subjectIds: [],
+      papers: [],
     },
   });
 
@@ -83,7 +85,7 @@ export function AdminExamFormModal({
       name: "",
       examDate: "",
       maxScore: 100,
-      subjectIds: [],
+      papers: [],
     },
   });
 
@@ -117,7 +119,7 @@ export function AdminExamFormModal({
   const examSubjectOptions = useMemo(() => {
     const rows = classSubjectsQ.data ?? [];
     const seen = new Set<string>();
-    const out: ClassSubjectRow[] = [];
+    const out: ExamSubjectOption[] = [];
     for (const r of rows) {
       if (!r.subjectId || seen.has(r.subjectId)) continue;
       seen.add(r.subjectId);
@@ -135,7 +137,7 @@ export function AdminExamFormModal({
       classId: defaultClassId || "",
       examDate: "",
       maxScore: 100,
-      subjectIds: [],
+      papers: [],
     });
   }, [open, isCreate, defaultYearId, defaultTermId, defaultClassId, years, createForm]);
 
@@ -145,7 +147,10 @@ export function AdminExamFormModal({
       name: exam.name,
       examDate: exam.examDate ?? "",
       maxScore: exam.maxScore,
-      subjectIds: exam.subjects.map((s) => s.subjectId),
+      papers: exam.subjects.map((s) => ({
+        subjectId: s.subjectId,
+        isCompulsory: s.isCompulsory !== false,
+      })),
     });
   }, [open, isCreate, exam, editForm]);
 
@@ -172,7 +177,7 @@ export function AdminExamFormModal({
       const pick =
         defaultClassId && valid.some((c) => c.id === defaultClassId) ? defaultClassId : valid[0]?.id ?? "";
       createForm.setValue("classId", pick, { shouldValidate: false });
-      createForm.setValue("subjectIds", [], { shouldValidate: false });
+      createForm.setValue("papers", [], { shouldValidate: false });
     }
   }, [open, isCreate, createYearId, classes, defaultClassId, createForm]);
 
@@ -232,7 +237,7 @@ export function AdminExamFormModal({
                 createForm.setValue("academicYearId", y);
                 createForm.setValue("termId", "");
                 createForm.setValue("classId", nextClasses[0]?.id ?? "");
-                createForm.setValue("subjectIds", [], { shouldValidate: true });
+                createForm.setValue("papers", [], { shouldValidate: true });
               }}
             />
             <Select
@@ -259,7 +264,7 @@ export function AdminExamFormModal({
             value={createForm.watch("classId")}
             onChange={(e) => {
               createForm.setValue("classId", e.target.value);
-              createForm.setValue("subjectIds", [], { shouldValidate: true });
+              createForm.setValue("papers", [], { shouldValidate: true });
             }}
           />
           <div className="grid gap-3 sm:grid-cols-2">
@@ -273,14 +278,17 @@ export function AdminExamFormModal({
               error={createForm.formState.errors.maxScore?.message}
             />
           </div>
-          <ExamSubjectCheckboxList
-            control={createForm.control as unknown as Control<{ subjectIds: string[] }>}
-            name="subjectIds"
+          <ExamPaperPicker
+            control={createForm.control as unknown as Control<{ papers: ExamPaperInput[] }>}
+            name="papers"
             options={examSubjectOptions}
             ready={subjectsReady}
             loading={subjectsLoading}
             error={subjectsLoadError}
-            fieldError={createForm.formState.errors.subjectIds?.message}
+            fieldError={
+              createForm.formState.errors.papers?.message ??
+              (createForm.formState.errors as { papers?: { root?: { message?: string } } }).papers?.root?.message
+            }
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -310,14 +318,14 @@ export function AdminExamFormModal({
               error={editForm.formState.errors.maxScore?.message}
             />
           </div>
-          <ExamSubjectCheckboxList
-            control={editForm.control as unknown as Control<{ subjectIds: string[] }>}
-            name="subjectIds"
+          <ExamPaperPicker
+            control={editForm.control as unknown as Control<{ papers: ExamPaperInput[] }>}
+            name="papers"
             options={examSubjectOptions}
             ready={subjectsReady}
             loading={subjectsLoading}
             error={subjectsLoadError}
-            fieldError={editForm.formState.errors.subjectIds?.message}
+            fieldError={editForm.formState.errors.papers?.message}
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Student } from "@uganda-cbc-sms/shared";
 import { PageWrapper } from "@/components/layout/PageWrapper";
@@ -12,6 +12,7 @@ import { apiGet } from "@/lib/api";
 
 export default function AdminStudentEditPage() {
   const params = useParams();
+  const router = useRouter();
   const id = String(params["id"]);
   const [st, setSt] = useState<Student | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -60,7 +61,12 @@ export default function AdminStudentEditPage() {
                 </p>
               </div>
             </Card>
-            <StudentEditForm key={id} studentId={id} initial={st} />
+            <StudentEditForm
+              key={id}
+              studentId={id}
+              initial={st}
+              onCancel={() => router.push(`/admin/students/${encodeURIComponent(id)}`)}
+            />
           </>
         ) : null}
       </div>

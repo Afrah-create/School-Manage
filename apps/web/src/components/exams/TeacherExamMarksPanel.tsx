@@ -141,7 +141,13 @@ export function TeacherExamMarksPanel({ examId }: { examId: string }) {
             />
           }
         >
-          {marksQ.data ? (
+          {marksQ.data && marksQ.data.entrantsCount === 0 ? (
+            <Alert tone="info">
+              No students are registered for this exam paper yet. Ask an administrator to configure student entries
+              on the exam before you can enter marks.
+            </Alert>
+          ) : null}
+          {marksQ.data && marksQ.data.entrantsCount > 0 ? (
             <ExamScoreGrid
               students={marksQ.data.students}
               maxScore={marksQ.data.maxScore}

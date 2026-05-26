@@ -1,48 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import type { Student } from "@uganda-cbc-sms/shared";
-import { AsyncContent } from "@/components/feedback/AsyncContent";
-import { ErrorState } from "@/components/feedback/ErrorState";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { PageWrapper } from "@/components/layout/PageWrapper";
-import { StudentTable } from "@/components/students/StudentTable";
+import { StudentEditModal } from "@/components/students/StudentEditModal";
+import { StudentsDirectory } from "@/components/students/StudentsDirectory";
 import { Button } from "@/components/ui/Button";
-import { apiGet } from "@/lib/api";
-import { queryStatus } from "@/lib/queryStatus";
 
 export default function AdminStudentsPage() {
-  const studentsQ = useQuery({
-    queryKey: ["students"],
-    queryFn: () => apiGet<Student[]>("/students"),
-  });
-
-  const status = queryStatus(studentsQ, (d) => d.length === 0);
+  const qc = useQueryClient();
+  const [editStudentId, setEditStudentId] = useState<string | null>(null);
 
   return (
-    <PageWrapper title="Students" description="Enrolled learners">
-      <div className="mb-4 flex justify-end gap-2">
+    <PageWrapper
+      title="Students"
+      description="Browse learners by class with search and pagination — built for large enrolments"
+    >
+      <div className="mb-6 flex justify-end">
         <Link href="/admin/students/enrol">
           <Button>Enrol new student</Button>
         </Link>
       </div>
-      <AsyncContent
-        status={status}
-        isFetching={studentsQ.isFetching && !studentsQ.isPending}
-        loading={<StudentTable students={[]} loading profileBasePath="/admin/students" showEnrollmentActions />}
-        error={
-          <ErrorState
-            message={studentsQ.error instanceof Error ? studentsQ.error.message : "Failed to load students"}
-            onRetry={() => void studentsQ.refetch()}
-          />
-        }
-      >
-        <StudentTable
-          students={studentsQ.data ?? []}
-          profileBasePath="/admin/students"
-          showEnrollmentActions
-        />
-      </AsyncContent>
+
+      <StudentsDirectory
+        profileBasePath="/admin/students"
+        showEnrollmentActions
+        onEditStudent={setEditStudentId}
+        enrolHref="/admin/students/enrol"
+      />
+
+      <StudentEditModal
+        open={Boolean(editStudentId)}
+        studentId={editStudentId}
+        onClose={() => setEditStudentId(null)}
+        onSaved={() => {
+          setEditStudentId(null);
+          void qc.invalidateQueries({ queryKey: ["students"] });
+        }}
+      />
     </PageWrapper>
   );
 }

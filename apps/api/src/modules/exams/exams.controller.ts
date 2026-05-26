@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
 import {
   createExamSchema,
+  examEntriesPresetSchema,
   examMarksBulkSchema,
   examMarksSubmitSchema,
   permanentDeleteExamSchema,
+  saveExamEntriesSchema,
   updateExamSchema,
 } from "@uganda-cbc-sms/shared";
 import { HttpError } from "../../utils/httpError";
@@ -135,5 +137,22 @@ export async function submitExamMarks(req: Request, res: Response) {
 export async function unlockExamMarks(req: Request, res: Response) {
   const { subjectId } = examMarksSubmitSchema.parse(req.body);
   const data = await svc.unlockExamMarks(req.params.id!, subjectId);
+  res.json({ success: true, data });
+}
+
+export async function getExamEntries(req: Request, res: Response) {
+  const data = await svc.getExamEntries(req.params.id!);
+  res.json({ success: true, data });
+}
+
+export async function saveExamEntries(req: Request, res: Response) {
+  const input = saveExamEntriesSchema.parse(req.body);
+  const data = await svc.saveExamEntries(req.params.id!, input);
+  res.json({ success: true, data });
+}
+
+export async function applyExamEntriesPreset(req: Request, res: Response) {
+  const { preset } = examEntriesPresetSchema.parse(req.body);
+  const data = await svc.applyExamEntriesPreset(req.params.id!, preset);
   res.json({ success: true, data });
 }

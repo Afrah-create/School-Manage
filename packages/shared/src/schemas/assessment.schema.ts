@@ -40,6 +40,13 @@ export const reportGenerateSchema = z.object({
   examId: z.string().uuid().optional(),
 });
 
+/** Set the official exam used for report generation for a class/term. */
+export const termReportDefaultSchema = z.object({
+  classId: z.string().uuid(),
+  termId: z.string().uuid(),
+  examId: z.union([z.string().uuid(), z.null()]),
+});
+
 export const academicYearSchema = z.object({
   name: z.string().min(1).max(50),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

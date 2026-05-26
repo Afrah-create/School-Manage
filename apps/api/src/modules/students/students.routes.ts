@@ -13,6 +13,7 @@ export const studentsRouter = Router();
 studentsRouter.use(requireAuth);
 
 studentsRouter.get("/search", staffReader, asyncHandler(c.search));
+studentsRouter.get("/class-summary", staffReader, asyncHandler(c.classSummary));
 studentsRouter.post("/", admin, asyncHandler(c.create));
 studentsRouter.get("/", staffReader, asyncHandler(c.list));
 studentsRouter.post("/promote", admin, asyncHandler(c.promote));

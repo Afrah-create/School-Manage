@@ -25,6 +25,13 @@ export function examArchiveSuccessMessage(exam: ExamSummary) {
 }
 
 export function examPermanentDeleteDialogCopy(impact: ExamDeletionImpact) {
+  if (!impact.canPermanentDelete && impact.linkedReportCount > 0) {
+    return {
+      title: "Cannot permanently delete",
+      description: `${impact.linkedReportCount} report card snapshot(s) reference this exam. Archive the exam instead; historical PDFs keep their recorded source.`,
+      confirmHint: impact.examName,
+    };
+  }
   const reportNote =
     impact.linkedReportCount > 0
       ? ` ${impact.linkedReportCount} generated report card(s) still reference this exam in their saved data. Regenerate those reports after deletion if needed.`

@@ -8,6 +8,7 @@ import type { AcademicYear, Term } from "@uganda-cbc-sms/shared";
 import { AdminExamFormModal } from "@/components/exams/AdminExamFormModal";
 import { ExamLifecycleStepper } from "@/components/exams/ExamLifecycleStepper";
 import { ExamMarkingProgressCard } from "@/components/exams/ExamMarkingProgressCard";
+import { ExamStudentEntriesCard } from "@/components/exams/ExamStudentEntriesCard";
 import { ExamStatusBadge } from "@/components/exams/ExamStatusBadge";
 import { PermanentDeleteExamDialog } from "@/components/exams/PermanentDeleteExamDialog";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
@@ -184,7 +185,7 @@ export default function AdminExamDetailPage() {
                         loading={actions.open.isPending}
                         onClick={() =>
                           void run(
-                            "Exam is open. Teachers assigned to these subjects can enter and submit marks.",
+                            "Exam is open. Teachers can enter marks for students registered on each paper.",
                             () => actions.open.mutateAsync(id),
                           )
                         }
@@ -208,8 +209,15 @@ export default function AdminExamDetailPage() {
                       Close exam
                     </Button>
                   ) : null}
-                  {exam.status === "closed" ? (
+                {exam.status === "closed" ? (
+                  <>
+                    <Link
+                      href={`/admin/reports?tab=actions&classId=${encodeURIComponent(exam.classId)}&termId=${encodeURIComponent(exam.termId)}&yearId=${encodeURIComponent(exam.academicYearId)}&examId=${encodeURIComponent(id)}`}
+                    >
+                      <Button type="button">Release report cards</Button>
+                    </Link>
                     <Button
+                      variant="secondary"
                       loading={actions.reopen.isPending}
                       onClick={() =>
                         void run("Exam reopened for marking.", () => actions.reopen.mutateAsync(id))
@@ -217,7 +225,8 @@ export default function AdminExamDetailPage() {
                     >
                       Reopen for marking
                     </Button>
-                  ) : null}
+                  </>
+                ) : null}
                 </div>
               ) : (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -237,15 +246,23 @@ export default function AdminExamDetailPage() {
             </Card>
 
             {!isArchived ? (
-              <Card title="Subjects & teacher submission">
+              <ExamStudentEntriesCard examId={id} examStatus={exam.status} />
+            ) : null}
+
+            {!isArchived ? (
+              <Card title="Papers & teacher submission">
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Each subject teacher must save marks and submit. Unlock only when corrections are approved.
+                  Each subject teacher enters marks only for students registered on that paper, then submits. Unlock
+                  only when corrections are approved.
                 </p>
                 <ul className="divide-y divide-border text-sm">
                   {exam.subjects.map((s) => (
                     <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                       <span>
                         <span className="font-medium">{s.subjectCode}</span> — {s.subjectName}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {s.isCompulsory ? "Compulsory" : "Optional"} · {s.entrantsCount ?? 0} entered
+                        </span>
                       </span>
                       <span className="flex items-center gap-2">
                         {s.isSubmitted ? (

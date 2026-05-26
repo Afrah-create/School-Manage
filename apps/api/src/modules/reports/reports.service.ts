@@ -21,9 +21,54 @@ import {
   listExamsForReportOptions,
   tryResolveExamForReports,
 } from "./reportExamLinkage";
+import { applyReportSourceMeta, reportSourceFromPayload } from "./reportSourceMeta";
 
 export async function listReportExamOptions(classId: string, termId: string) {
   return listExamsForReportOptions(classId, termId);
+}
+
+export async function getTermReportDefault(classId: string, termId: string) {
+  const { rows } = await query<{ exam_id: string | null }>(
+    `SELECT exam_id FROM term_report_defaults WHERE class_id = $1 AND term_id = $2`,
+    [classId, termId],
+  );
+  const examId = rows[0]?.exam_id ?? null;
+  if (!examId) return { examId: null, examName: null, clearedStaleDefault: false };
+  const exam = await tryResolveExamForReports(examId, classId, termId);
+  if (!exam) {
+    await query(`DELETE FROM term_report_defaults WHERE class_id = $1 AND term_id = $2`, [
+      classId,
+      termId,
+    ]);
+    return { examId: null, examName: null, clearedStaleDefault: true };
+  }
+  return { examId: exam.id, examName: exam.name, clearedStaleDefault: false };
+}
+
+export async function setTermReportDefault(
+  classId: string,
+  termId: string,
+  examId: string | null,
+  updatedBy?: string,
+) {
+  if (examId) {
+    const exam = await tryResolveExamForReports(examId, classId, termId);
+    if (!exam) {
+      throw new HttpError(400, "That exam is not available for this class and term.");
+    }
+  }
+
+  await query(
+    `INSERT INTO term_report_defaults (class_id, term_id, exam_id, updated_by, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (class_id, term_id) DO UPDATE SET
+       exam_id = EXCLUDED.exam_id,
+       updated_by = EXCLUDED.updated_by,
+       updated_at = NOW()`,
+    [classId, termId, examId, updatedBy ?? null],
+  );
+
+  return getTermReportDefault(classId, termId);
 }
 
 export async function getReportReadiness(classId: string, termId: string, examId?: string) {
@@ -48,24 +93,33 @@ export async function getReportReadiness(classId: string, termId: string, examId
   const pending = subjectTracking.filter((s) => s.status !== "submitted");
   const submitted = subjectTracking.filter((s) => s.status === "submitted");
 
-  const examOptions = await listExamsForReportOptions(classId, termId);
+  const [examOptions, termDefault] = await Promise.all([
+    listExamsForReportOptions(classId, termId),
+    getTermReportDefault(classId, termId),
+  ]);
   const resolvedExam = examId ? await tryResolveExamForReports(examId, classId, termId) : null;
   const examLinkInvalid = Boolean(examId && !resolvedExam);
+  const examNotClosed = Boolean(resolvedExam && resolvedExam.status !== "closed");
   const activeLinkedExamId = resolvedExam?.id ?? null;
 
   let examTracking: Awaited<ReturnType<typeof listExamSubjectTracking>> | undefined;
   let examReady = false;
   if (activeLinkedExamId) {
     examTracking = await listExamSubjectTracking(activeLinkedExamId, activeStudents);
-    examReady =
+    const subjectsSubmitted =
       examTracking.length > 0 && examTracking.every((t) => t.status === "submitted");
+    examReady = subjectsSubmitted && !examNotClosed;
   }
 
   const termReady =
     pending.length === 0 && activeStudents > 0 && subjectTracking.length > 0;
 
   let ready = termReady;
-  if (activeLinkedExamId) {
+  if (examLinkInvalid) {
+    examTracking = undefined;
+    examReady = false;
+    ready = termReady;
+  } else if (activeLinkedExamId) {
     if (ctx.track === "alevel") {
       ready = examReady && activeStudents > 0;
     } else {
@@ -112,7 +166,11 @@ export async function getReportReadiness(classId: string, termId: string, examId
     examReady: activeLinkedExamId ? examReady : undefined,
     linkedExamId: activeLinkedExamId,
     examLinkInvalid,
+    examNotClosed,
     termReady,
+    defaultExamId: termDefault.examId,
+    defaultExamName: termDefault.examName,
+    clearedStaleDefault: termDefault.clearedStaleDefault ?? false,
   };
 }
 
@@ -301,9 +359,13 @@ export async function generateReportsForClass(
   for (const student of students) {
     try {
       if (ctx.track === "cbc") {
-        const payload = exam
+        let payload = exam
           ? await compileCbcReportWithExam(student.id, termId, ctx.academicYearId, exam)
           : await compileCbcReportPayload(student.id, termId, ctx.academicYearId);
+        payload = applyReportSourceMeta(
+          payload,
+          exam ? { type: "exam", examId: exam.id, examName: exam.name } : { type: "term" },
+        );
         if (payload.subjects.length === 0) {
           warnings.push(`${student.full_name}: no CBC competency marks found for this term.`);
           continue;
@@ -314,9 +376,13 @@ export async function generateReportsForClass(
         const id = await upsertCbcReport(student.id, termId, ctx.academicYearId, payload);
         reportIds.push(id);
       } else {
-        const payload = exam
+        let payload = exam
           ? await compileAlevelReportFromExam(student.id, termId, ctx.academicYearId, exam)
           : await compileAlevelReportPayload(student.id, termId, ctx.academicYearId);
+        payload = applyReportSourceMeta(
+          payload,
+          exam ? { type: "exam", examId: exam.id, examName: exam.name } : { type: "term" },
+        );
         if (payload.subjects.length === 0) {
           warnings.push(
             exam
@@ -357,10 +423,20 @@ export async function generateReportsForClass(
     count: reportIds.length,
     warnings,
     skipped: students.length - reportIds.length,
+    sourceType: (exam ? "exam" : "term") as "exam" | "term",
     sourceExamId: exam?.id ?? null,
     sourceExamName: exam?.name ?? null,
     usedTermAssessmentsFallback: Boolean(examId && !exam),
   };
+}
+
+/** Regenerate all non-approved report cards for a class/term (same rules as generate). */
+export async function regenerateReportsForClass(
+  classId: string,
+  termId: string,
+  examId?: string,
+) {
+  return generateReportsForClass(classId, termId, examId);
 }
 
 function examIdFromPayload(payload: unknown): string | null {
@@ -560,15 +636,21 @@ export async function listClassReports(classId: string, termId: string) {
     const activeIds = await activeExamIdSet([...new Set(linkedIds)]);
     return {
       track: "cbc" as const,
-      reports: rows.map((r) => ({
-        id: r.id,
-        studentId: r.student_id,
-        studentName: r.full_name,
-        studentNumber: r.student_number,
-        isApproved: Boolean(r.is_approved),
-        computedAt: r.computed_at ? new Date(r.computed_at).toISOString() : null,
-        examLinkStatus: examLinkStatusForPayload(r.payload, activeIds),
-      })),
+      reports: rows.map((r) => {
+        const source = reportSourceFromPayload(r.payload);
+        return {
+          id: r.id,
+          studentId: r.student_id,
+          studentName: r.full_name,
+          studentNumber: r.student_number,
+          isApproved: Boolean(r.is_approved),
+          computedAt: r.computed_at ? new Date(r.computed_at).toISOString() : null,
+          examLinkStatus: examLinkStatusForPayload(r.payload, activeIds),
+          reportSourceType: source.sourceType,
+          reportSourceLabel: source.sourceLabel,
+          payloadGeneratedAt: source.generatedAt,
+        };
+      }),
     };
   }
 
@@ -597,16 +679,22 @@ export async function listClassReports(classId: string, termId: string) {
   const activeIds = await activeExamIdSet([...new Set(linkedIds)]);
   return {
     track: "alevel" as const,
-    reports: rows.map((r) => ({
-      id: r.id,
-      studentId: r.student_id,
-      studentName: r.full_name,
-      studentNumber: r.student_number,
-      isApproved: Boolean(r.is_approved),
-      computedAt: r.computed_at ? new Date(r.computed_at).toISOString() : null,
-      division: r.division,
-      totalPoints: r.total_points,
-      examLinkStatus: examLinkStatusForPayload(r.payload, activeIds),
-    })),
+    reports: rows.map((r) => {
+      const source = reportSourceFromPayload(r.payload);
+      return {
+        id: r.id,
+        studentId: r.student_id,
+        studentName: r.full_name,
+        studentNumber: r.student_number,
+        isApproved: Boolean(r.is_approved),
+        computedAt: r.computed_at ? new Date(r.computed_at).toISOString() : null,
+        division: r.division,
+        totalPoints: r.total_points,
+        examLinkStatus: examLinkStatusForPayload(r.payload, activeIds),
+        reportSourceType: source.sourceType,
+        reportSourceLabel: source.sourceLabel,
+        payloadGeneratedAt: source.generatedAt,
+      };
+    }),
   };
 }

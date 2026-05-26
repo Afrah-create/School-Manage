@@ -84,8 +84,25 @@ export const attendanceSchema = z.object({
   status: z.enum(["present", "absent", "late"]),
 });
 
+export const STUDENT_BROWSE_STATUSES = ["active", "transferred", "withdrawn", "all"] as const;
+
+export const studentBrowseQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(10).max(100).default(25),
+  /** Class UUID, or `unassigned` for learners without a class. */
+  classId: z
+    .string()
+    .max(40)
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? undefined : v)),
+  status: z.enum(STUDENT_BROWSE_STATUSES).default("active"),
+  q: z.string().max(100).optional(),
+  sort: z.enum(["name", "number"]).default("name"),
+});
+
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 export type PromoteStudentsInput = z.infer<typeof promoteStudentsSchema>;
 export type WithdrawStudentInput = z.infer<typeof withdrawStudentSchema>;
 export type AttendanceInput = z.infer<typeof attendanceSchema>;
+export type StudentBrowseQuery = z.infer<typeof studentBrowseQuerySchema>;

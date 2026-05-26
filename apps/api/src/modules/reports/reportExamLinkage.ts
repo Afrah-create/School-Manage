@@ -14,16 +14,21 @@ export type ExamReportOption = {
   maxScore: number;
   subjectCount: number;
   allSubjectsSubmitted: boolean;
+  /** Closed and all exam subjects submitted — suitable for official report release. */
+  readyForReports: boolean;
+  isDefault: boolean;
 };
 
 export type ExamSubjectTrack = {
   subjectId: string;
   subjectName: string;
   subjectCode: string;
+  isCompulsory: boolean;
+  entrantsCount: number;
   studentsWithMarks: number;
   activeStudents: number;
   isSubmitted: boolean;
-  status: "not_started" | "in_progress" | "submitted";
+  status: "not_started" | "in_progress" | "submitted" | "not_applicable";
 };
 
 type ExamRow = {
@@ -46,6 +51,7 @@ export async function listExamsForReportOptions(classId: string, termId: string)
     max_score: string;
     subject_count: string;
     pending_subjects: string;
+    is_default: boolean;
   }>(
     `SELECT e.id, e.name, e.status, e.exam_date, e.max_score,
             (SELECT COUNT(*)::text FROM exam_subjects es WHERE es.exam_id = e.id) AS subject_count,
@@ -53,22 +59,45 @@ export async function listExamsForReportOptions(classId: string, termId: string)
              FROM exam_subjects es
              LEFT JOIN exam_subject_submissions ess
                ON ess.exam_id = es.exam_id AND ess.subject_id = es.subject_id
-             WHERE es.exam_id = e.id AND COALESCE(ess.is_submitted, false) = false) AS pending_subjects
+             WHERE es.exam_id = e.id
+               AND COALESCE(ess.is_submitted, false) = false
+               AND EXISTS (
+                 SELECT 1 FROM exam_student_entries ese
+                 WHERE ese.exam_id = es.exam_id AND ese.subject_id = es.subject_id
+               )) AS pending_subjects,
+            EXISTS (
+              SELECT 1 FROM term_report_defaults trd
+              WHERE trd.class_id = $1 AND trd.term_id = $2 AND trd.exam_id = e.id
+            ) AS is_default
      FROM exams e
      WHERE e.class_id = $1 AND e.term_id = $2 AND e.deleted_at IS NULL
-     ORDER BY e.exam_date DESC NULLS LAST, e.name`,
+     ORDER BY
+       EXISTS (
+         SELECT 1 FROM term_report_defaults trd
+         WHERE trd.class_id = $1 AND trd.term_id = $2 AND trd.exam_id = e.id
+       ) DESC,
+       (e.status = 'closed') DESC,
+       e.exam_date DESC NULLS LAST,
+       e.name`,
     [classId, termId],
   );
 
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    status: r.status,
-    examDate: r.exam_date,
-    maxScore: Number(r.max_score),
-    subjectCount: Number(r.subject_count ?? 0),
-    allSubjectsSubmitted: Number(r.subject_count ?? 0) > 0 && Number(r.pending_subjects ?? 0) === 0,
-  }));
+  return rows.map((r) => {
+    const subjectCount = Number(r.subject_count ?? 0);
+    const allSubjectsSubmitted = subjectCount > 0 && Number(r.pending_subjects ?? 0) === 0;
+    const readyForReports = r.status === "closed" && allSubjectsSubmitted;
+    return {
+      id: r.id,
+      name: r.name,
+      status: r.status,
+      examDate: r.exam_date,
+      maxScore: Number(r.max_score),
+      subjectCount,
+      allSubjectsSubmitted,
+      readyForReports,
+      isDefault: Boolean(r.is_default),
+    };
+  });
 }
 
 export async function getExamForReports(examId: string, classId: string, termId: string): Promise<ExamRow> {
@@ -118,11 +147,16 @@ export async function listExamSubjectTracking(
     subject_id: string;
     subject_name: string;
     subject_code: string;
+    is_compulsory: boolean;
     is_submitted: boolean;
+    entrants_count: string;
     students_with_marks: string;
   }>(
     `SELECT es.subject_id, s.name AS subject_name, s.code AS subject_code,
+            es.is_compulsory,
             COALESCE(ess.is_submitted, false) AS is_submitted,
+            (SELECT COUNT(*)::text FROM exam_student_entries ese
+             WHERE ese.exam_id = es.exam_id AND ese.subject_id = es.subject_id) AS entrants_count,
             (SELECT COUNT(DISTINCT em.student_id)::text
              FROM exam_marks em
              WHERE em.exam_id = es.exam_id AND em.subject_id = es.subject_id) AS students_with_marks
@@ -136,35 +170,53 @@ export async function listExamSubjectTracking(
   );
 
   return rows.map((r) => {
+    const entrantsCount = Number(r.entrants_count ?? 0);
     const studentsWithMarks = Number(r.students_with_marks ?? 0);
     const isSubmitted = Boolean(r.is_submitted);
     let status: ExamSubjectTrack["status"] = "not_started";
-    if (isSubmitted) status = "submitted";
+    if (entrantsCount === 0) status = "not_applicable";
+    else if (isSubmitted) status = "submitted";
     else if (studentsWithMarks > 0) status = "in_progress";
 
     return {
       subjectId: r.subject_id,
       subjectName: r.subject_name,
       subjectCode: r.subject_code,
+      isCompulsory: Boolean(r.is_compulsory),
+      entrantsCount,
       studentsWithMarks,
-      activeStudents,
-      isSubmitted,
+      activeStudents: entrantsCount,
+      isSubmitted: entrantsCount === 0 ? true : isSubmitted,
       status,
     };
   });
 }
 
 export async function assertExamReadyForReports(examId: string, activeStudents: number) {
+  const { rows: statusRows } = await query<{ status: string; name: string }>(
+    `SELECT status, name FROM exams WHERE id = $1 AND deleted_at IS NULL`,
+    [examId],
+  );
+  if (!statusRows[0]) {
+    throw new HttpError(404, "That exam was not found. It may have been archived or deleted.");
+  }
+  if (statusRows[0].status !== "closed") {
+    throw new HttpError(
+      400,
+      `"${statusRows[0].name}" must be closed before it can be used for official report cards. Close the exam after all subjects are submitted.`,
+    );
+  }
+
   const tracking = await listExamSubjectTracking(examId, activeStudents);
   if (tracking.length === 0) {
     throw new HttpError(400, "This exam has no subjects. Edit the exam and add subjects before generating reports.");
   }
-  const pending = tracking.filter((t) => !t.isSubmitted);
+  const pending = tracking.filter((t) => t.status !== "not_applicable" && !t.isSubmitted);
   if (pending.length > 0) {
     const codes = pending.map((t) => t.subjectCode).join(", ");
     throw new HttpError(
       400,
-      `Formal exam marks are not ready for reports. These exam subjects still need submission: ${codes}.`,
+      `Formal exam marks are not ready for reports. These exam papers still need submission: ${codes}.`,
     );
   }
   return tracking;
@@ -184,13 +236,13 @@ async function formalExamSectionForStudent(
   }>(
     `SELECT s.name AS subject_name, s.code AS subject_code,
             em.score::text AS score, em.grade, em.points
-     FROM exam_subjects es
-     JOIN subjects s ON s.id = es.subject_id
+     FROM exam_student_entries ese
+     JOIN subjects s ON s.id = ese.subject_id
      LEFT JOIN exam_marks em
-       ON em.exam_id = es.exam_id
-      AND em.subject_id = es.subject_id
-      AND em.student_id = $2
-     WHERE es.exam_id = $1
+       ON em.exam_id = ese.exam_id
+      AND em.subject_id = ese.subject_id
+      AND em.student_id = ese.student_id
+     WHERE ese.exam_id = $1 AND ese.student_id = $2
      ORDER BY s.code`,
     [exam.id, studentId],
   );
@@ -284,5 +336,7 @@ export async function compileCbcReportWithExam(
   if (formal.subjects.length > 0) {
     payload.formalExam = formal;
   }
+  payload.sourceExamId = exam.id;
+  payload.sourceExamName = exam.name;
   return payload;
 }

@@ -1,4 +1,9 @@
-import type { CreateExamInput, ExamMarksBulkInput, UpdateExamInput } from "@uganda-cbc-sms/shared";
+import type {
+  CreateExamInput,
+  ExamMarksBulkInput,
+  SaveExamEntriesInput,
+  UpdateExamInput,
+} from "@uganda-cbc-sms/shared";
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
 import { resolveConfiguredGrade } from "../../utils/gradingScales";
@@ -6,6 +11,13 @@ import {
   assertTeacherIsAssignedSubjectTeacher,
   teacherIsAssignedSubjectTeacher,
 } from "../../utils/teacherTeachingAccess";
+import {
+  assertStudentsEnteredForMarks,
+  countEntrantsForSubject,
+  normalizeExamPapers,
+  replaceExamPapers,
+  seedCompulsoryEntries,
+} from "./examEntries";
 
 type ExamRow = {
   id: string;
@@ -64,7 +76,7 @@ async function getExamRow(id: string, options?: { includeArchived?: boolean }) {
 }
 
 async function getExamMarkingProgress(examId: string, classId: string) {
-  const [{ rows: sub }, { rows: st }, { rows: marks }] = await Promise.all([
+  const [{ rows: sub }, { rows: st }, { rows: marks }, { rows: entries }] = await Promise.all([
     query<{ total: number; submitted: number }>(
       `SELECT
          COUNT(*)::int AS total,
@@ -83,6 +95,10 @@ async function getExamMarkingProgress(examId: string, classId: string) {
       `SELECT COUNT(*)::int AS c FROM exam_marks WHERE exam_id = $1`,
       [examId],
     ),
+    query<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM exam_student_entries WHERE exam_id = $1`,
+      [examId],
+    ),
   ]);
   const totalSubjects = sub[0]?.total ?? 0;
   const submittedSubjects = sub[0]?.submitted ?? 0;
@@ -92,6 +108,7 @@ async function getExamMarkingProgress(examId: string, classId: string) {
     pendingSubjects: Math.max(0, totalSubjects - submittedSubjects),
     activeStudents: st[0]?.c ?? 0,
     marksEntered: marks[0]?.c ?? 0,
+    totalEntries: entries[0]?.c ?? 0,
   };
 }
 
@@ -140,7 +157,12 @@ export async function createExam(input: CreateExamInput, createdBy: string) {
     throw new HttpError(400, "The term you selected does not belong to the chosen academic year.");
   }
 
-  await assertSubjectsBelongToClass(input.classId, input.academicYearId, input.subjectIds);
+  const papers = normalizeExamPapers(input);
+  await assertSubjectsBelongToClass(
+    input.classId,
+    input.academicYearId,
+    papers.map((p) => p.subjectId),
+  );
 
   const ins = await query<{ id: string }>(
     `INSERT INTO exams (name, academic_year_id, term_id, class_id, exam_date, max_score, status, created_by)
@@ -157,9 +179,8 @@ export async function createExam(input: CreateExamInput, createdBy: string) {
     ],
   );
   const examId = ins.rows[0]!.id;
-  for (const subjectId of input.subjectIds) {
-    await query(`INSERT INTO exam_subjects (exam_id, subject_id) VALUES ($1, $2)`, [examId, subjectId]);
-  }
+  await replaceExamPapers(examId, papers);
+  await seedCompulsoryEntries(examId, input.classId);
   return getExamById(examId);
 }
 
@@ -169,12 +190,18 @@ export async function updateExam(id: string, input: UpdateExamInput) {
     throw new HttpError(400, "Only draft exams can be edited. Close the exam first if you need to make changes after opening.");
   }
 
-  if (input.subjectIds?.length) {
-    await assertSubjectsBelongToClass(exam.class_id, exam.academic_year_id, input.subjectIds);
-    await query(`DELETE FROM exam_subjects WHERE exam_id = $1`, [id]);
-    for (const subjectId of input.subjectIds) {
-      await query(`INSERT INTO exam_subjects (exam_id, subject_id) VALUES ($1, $2)`, [id, subjectId]);
-    }
+  const paperInput = normalizeExamPapers({
+    papers: input.papers,
+    subjectIds: input.subjectIds,
+  });
+  if (paperInput.length) {
+    await assertSubjectsBelongToClass(
+      exam.class_id,
+      exam.academic_year_id,
+      paperInput.map((p) => p.subjectId),
+    );
+    await replaceExamPapers(id, paperInput);
+    await seedCompulsoryEntries(id, exam.class_id);
   }
 
   const sets: string[] = [];
@@ -241,7 +268,10 @@ export async function getExamDeletionImpact(id: string) {
   let canPermanentDelete = true;
   let blockReason: string | null = null;
 
-  if (!isArchived) {
+  if (linkedReportCount > 0) {
+    canPermanentDelete = false;
+    blockReason = `${linkedReportCount} report card snapshot(s) reference this exam. Reports keep historical data; permanent delete is not allowed. Archive the exam instead.`;
+  } else if (!isArchived) {
     if (row.status !== "draft") {
       canPermanentDelete = false;
       blockReason =
@@ -290,6 +320,44 @@ export async function openExam(id: string) {
   if (Number(exam.subject_count ?? 0) < 1) {
     throw new HttpError(400, "Add at least one subject before opening the exam for teachers.");
   }
+  await seedCompulsoryEntries(id, exam.class_id);
+
+  const entryTotal = (
+    await query<{ c: number }>(
+      `SELECT COUNT(*)::int AS c FROM exam_student_entries WHERE exam_id = $1`,
+      [id],
+    )
+  ).rows[0]?.c ?? 0;
+  if (entryTotal === 0) {
+    throw new HttpError(
+      400,
+      "No student paper entries are configured. Register students for at least one paper before opening.",
+    );
+  }
+
+  const { rows: missingComp } = await query<{ subject_code: string }>(
+    `SELECT DISTINCT s.code AS subject_code
+     FROM exam_subjects es
+     JOIN subjects s ON s.id = es.subject_id
+     WHERE es.exam_id = $1 AND es.is_compulsory = true
+       AND EXISTS (
+         SELECT 1 FROM students st
+         WHERE st.class_id = $2 AND st.status = 'active'
+           AND NOT EXISTS (
+             SELECT 1 FROM exam_student_entries ese
+             WHERE ese.exam_id = $1
+               AND ese.student_id = st.id
+               AND ese.subject_id = es.subject_id
+           )
+       )`,
+    [id, exam.class_id],
+  );
+  if (missingComp.length > 0) {
+    throw new HttpError(
+      400,
+      `Not all students are registered for compulsory paper(s): ${missingComp.map((r) => r.subject_code).join(", ")}. Use “Register all for compulsory papers” on the exam page, then open.`,
+    );
+  }
   await query(
     `UPDATE exams SET status = 'open', opened_at = NOW(), updated_at = NOW() WHERE id = $1`,
     [id],
@@ -304,10 +372,24 @@ export async function closeExam(id: string, options?: { force?: boolean }) {
   }
 
   const progress = await getExamMarkingProgress(id, exam.class_id);
-  if (progress.pendingSubjects > 0 && !options?.force) {
+  const { rows: pendingRows } = await query<{ c: number }>(
+    `SELECT COUNT(*)::int AS c
+     FROM exam_subjects es
+     LEFT JOIN exam_subject_submissions ess
+       ON ess.exam_id = es.exam_id AND ess.subject_id = es.subject_id
+     WHERE es.exam_id = $1
+       AND COALESCE(ess.is_submitted, false) = false
+       AND EXISTS (
+         SELECT 1 FROM exam_student_entries ese
+         WHERE ese.exam_id = es.exam_id AND ese.subject_id = es.subject_id
+       )`,
+    [id],
+  );
+  const pendingWithEntrants = pendingRows[0]?.c ?? 0;
+  if (pendingWithEntrants > 0 && !options?.force) {
     throw new HttpError(
       400,
-      `${progress.pendingSubjects} subject(s) still have unsubmitted marks. Ensure all teachers submit, or force-close if you accept incomplete results.`,
+      `${pendingWithEntrants} paper(s) with registered students still have unsubmitted marks. Ensure all teachers submit, or force-close if you accept incomplete results.`,
     );
   }
 
@@ -385,10 +467,15 @@ export async function getExamById(id: string, options?: { includeArchived?: bool
     subject_id: string;
     subject_name: string;
     subject_code: string;
+    is_compulsory: boolean;
     is_submitted: boolean;
+    entrants_count: string;
   }>(
     `SELECT es.id, es.subject_id, s.name AS subject_name, s.code AS subject_code,
-            COALESCE(ess.is_submitted, false) AS is_submitted
+            es.is_compulsory,
+            COALESCE(ess.is_submitted, false) AS is_submitted,
+            (SELECT COUNT(*)::text FROM exam_student_entries ese
+             WHERE ese.exam_id = es.exam_id AND ese.subject_id = es.subject_id) AS entrants_count
      FROM exam_subjects es
      JOIN subjects s ON s.id = es.subject_id
      LEFT JOIN exam_subject_submissions ess
@@ -405,7 +492,9 @@ export async function getExamById(id: string, options?: { includeArchived?: bool
       subjectId: s.subject_id,
       subjectName: s.subject_name,
       subjectCode: s.subject_code,
+      isCompulsory: Boolean(s.is_compulsory),
       isSubmitted: Boolean(s.is_submitted),
+      entrantsCount: Number(s.entrants_count ?? 0),
     })),
   };
 }
@@ -630,6 +719,14 @@ export async function listExamMarks(
   }
   const maxScore = Number(exam.max_score);
 
+  const entrants = await countEntrantsForSubject(examId, subjectId);
+  if (entrants === 0) {
+    throw new HttpError(
+      400,
+      "No students are registered for this exam paper. An administrator must configure student entries first.",
+    );
+  }
+
   const { rows: students } = await query<{
     id: string;
     full_name: string;
@@ -641,12 +738,14 @@ export async function listExamMarks(
   }>(
     `SELECT st.id, st.full_name, st.student_number,
             em.score::text, em.grade, em.points, COALESCE(em.is_locked, false) AS is_locked
-     FROM students st
+     FROM exam_student_entries ese
+     JOIN students st ON st.id = ese.student_id
      LEFT JOIN exam_marks em
        ON em.student_id = st.id AND em.exam_id = $1 AND em.subject_id = $2
-     WHERE st.class_id = $3 AND st.status = 'active'
+     WHERE ese.exam_id = $1 AND ese.subject_id = $2
+       AND st.status = 'active'
      ORDER BY st.full_name`,
-    [examId, subjectId, exam.class_id],
+    [examId, subjectId],
   );
 
   const { rows: sub } = await query<{ is_submitted: boolean }>(
@@ -658,6 +757,7 @@ export async function listExamMarks(
     exam: mapExam(exam),
     maxScore,
     subjectSubmitted: Boolean(sub[0]?.is_submitted),
+    entrantsCount: entrants,
     students: students.map((s) => ({
       id: s.id,
       fullName: s.full_name,
@@ -704,6 +804,11 @@ export async function upsertExamMarks(
   }
 
   await assertSubjectSubmitted(examId, input.subjectId);
+  await assertStudentsEnteredForMarks(
+    examId,
+    input.subjectId,
+    input.marks.map((m) => m.studentId),
+  );
 
   const maxScore = Number(exam.max_score);
   const level = await gradingLevelForClass(exam.class_id);
@@ -764,12 +869,29 @@ export async function submitExamMarks(
 
   await assertSubjectSubmitted(examId, subjectId);
 
-  const count = await query<{ c: string }>(
-    `SELECT COUNT(*)::text AS c FROM exam_marks WHERE exam_id = $1 AND subject_id = $2`,
+  const entrants = await countEntrantsForSubject(examId, subjectId);
+  if (entrants === 0) {
+    throw new HttpError(
+      400,
+      "No students are registered for this paper. Configure entries or skip submission if the paper is not used.",
+    );
+  }
+
+  const { rows: missing } = await query<{ c: number }>(
+    `SELECT COUNT(*)::int AS c
+     FROM exam_student_entries ese
+     LEFT JOIN exam_marks em
+       ON em.exam_id = ese.exam_id
+      AND em.student_id = ese.student_id
+      AND em.subject_id = ese.subject_id
+     WHERE ese.exam_id = $1 AND ese.subject_id = $2 AND em.id IS NULL`,
     [examId, subjectId],
   );
-  if (Number(count.rows[0]?.c ?? 0) === 0) {
-    throw new HttpError(400, "Enter and save at least one mark before submitting.");
+  if ((missing[0]?.c ?? 0) > 0) {
+    throw new HttpError(
+      400,
+      `${missing[0]!.c} registered student(s) still need marks before this paper can be submitted.`,
+    );
   }
 
   await query(
@@ -812,4 +934,161 @@ export async function unlockExamMarks(examId: string, subjectId: string) {
   }
 
   return { unlocked: true };
+}
+
+export async function getExamEntries(examId: string) {
+  const exam = await getExamRow(examId);
+  const [{ rows: students }, { rows: papers }, { rows: entryRows }] = await Promise.all([
+    query<{ id: string; full_name: string; student_number: string }>(
+      `SELECT id, full_name, student_number
+       FROM students
+       WHERE class_id = $1 AND status = 'active'
+       ORDER BY full_name`,
+      [exam.class_id],
+    ),
+    query<{
+      subject_id: string;
+      subject_code: string;
+      subject_name: string;
+      is_compulsory: boolean;
+      entrants_count: string;
+    }>(
+      `SELECT es.subject_id, s.code AS subject_code, s.name AS subject_name,
+              es.is_compulsory,
+              (SELECT COUNT(*)::text FROM exam_student_entries ese
+               WHERE ese.exam_id = es.exam_id AND ese.subject_id = es.subject_id) AS entrants_count
+       FROM exam_subjects es
+       JOIN subjects s ON s.id = es.subject_id
+       WHERE es.exam_id = $1
+       ORDER BY s.code`,
+      [examId],
+    ),
+    query<{ student_id: string; subject_id: string }>(
+      `SELECT student_id, subject_id FROM exam_student_entries WHERE exam_id = $1`,
+      [examId],
+    ),
+  ]);
+
+  const entriesByStudent: Record<string, string[]> = {};
+  for (const st of students) {
+    entriesByStudent[st.id] = [];
+  }
+  for (const e of entryRows) {
+    if (!entriesByStudent[e.student_id]) entriesByStudent[e.student_id] = [];
+    entriesByStudent[e.student_id]!.push(e.subject_id);
+  }
+
+  return {
+    students: students.map((s) => ({
+      id: s.id,
+      fullName: s.full_name,
+      studentNumber: s.student_number,
+    })),
+    papers: papers.map((p) => ({
+      subjectId: p.subject_id,
+      subjectCode: p.subject_code,
+      subjectName: p.subject_name,
+      isCompulsory: Boolean(p.is_compulsory),
+      entrantsCount: Number(p.entrants_count ?? 0),
+    })),
+    entriesByStudent,
+  };
+}
+
+export async function saveExamEntries(examId: string, input: SaveExamEntriesInput) {
+  const exam = await getExamRow(examId);
+  if (exam.status !== "draft") {
+    throw new HttpError(400, "Student entries can only be changed while the exam is a draft.");
+  }
+
+  const subjectIds = new Set(
+    (
+      await query<{ subject_id: string; is_compulsory: boolean }>(
+        `SELECT subject_id, is_compulsory FROM exam_subjects WHERE exam_id = $1`,
+        [examId],
+      )
+    ).rows.map((r) => r.subject_id),
+  );
+  const compulsoryIds = new Set(
+    (
+      await query<{ subject_id: string }>(
+        `SELECT subject_id FROM exam_subjects WHERE exam_id = $1 AND is_compulsory = true`,
+        [examId],
+      )
+    ).rows.map((r) => r.subject_id),
+  );
+
+  const activeStudents = new Set(
+    (
+      await query<{ id: string }>(
+        `SELECT id FROM students WHERE class_id = $1 AND status = 'active'`,
+        [exam.class_id],
+      )
+    ).rows.map((r) => r.id),
+  );
+
+  let changed = 0;
+  for (const item of input.entries) {
+    if (!subjectIds.has(item.subjectId)) {
+      throw new HttpError(400, "One of the subjects is not part of this exam.");
+    }
+    if (!activeStudents.has(item.studentId)) {
+      throw new HttpError(400, "One of the students is not in this exam's class.");
+    }
+    if (!item.isEntered && compulsoryIds.has(item.subjectId)) {
+      throw new HttpError(
+        400,
+        "Compulsory papers must include every student in the class. Mark the paper as optional in exam settings instead.",
+      );
+    }
+
+    if (item.isEntered) {
+      await query(
+        `INSERT INTO exam_student_entries (exam_id, student_id, subject_id)
+         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [examId, item.studentId, item.subjectId],
+      );
+      changed += 1;
+    } else {
+      await query(
+        `DELETE FROM exam_marks
+         WHERE exam_id = $1 AND student_id = $2 AND subject_id = $3`,
+        [examId, item.studentId, item.subjectId],
+      );
+      await query(
+        `DELETE FROM exam_student_entries
+         WHERE exam_id = $1 AND student_id = $2 AND subject_id = $3`,
+        [examId, item.studentId, item.subjectId],
+      );
+      changed += 1;
+    }
+  }
+
+  return { changed };
+}
+
+export async function applyExamEntriesPreset(
+  examId: string,
+  preset: "compulsory_all_students" | "all_papers_all_students",
+) {
+  const exam = await getExamRow(examId);
+  if (exam.status !== "draft") {
+    throw new HttpError(400, "Entry presets can only be applied while the exam is a draft.");
+  }
+
+  if (preset === "compulsory_all_students") {
+    await seedCompulsoryEntries(examId, exam.class_id);
+    return { applied: preset };
+  }
+
+  await query(
+    `INSERT INTO exam_student_entries (exam_id, student_id, subject_id)
+     SELECT $1, st.id, es.subject_id
+     FROM students st
+     CROSS JOIN exam_subjects es
+     WHERE st.class_id = $2 AND st.status = 'active' AND es.exam_id = $1
+     ON CONFLICT DO NOTHING`,
+    [examId, exam.class_id],
+  );
+  return { applied: preset };
 }

@@ -4,11 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateExamInput,
   ExamDeletionImpact,
+  ExamEntriesMatrix,
   ExamMarkingProgress,
   ExamSummary,
+  SaveExamEntriesInput,
   UpdateExamInput,
 } from "@uganda-cbc-sms/shared";
-import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/lib/api";
 
 const toQuery = (filters: Record<string, string | boolean | undefined>) => {
   const qp = new URLSearchParams();
@@ -27,7 +29,9 @@ export type ExamDetail = ExamSummary & {
     subjectId: string;
     subjectName: string;
     subjectCode: string;
+    isCompulsory: boolean;
     isSubmitted: boolean;
+    entrantsCount?: number;
   }>;
 };
 
@@ -43,6 +47,7 @@ export type ExamMarksPayload = {
   exam: ExamSummary;
   maxScore: number;
   subjectSubmitted: boolean;
+  entrantsCount: number;
   students: Array<{
     id: string;
     fullName: string;
@@ -123,6 +128,36 @@ export function useExamSubjects(examId: string | undefined) {
   });
 }
 
+export function useExamEntriesMatrix(examId: string | undefined) {
+  return useQuery({
+    queryKey: ["exams", examId, "entries"],
+    queryFn: () => apiGet<ExamEntriesMatrix>(`/exams/${examId}/entries`),
+    enabled: Boolean(examId),
+  });
+}
+
+export function useExamEntriesActions(examId: string) {
+  const qc = useQueryClient();
+  const invalidate = async () => {
+    await qc.invalidateQueries({ queryKey: ["exams", examId] });
+    await qc.invalidateQueries({ queryKey: ["exams", examId, "entries"] });
+    await qc.invalidateQueries({ queryKey: ["reports-readiness"] });
+  };
+
+  const save = useMutation({
+    mutationFn: (body: SaveExamEntriesInput) =>
+      apiPut<{ changed: number }>(`/exams/${examId}/entries`, body),
+    onSuccess: () => void invalidate(),
+  });
+  const applyPreset = useMutation({
+    mutationFn: (preset: "compulsory_all_students" | "all_papers_all_students") =>
+      apiPost<{ applied: string }>(`/exams/${examId}/entries/preset`, { preset }),
+    onSuccess: () => void invalidate(),
+  });
+
+  return { save, applyPreset };
+}
+
 export function useExamMarks(examId: string | undefined, subjectId: string | undefined) {
   return useQuery({
     queryKey: ["exams", examId, "marks", subjectId],
@@ -139,6 +174,7 @@ export function useExamAdminActions() {
     await qc.invalidateQueries({ queryKey: ["reports-exam-options"] });
     await qc.invalidateQueries({ queryKey: ["reports-readiness"] });
     await qc.invalidateQueries({ queryKey: ["reports-list"] });
+    await qc.invalidateQueries({ queryKey: ["reports-term-default"] });
   };
 
   const create = useMutation({

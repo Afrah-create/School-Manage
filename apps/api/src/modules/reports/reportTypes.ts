@@ -1,5 +1,7 @@
 export const REPORT_PAYLOAD_VERSION = 1;
 
+export type ReportSourceType = "term" | "exam";
+
 export type ReportFormalExamLine = {
   name: string;
   code: string;
@@ -42,6 +44,11 @@ export type CbcReportPayload = {
   headteacherComment: string;
   /** Present when generated with a linked formal exam (CBC annex). */
   formalExam?: ReportFormalExamSection;
+  /** Snapshot metadata — set at generation time. */
+  sourceType?: ReportSourceType;
+  sourceExamId?: string;
+  sourceExamName?: string;
+  generatedAt?: string;
 };
 
 export type AlevelReportSubjectLine = {
@@ -66,9 +73,11 @@ export type AlevelReportPayload = {
   division: string;
   teacherComment: string;
   headteacherRemark: string;
+  sourceType?: ReportSourceType;
   /** Set when report scores were compiled from a formal exam. */
   sourceExamId?: string;
   sourceExamName?: string;
+  generatedAt?: string;
 };
 
 export type ReportTrack = "cbc" | "alevel";

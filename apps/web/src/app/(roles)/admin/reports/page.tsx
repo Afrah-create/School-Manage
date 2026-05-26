@@ -1,6 +1,7 @@
 "use client";
 
 import type { AcademicYear, SchoolClass, Term } from "@uganda-cbc-sms/shared";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
@@ -26,7 +27,10 @@ const CONTEXT_KEY = "sms-admin-reports-context-v1";
 type TabId = "pipeline" | "performance" | "readiness" | "actions";
 
 export default function AdminReportsPage() {
-  const [tab, setTab] = useState<TabId>("pipeline");
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") === "actions" ? "actions" : "pipeline";
+  const initialExamId = searchParams.get("examId") ?? undefined;
+  const [tab, setTab] = useState<TabId>(initialTab as TabId);
   const [filters, setFilters] = useState<ReportsFiltersValue>({
     yearId: "",
     termId: "",
@@ -76,6 +80,20 @@ export default function AdminReportsPage() {
       if (active) setFilters((f) => ({ ...f, termId: active.id }));
     }
   }, [terms, filters.termId]);
+
+  useEffect(() => {
+    const qpClass = searchParams.get("classId");
+    const qpTerm = searchParams.get("termId");
+    const qpYear = searchParams.get("yearId");
+    if (qpClass || qpTerm || qpYear) {
+      setFilters((f) => ({
+        ...f,
+        classId: qpClass ?? f.classId,
+        termId: qpTerm ?? f.termId,
+        yearId: qpYear ?? f.yearId,
+      }));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!filters.classId && classes.length) {
@@ -277,6 +295,8 @@ export default function AdminReportsPage() {
             classId={filters.classId}
             termId={filters.termId}
             classes={classesQ.data ?? []}
+            initialExamId={initialExamId}
+            initialMarksSource={initialExamId ? "exam" : undefined}
           />
         </div>
       ) : null}

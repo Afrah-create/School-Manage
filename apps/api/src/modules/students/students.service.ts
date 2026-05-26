@@ -1,12 +1,16 @@
 import type {
+  ClassEnrollmentSummary,
   CreateStudentInput,
+  PaginatedStudents,
   PromoteStudentsInput,
+  StudentBrowseQuery,
   UpdateStudentInput,
   WithdrawStudentInput,
 } from "@uganda-cbc-sms/shared";
 import type { Role } from "@uganda-cbc-sms/shared";
 import type { PoolClient } from "pg";
 import { pool, query, withTransaction } from "../../config/db";
+import { formatDateOnly } from "../../utils/dateOnly";
 import { HttpError } from "../../utils/httpError";
 import { nextSequence, padNumber } from "../../utils/sequences";
 
@@ -19,17 +23,19 @@ function mapStudent(r: Record<string, unknown>) {
     id: r.id as string,
     studentNumber: r.student_number as string,
     fullName: r.full_name as string,
-    dateOfBirth: String(r.date_of_birth).slice(0, 10),
-    gender: r.gender as string,
+    dateOfBirth: formatDateOnly(r.date_of_birth),
+    gender: r.gender as "male" | "female",
     guardianName: r.guardian_name as string,
     guardianContact: r.guardian_contact as string,
     guardianEmail: (r.guardian_email as string | null | undefined) ?? null,
     address: (r.address as string | null | undefined) ?? null,
     previousSchool: (r.previous_school as string | null | undefined) ?? null,
     classId: r.class_id as string | null,
+    className: (r.class_name as string | null | undefined) ?? null,
+    classStream: (r.class_stream as string | null | undefined) ?? null,
     combinationId: r.combination_id as string | null,
     photoUrl: r.photo_url as string | null,
-    status: r.status as string,
+    status: r.status as "active" | "transferred" | "withdrawn",
     transferReason: r.transfer_reason as string | null,
     enrolledAt: enrolled,
   };
@@ -163,7 +169,11 @@ export async function listStudents(role: Role, userId: string, classId?: string)
     }
     const { sql: extra, params } = listWhereClause(role, userId, classId);
     const { rows } = await query(
-      `SELECT s.* FROM students s WHERE s.status = 'active' ${extra} ORDER BY s.student_number`,
+      `SELECT s.*, c.name AS class_name, c.stream AS class_stream
+       FROM students s
+       LEFT JOIN classes c ON c.id = s.class_id
+       WHERE s.status = 'active' ${extra}
+       ORDER BY c.name NULLS LAST, c.stream NULLS LAST, s.full_name`,
       params,
     );
     return rows.map((r) => mapStudent(r as never));
@@ -205,7 +215,13 @@ export async function canViewStudent(id: string, role: Role, userId: string): Pr
 
 export async function getStudent(id: string, role: Role, userId: string) {
   try {
-    const { rows } = await query(`SELECT s.* FROM students s WHERE s.id = $1`, [id]);
+    const { rows } = await query(
+      `SELECT s.*, c.name AS class_name, c.stream AS class_stream
+       FROM students s
+       LEFT JOIN classes c ON c.id = s.class_id
+       WHERE s.id = $1`,
+      [id],
+    );
     if (rows.length === 0) throw new HttpError(404, "Student not found");
     const ok = await canViewStudent(id, role, userId);
     if (!ok) throw new HttpError(403, "Forbidden");
@@ -328,6 +344,195 @@ export async function withdrawStudent(id: string, input: WithdrawStudentInput) {
     if (e instanceof HttpError) throw e;
     throw new Error(e instanceof Error ? e.message : "Could not withdraw student");
   }
+}
+
+export async function browseStudents(
+  role: Role,
+  userId: string,
+  input: StudentBrowseQuery,
+): Promise<PaginatedStudents> {
+  const classFilter = input.classId?.trim();
+  const isUnassigned = classFilter === "unassigned";
+  if (classFilter && !isUnassigned) {
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(classFilter)) {
+      throw new HttpError(400, "Invalid class filter");
+    }
+    if (!(await teacherMayViewClass(role, userId, classFilter))) {
+      throw new HttpError(403, "You are not assigned to this class");
+    }
+  }
+
+  const page = input.page;
+  const limit = input.limit;
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = [];
+  const filterParams: unknown[] = [];
+
+  const push = (sql: string, ...vals: unknown[]) => {
+    conditions.push(sql);
+    filterParams.push(...vals);
+  };
+
+  if (role === "class_teacher" || role === "subject_teacher") {
+    const p = filterParams.length + 1;
+    push(
+      `(
+        EXISTS (
+          SELECT 1 FROM class_teacher_assignments cta
+          WHERE cta.class_id = s.class_id AND cta.teacher_id = $${p}
+        )
+        OR EXISTS (
+          SELECT 1 FROM class_subjects cs
+          WHERE cs.class_id = s.class_id AND cs.teacher_id = $${p}
+        )
+        OR EXISTS (
+          SELECT 1 FROM classes c0
+          WHERE c0.id = s.class_id AND c0.class_teacher_id = $${p}
+        )
+      )`,
+      userId,
+    );
+  }
+
+  if (isUnassigned) {
+    push("s.class_id IS NULL");
+  } else if (classFilter) {
+    push(`s.class_id = $${filterParams.length + 1}`, classFilter);
+  }
+
+  if (input.status !== "all") {
+    push(`s.status = $${filterParams.length + 1}`, input.status);
+  }
+
+  const q = input.q?.trim();
+  if (q) {
+    const p = filterParams.length + 1;
+    push(`(s.full_name ILIKE $${p} OR s.student_number ILIKE $${p})`, `%${q}%`);
+  }
+
+  const whereSql = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderBy =
+    input.sort === "number"
+      ? "s.student_number ASC, s.full_name ASC"
+      : "s.full_name ASC, s.student_number ASC";
+
+  const countSql = `SELECT COUNT(*)::int AS c FROM students s ${whereSql}`;
+
+  const dataSql = `
+    SELECT s.*, c.name AS class_name, c.stream AS class_stream
+    FROM students s
+    LEFT JOIN classes c ON c.id = s.class_id
+    ${whereSql}
+    ORDER BY ${orderBy}
+    LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}`;
+
+  const countParams = [...filterParams];
+  const dataParams = [...filterParams, limit, offset];
+
+  const [{ rows: countRows }, { rows }] = await Promise.all([
+    query<{ c: number }>(countSql, countParams),
+    query(dataSql, dataParams),
+  ]);
+
+  const total = countRows[0]?.c ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  return {
+    items: rows.map((r) => mapStudent(r as never)),
+    page,
+    limit,
+    total,
+    totalPages,
+  };
+}
+
+export async function getClassEnrollmentSummary(
+  role: Role,
+  userId: string,
+): Promise<ClassEnrollmentSummary[]> {
+  if (role === "admin" || role === "headteacher" || role === "bursar") {
+    const { rows } = await query<{
+      class_id: string;
+      class_name: string;
+      class_stream: string | null;
+      active_count: number;
+      total_count: number;
+    }>(
+      `SELECT c.id AS class_id, c.name AS class_name, c.stream AS class_stream,
+              COUNT(s.id) FILTER (WHERE s.status = 'active')::int AS active_count,
+              COUNT(s.id)::int AS total_count
+       FROM classes c
+       LEFT JOIN students s ON s.class_id = c.id
+       GROUP BY c.id, c.name, c.stream
+       HAVING COUNT(s.id) > 0
+       ORDER BY c.name, c.stream NULLS LAST`,
+    );
+    const mapped = rows.map((r) => ({
+      classId: r.class_id,
+      className: r.class_name,
+      classStream: r.class_stream,
+      activeCount: r.active_count,
+      totalCount: r.total_count,
+    }));
+    const unassigned = await query<{ active_count: number; total_count: number }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'active')::int AS active_count,
+         COUNT(*)::int AS total_count
+       FROM students WHERE class_id IS NULL`,
+    );
+    const u = unassigned.rows[0];
+    if (u && u.total_count > 0) {
+      mapped.push({
+        classId: "unassigned",
+        className: "Unassigned",
+        classStream: null,
+        activeCount: u.active_count,
+        totalCount: u.total_count,
+      });
+    }
+    return mapped;
+  }
+
+  if (role === "class_teacher" || role === "subject_teacher") {
+    const { rows } = await query<{
+      class_id: string;
+      class_name: string;
+      class_stream: string | null;
+      active_count: number;
+      total_count: number;
+    }>(
+      `SELECT c.id AS class_id, c.name AS class_name, c.stream AS class_stream,
+              COUNT(s.id) FILTER (WHERE s.status = 'active')::int AS active_count,
+              COUNT(s.id)::int AS total_count
+       FROM classes c
+       JOIN students s ON s.class_id = c.id
+       WHERE (
+         EXISTS (
+           SELECT 1 FROM class_teacher_assignments cta
+           WHERE cta.class_id = c.id AND cta.teacher_id = $1
+         )
+         OR EXISTS (
+           SELECT 1 FROM class_subjects cs
+           WHERE cs.class_id = c.id AND cs.teacher_id = $1
+         )
+         OR c.class_teacher_id = $1
+       )
+       GROUP BY c.id, c.name, c.stream
+       ORDER BY c.name, c.stream NULLS LAST`,
+      [userId],
+    );
+    return rows.map((r) => ({
+      classId: r.class_id,
+      className: r.class_name,
+      classStream: r.class_stream,
+      activeCount: r.active_count,
+      totalCount: r.total_count,
+    }));
+  }
+
+  return [];
 }
 
 export async function searchStudents(q: string, role: Role, userId: string) {

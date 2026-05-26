@@ -41,7 +41,10 @@ export interface ExamSubject {
   subjectId: string;
   subjectName: string;
   subjectCode: string;
+  isCompulsory: boolean;
   isSubmitted?: boolean;
+  /** Students registered to sit this paper on the exam. */
+  entrantsCount?: number;
 }
 
 export interface ExamMarkingProgress {
@@ -50,6 +53,25 @@ export interface ExamMarkingProgress {
   pendingSubjects: number;
   activeStudents: number;
   marksEntered: number;
+  /** Sum of student×paper registrations across the exam. */
+  totalEntries?: number;
+}
+
+export interface ExamEntriesMatrix {
+  students: Array<{
+    id: string;
+    fullName: string;
+    studentNumber: string;
+  }>;
+  papers: Array<{
+    subjectId: string;
+    subjectCode: string;
+    subjectName: string;
+    isCompulsory: boolean;
+    entrantsCount: number;
+  }>;
+  /** studentId → subjectIds the learner is entered for */
+  entriesByStudent: Record<string, string[]>;
 }
 
 export interface ExamDeletionImpact {
@@ -74,11 +96,30 @@ export interface Student {
   address: string | null;
   previousSchool: string | null;
   classId: string | null;
+  /** Present on list endpoints that join classes */
+  className?: string | null;
+  classStream?: string | null;
   combinationId: string | null;
   photoUrl: string | null;
   status: "active" | "transferred" | "withdrawn";
   transferReason: string | null;
   enrolledAt: string;
+}
+
+export interface PaginatedStudents {
+  items: Student[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ClassEnrollmentSummary {
+  classId: string;
+  className: string;
+  classStream: string | null;
+  activeCount: number;
+  totalCount: number;
 }
 
 export interface AcademicYear {

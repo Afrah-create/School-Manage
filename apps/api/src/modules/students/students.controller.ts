@@ -13,6 +13,7 @@ const schemaExports = (
 const {
   createStudentSchema,
   promoteStudentsSchema,
+  studentBrowseQuerySchema,
   updateStudentSchema,
   withdrawStudentSchema,
 } = schemaExports;
@@ -28,9 +29,32 @@ export async function list(req: Request, res: Response): Promise<void> {
     res.status(401).json({ success: false, error: "Unauthorized" });
     return;
   }
+  const pageRaw = req.query["page"];
+  if (pageRaw != null && String(pageRaw) !== "") {
+    const browse = studentBrowseQuerySchema.parse({
+      page: req.query["page"],
+      limit: req.query["limit"],
+      classId: req.query["classId"],
+      status: req.query["status"],
+      q: req.query["q"],
+      sort: req.query["sort"],
+    });
+    const data = await svc.browseStudents(req.user.role, req.user.id, browse);
+    res.json({ success: true, data });
+    return;
+  }
   const classId = typeof req.query["classId"] === "string" ? req.query["classId"] : undefined;
   const rows = await svc.listStudents(req.user.role, req.user.id, classId);
   res.json({ success: true, data: rows });
+}
+
+export async function classSummary(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return;
+  }
+  const data = await svc.getClassEnrollmentSummary(req.user.role, req.user.id);
+  res.json({ success: true, data });
 }
 
 export async function getOne(req: Request, res: Response): Promise<void> {

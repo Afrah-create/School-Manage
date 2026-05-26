@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Student } from "@uganda-cbc-sms/shared";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
-import { StudentTable } from "@/components/students/StudentTable";
+import { StudentAvatar } from "@/components/students/StudentAvatar";
+import { PaginationBar } from "@/components/ui/PaginationBar";
 import { apiGet } from "@/lib/api";
+import type { PaginatedStudents } from "@uganda-cbc-sms/shared";
 
 export type TeacherClassOption = {
   classId: string;
@@ -29,7 +30,11 @@ type Props = {
 export function TeacherStudentsByClass({ title, description, profileBasePath }: Props) {
   const [classes, setClasses] = useState<TeacherClassOption[]>([]);
   const [classId, setClassId] = useState("");
-  const [students, setStudents] = useState<Student[]>([]);
+  const [browse, setBrowse] = useState<PaginatedStudents | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+  const [searchQ, setSearchQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -62,23 +67,42 @@ export function TeacherStudentsByClass({ title, description, profileBasePath }: 
   }, []);
 
   useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQ(searchQ), 350);
+    return () => window.clearTimeout(t);
+  }, [searchQ]);
+
+  useEffect(() => {
     if (!classId) {
-      setStudents([]);
+      setBrowse(null);
       return;
     }
     setStudentsLoading(true);
     setErr(null);
     void (async () => {
       try {
-        const rows = await apiGet<Student[]>(`/students?classId=${encodeURIComponent(classId)}`);
-        setStudents(rows);
+        const qp = new URLSearchParams({
+          page: String(page),
+          limit: String(limit),
+          classId,
+          status: "active",
+          sort: "name",
+        });
+        if (debouncedQ.trim()) qp.set("q", debouncedQ.trim());
+        const data = await apiGet<PaginatedStudents>(`/students?${qp.toString()}`);
+        setBrowse(data);
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Failed to load students");
-        setStudents([]);
+        setBrowse(null);
       } finally {
         setStudentsLoading(false);
       }
     })();
+  }, [classId, page, limit, debouncedQ]);
+
+  useEffect(() => {
+    setPage(1);
+    setSearchQ("");
+    setDebouncedQ("");
   }, [classId]);
 
   return (
@@ -112,7 +136,71 @@ export function TeacherStudentsByClass({ title, description, profileBasePath }: 
         )}
       </Card>
       <Card title={selectedClass ? `Learners — ${selectedClass.className} ${selectedClass.classStream}` : "Learners"}>
-        <StudentTable students={students} loading={studentsLoading} profileBasePath={profileBasePath} />
+        {selectedClass ? (
+          <div className="mb-4 max-w-md">
+            <label className="mb-1 block text-sm font-medium text-foreground">Search this class</label>
+            <input
+              type="search"
+              value={searchQ}
+              onChange={(e) => {
+                setSearchQ(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Name or student number…"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+            />
+          </div>
+        ) : null}
+        {studentsLoading && !browse ? (
+          <p className="text-sm text-muted-foreground">Loading learners…</p>
+        ) : browse && browse.items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No learners in this class match your search.</p>
+        ) : browse ? (
+          <>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="min-w-full divide-y divide-border text-sm">
+                <thead className="bg-muted/60">
+                  <tr>
+                    <th className="px-3 py-2 text-left" />
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Student #</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Name</th>
+                    <th className="px-3 py-2 text-right font-semibold text-muted-foreground"> </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {browse.items.map((st) => (
+                    <tr key={st.id} className="hover:bg-muted/30">
+                      <td className="px-3 py-2">
+                        <StudentAvatar fullName={st.fullName} photoUrl={st.photoUrl} size="sm" />
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">{st.studentNumber}</td>
+                      <td className="px-3 py-2 font-medium">{st.fullName}</td>
+                      <td className="px-3 py-2 text-right">
+                        <a
+                          className="text-xs font-medium text-brand underline"
+                          href={`${profileBasePath.replace(/\/$/, "")}/${st.id}`}
+                        >
+                          View
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <PaginationBar
+              page={browse.page}
+              totalPages={browse.totalPages}
+              total={browse.total}
+              limit={browse.limit}
+              onPageChange={setPage}
+              onLimitChange={(n) => {
+                setLimit(n);
+                setPage(1);
+              }}
+            />
+          </>
+        ) : null}
       </Card>
     </PageWrapper>
   );

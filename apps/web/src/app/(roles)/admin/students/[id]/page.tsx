@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { StudentAvatar } from "@/components/students/StudentAvatar";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Student } from "@uganda-cbc-sms/shared";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { FeeBalanceCard } from "@/components/fees/FeeBalanceCard";
@@ -12,15 +12,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { StudentEditModal } from "@/components/students/StudentEditModal";
 import { apiDelete, apiGet } from "@/lib/api";
-
-function resolvePhotoUrl(photoUrl: string | null): string | null {
-  if (!photoUrl) return null;
-  if (photoUrl.startsWith("http")) return photoUrl;
-  const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api";
-  const origin = apiBase.replace(/\/api\/?$/, "");
-  return `${origin}${photoUrl.startsWith("/") ? "" : "/"}${photoUrl}`;
-}
+import { formatDateForInput } from "@/lib/dates";
 
 function statusTone(s: Student["status"]): "success" | "warning" | "neutral" {
   if (s === "active") return "success";
@@ -48,6 +42,7 @@ export default function AdminStudentProfilePage() {
   const [loading, setLoading] = useState(true);
   const [confirmDel, setConfirmDel] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     if (searchParams.get("created") === "1") {
@@ -67,16 +62,6 @@ export default function AdminStudentProfilePage() {
       }
     })();
   }, [id]);
-
-  const initials = useMemo(() => {
-    if (!st?.fullName) return "?";
-    const parts = st.fullName.trim().split(/\s+/);
-    const a = parts[0]?.[0] ?? "";
-    const b = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
-    return `${a}${b}`.toUpperCase() || "?";
-  }, [st?.fullName]);
-
-  const photoSrc = st ? resolvePhotoUrl(st.photoUrl) : null;
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -106,9 +91,9 @@ export default function AdminStudentProfilePage() {
             Back to students
           </Link>
           <div className="flex flex-wrap gap-2">
-            <Link href={`/admin/students/${encodeURIComponent(id)}/edit`}>
-              <Button className="w-full sm:w-auto">Edit enrollment</Button>
-            </Link>
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setEditOpen(true)}>
+              Edit enrollment
+            </Button>
             <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => setConfirmDel(true)}>
               Delete record
             </Button>
@@ -149,12 +134,13 @@ export default function AdminStudentProfilePage() {
           <>
             <Card>
               <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
-                <div className="relative mx-auto flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted text-2xl font-semibold text-muted-foreground sm:mx-0">
-                  {photoSrc ? (
-                    <Image src={photoSrc} alt="" fill className="object-cover" sizes="112px" unoptimized />
-                  ) : (
-                    initials
-                  )}
+                <div className="mx-auto sm:mx-0">
+                  <StudentAvatar
+                    fullName={st.fullName}
+                    photoUrl={st.photoUrl}
+                    size="lg"
+                    className="!h-28 !w-28 !rounded-2xl !text-2xl"
+                  />
                 </div>
                 <div className="min-w-0 flex-1 text-center sm:text-left">
                   <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -165,7 +151,7 @@ export default function AdminStudentProfilePage() {
                   </div>
                   <p className="mt-1 font-mono text-sm text-muted-foreground">{st.studentNumber}</p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {st.dateOfBirth}
+                    {formatDateForInput(st.dateOfBirth) || st.dateOfBirth}
                     <span className="mx-2 text-border">·</span>
                     <span className="capitalize">{st.gender}</span>
                   </p>
@@ -177,7 +163,11 @@ export default function AdminStudentProfilePage() {
               <div className="space-y-6 lg:col-span-2">
                 <Card title="Enrollment">
                   <dl className="grid gap-6 sm:grid-cols-2">
-                    <DetailItem label="Class ID">{st.classId ?? "—"}</DetailItem>
+                    <DetailItem label="Class">
+                      {st.className
+                        ? `${st.className}${st.classStream ? ` · ${st.classStream}` : ""}`
+                        : st.classId ?? "—"}
+                    </DetailItem>
                     <DetailItem label="Combination ID">{st.combinationId ?? "—"}</DetailItem>
                     <DetailItem label="Enrolled">{new Date(st.enrolledAt).toLocaleString()}</DetailItem>
                     <DetailItem label="Notes">{st.transferReason ? <span className="whitespace-pre-wrap font-normal">{st.transferReason}</span> : "—"}</DetailItem>
@@ -203,6 +193,21 @@ export default function AdminStudentProfilePage() {
             </div>
           </>
         ) : null}
+
+        <StudentEditModal
+          open={editOpen}
+          studentId={id}
+          onClose={() => setEditOpen(false)}
+          onSaved={async () => {
+            try {
+              const row = await apiGet<Student>(`/students/${encodeURIComponent(id)}`);
+              setSt(row);
+              setOk("Student record updated.");
+            } catch {
+              /* list refresh not critical */
+            }
+          }}
+        />
       </div>
     </PageWrapper>
   );
