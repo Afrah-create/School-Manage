@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ROLES } from "@uganda-cbc-sms/shared";
 import { PageWrapper } from "@/components/layout/PageWrapper";
+import { StudentEnrollmentCharts } from "@/components/students/StudentEnrollmentCharts";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -130,7 +131,11 @@ export default function AdminUsersListPage() {
   };
 
   return (
-    <PageWrapper title="Users" description="Staff accounts">
+    <PageWrapper title="Users" description="Staff accounts and school enrollment overview">
+      <div className="mb-8">
+        <StudentEnrollmentCharts />
+      </div>
+
       <div className="mb-4 flex justify-between gap-3">
         <div className="grid w-full max-w-4xl grid-cols-1 gap-2 md:grid-cols-3">
           <Input placeholder="Search name or email" value={search} onChange={(e) => setSearch(e.target.value)} />
