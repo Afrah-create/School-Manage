@@ -159,10 +159,15 @@ export async function postClassSubject(req: Request, res: Response): Promise<voi
 }
 
 export async function getClassSubjects(req: Request, res: Response): Promise<void> {
+  let teacherId = req.query["teacherId"] as string | undefined;
+  const role = req.user?.role ?? "";
+  if (req.user && (role === "subject_teacher" || role === "class_teacher")) {
+    teacherId = req.user.id;
+  }
   const rows = await svc.getClassSubjects({
     classId: req.query["classId"] as string | undefined,
     academicYearId: req.query["academicYearId"] as string | undefined,
-    teacherId: req.query["teacherId"] as string | undefined,
+    teacherId,
   });
   res.json({ success: true, data: rows, message: "Class subject assignments loaded." });
 }

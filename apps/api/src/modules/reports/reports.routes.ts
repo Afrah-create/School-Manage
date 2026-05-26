@@ -13,6 +13,7 @@ export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
 
 reportsRouter.get("/readiness", reporters, asyncHandler(c.getReadiness));
+reportsRouter.get("/exam-options", reporters, asyncHandler(c.getExamOptions));
 reportsRouter.get("/list", reporters, asyncHandler(c.listReports));
 reportsRouter.post("/generate", reporters, asyncHandler(c.generate));
 reportsRouter.post("/cbc/generate", reporters, asyncHandler(c.generateCbc));

@@ -17,6 +17,26 @@ export type SubjectSubmissionTrack = {
   lastSubmittedAt: string | null;
 };
 
+export type ReportExamOption = {
+  id: string;
+  name: string;
+  status: string;
+  examDate: string | null;
+  maxScore: number;
+  subjectCount: number;
+  allSubjectsSubmitted: boolean;
+};
+
+export type ExamSubjectTrack = {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  studentsWithMarks: number;
+  activeStudents: number;
+  isSubmitted: boolean;
+  status: "not_started" | "in_progress" | "submitted";
+};
+
 export type ReportReadiness = {
   track: "cbc" | "alevel";
   classLevel: string;
@@ -41,6 +61,12 @@ export type ReportReadiness = {
     teacherEmail: string | null;
     subjects: string[];
   }>;
+  examOptions: ReportExamOption[];
+  examTracking?: ExamSubjectTrack[];
+  examReady?: boolean;
+  linkedExamId?: string | null;
+  examLinkInvalid?: boolean;
+  termReady?: boolean;
 };
 
 export type ClassReportRow = {
@@ -52,6 +78,7 @@ export type ClassReportRow = {
   computedAt: string | null;
   division?: string | null;
   totalPoints?: number | null;
+  examLinkStatus?: ReportExamLinkStatus;
 };
 
 export type GenerateReportsResult = {
@@ -60,15 +87,39 @@ export type GenerateReportsResult = {
   count: number;
   warnings: string[];
   skipped: number;
+  sourceExamId?: string | null;
+  sourceExamName?: string | null;
+  usedTermAssessmentsFallback?: boolean;
 };
 
-export function useReportReadiness(classId: string | undefined, termId: string | undefined) {
+export type ReportExamLinkStatus = "none" | "active" | "deleted";
+
+export function useReportExamOptions(classId: string | undefined, termId: string | undefined) {
   return useQuery({
-    queryKey: ["reports-readiness", classId, termId],
+    queryKey: ["reports-exam-options", classId, termId],
     queryFn: () =>
-      apiGet<ReportReadiness>(
-        `/reports/readiness?classId=${encodeURIComponent(classId!)}&termId=${encodeURIComponent(termId!)}`,
+      apiGet<ReportExamOption[]>(
+        `/reports/exam-options?classId=${encodeURIComponent(classId!)}&termId=${encodeURIComponent(termId!)}`,
       ),
+    enabled: Boolean(classId && termId),
+  });
+}
+
+export function useReportReadiness(
+  classId: string | undefined,
+  termId: string | undefined,
+  examId?: string,
+) {
+  return useQuery({
+    queryKey: ["reports-readiness", classId, termId, examId ?? ""],
+    queryFn: () => {
+      const qp = new URLSearchParams({
+        classId: classId!,
+        termId: termId!,
+      });
+      if (examId) qp.set("examId", examId);
+      return apiGet<ReportReadiness>(`/reports/readiness?${qp.toString()}`);
+    },
     enabled: Boolean(classId && termId),
   });
 }
@@ -87,6 +138,7 @@ export function useClassReports(classId: string | undefined, termId: string | un
 export function useReportActions() {
   const qc = useQueryClient();
   const invalidate = async (classId?: string, termId?: string) => {
+    await qc.invalidateQueries({ queryKey: ["reports-exam-options"] });
     await qc.invalidateQueries({ queryKey: ["reports-readiness"] });
     await qc.invalidateQueries({ queryKey: ["reports-list"] });
     await qc.invalidateQueries({ queryKey: ["reports-analytics"] });
@@ -98,7 +150,7 @@ export function useReportActions() {
   };
 
   const generate = useMutation({
-    mutationFn: (body: { classId: string; termId: string }) =>
+    mutationFn: (body: { classId: string; termId: string; examId?: string }) =>
       apiPost<GenerateReportsResult>("/reports/generate", body),
     onSuccess: (_d, vars) => void invalidate(vars.classId, vars.termId),
   });

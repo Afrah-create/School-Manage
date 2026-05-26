@@ -1,15 +1,15 @@
 "use client";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
-import { TeacherOpenExamsList } from "@/components/exams/TeacherOpenExamsList";
+import { TeacherExamMarkingList } from "@/components/exams/TeacherExamMarkingList";
 
 export default function SubjectTeacherExamsPage() {
   return (
     <PageWrapper
       title="Open exams"
-      description="Enter marks for exams your administrator has opened for your subjects."
+      description="Each row is one of your assigned subjects on an open exam. You can only enter and submit marks for subjects on your timetable."
     >
-      <TeacherOpenExamsList basePath="/subject-teacher/exams" />
+      <TeacherExamMarkingList basePath="/subject-teacher/exams" />
     </PageWrapper>
   );
 }

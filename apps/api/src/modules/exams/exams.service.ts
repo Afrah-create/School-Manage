@@ -2,7 +2,10 @@ import type { CreateExamInput, ExamMarksBulkInput, UpdateExamInput } from "@ugan
 import { query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
 import { resolveConfiguredGrade } from "../../utils/gradingScales";
-import { teacherCanTeachClassSubject } from "../../utils/teacherTeachingAccess";
+import {
+  assertTeacherIsAssignedSubjectTeacher,
+  teacherIsAssignedSubjectTeacher,
+} from "../../utils/teacherTeachingAccess";
 
 type ExamRow = {
   id: string;
@@ -50,7 +53,7 @@ async function getExamRow(id: string) {
             (SELECT COUNT(*)::text FROM exam_subjects es WHERE es.exam_id = e.id) AS subject_count
      FROM exams e
      JOIN classes c ON c.id = e.class_id
-     WHERE e.id = $1`,
+     WHERE e.id = $1 AND e.deleted_at IS NULL`,
     [id],
   );
   if (rows.length === 0) throw new HttpError(404, "We could not find that exam. It may have been removed.");
@@ -147,12 +150,17 @@ export async function updateExam(id: string, input: UpdateExamInput) {
   return getExamById(id);
 }
 
-export async function deleteExam(id: string) {
-  const exam = await getExamRow(id);
-  if (exam.status !== "draft") {
-    throw new HttpError(400, "Only draft exams can be deleted. Close the exam instead if marking is finished.");
+export async function deleteExam(id: string, deletedBy?: string) {
+  await getExamRow(id);
+  const { rowCount } = await query(
+    `UPDATE exams
+     SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
+     WHERE id = $1 AND deleted_at IS NULL`,
+    [id, deletedBy ?? null],
+  );
+  if (!rowCount) {
+    throw new HttpError(404, "We could not find that exam. It may have been removed.");
   }
-  await query(`DELETE FROM exams WHERE id = $1`, [id]);
 }
 
 export async function openExam(id: string) {
@@ -200,7 +208,7 @@ export async function listExams(filters: {
   classId?: string;
   status?: string;
 }) {
-  const where: string[] = [];
+  const where: string[] = ["e.deleted_at IS NULL"];
   const values: unknown[] = [];
   let i = 1;
   if (filters.academicYearId) {
@@ -263,6 +271,105 @@ export async function getExamById(id: string) {
   };
 }
 
+export type ExamMarkingSlot = {
+  examId: string;
+  examName: string;
+  examDate: string | null;
+  maxScore: number;
+  classId: string;
+  className: string;
+  classStream: string | null;
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  isSubmitted: boolean;
+  canEdit: boolean;
+};
+
+export async function listTeacherMarkingSlots(teacherId: string, role: string): Promise<ExamMarkingSlot[]> {
+  if (role === "admin" || role === "headteacher") {
+    const exams = await listExams({ status: "open" });
+    const slots: ExamMarkingSlot[] = [];
+    for (const exam of exams) {
+      const detail = await getExamById(exam.id);
+      for (const s of detail.subjects) {
+        slots.push({
+          examId: exam.id,
+          examName: exam.name,
+          examDate: exam.examDate,
+          maxScore: exam.maxScore,
+          classId: exam.classId,
+          className: exam.className ?? "",
+          classStream: exam.classStream ?? null,
+          subjectId: s.subjectId,
+          subjectName: s.subjectName,
+          subjectCode: s.subjectCode,
+          isSubmitted: Boolean(s.isSubmitted),
+          canEdit: exam.status === "open" && !s.isSubmitted,
+        });
+      }
+    }
+    return slots;
+  }
+
+  const { rows } = await query<{
+    exam_id: string;
+    exam_name: string;
+    exam_date: string | null;
+    max_score: string;
+    class_id: string;
+    class_name: string;
+    class_stream: string | null;
+    subject_id: string;
+    subject_name: string;
+    subject_code: string;
+    is_submitted: boolean;
+  }>(
+    `SELECT
+        e.id AS exam_id,
+        e.name AS exam_name,
+        e.exam_date,
+        e.max_score,
+        e.class_id,
+        c.name AS class_name,
+        c.stream AS class_stream,
+        es.subject_id,
+        s.name AS subject_name,
+        s.code AS subject_code,
+        COALESCE(ess.is_submitted, false) AS is_submitted
+     FROM exams e
+     JOIN classes c ON c.id = e.class_id
+     JOIN exam_subjects es ON es.exam_id = e.id
+     JOIN subjects s ON s.id = es.subject_id
+     JOIN class_subjects cs
+       ON cs.class_id = e.class_id
+      AND cs.subject_id = es.subject_id
+      AND cs.academic_year_id = e.academic_year_id
+      AND cs.teacher_id = $1
+     LEFT JOIN exam_subject_submissions ess
+       ON ess.exam_id = e.id AND ess.subject_id = es.subject_id
+     WHERE e.status = 'open' AND e.deleted_at IS NULL
+     ORDER BY e.exam_date DESC NULLS LAST, e.name, s.code`,
+    [teacherId],
+  );
+
+  return rows.map((r) => ({
+    examId: r.exam_id,
+    examName: r.exam_name,
+    examDate: r.exam_date,
+    maxScore: Number(r.max_score),
+    classId: r.class_id,
+    className: r.class_name,
+    classStream: r.class_stream,
+    subjectId: r.subject_id,
+    subjectName: r.subject_name,
+    subjectCode: r.subject_code,
+    isSubmitted: Boolean(r.is_submitted),
+    canEdit: !r.is_submitted,
+  }));
+}
+
+/** @deprecated Prefer listTeacherMarkingSlots for teacher UI */
 export async function listOpenExamsForTeacher(teacherId: string, role: string) {
   if (role === "admin" || role === "headteacher") {
     return listExams({ status: "open" });
@@ -278,17 +385,8 @@ export async function listOpenExamsForTeacher(teacherId: string, role: string) {
        ON cs.class_id = e.class_id
       AND cs.subject_id = es.subject_id
       AND cs.academic_year_id = e.academic_year_id
-     WHERE e.status = 'open'
-       AND (
-         cs.teacher_id = $1
-         OR c.class_teacher_id = $1
-         OR EXISTS (
-           SELECT 1 FROM class_teacher_assignments cta
-           WHERE cta.class_id = e.class_id
-             AND cta.teacher_id = $1
-             AND cta.academic_year_id = e.academic_year_id
-         )
-       )
+      AND cs.teacher_id = $1
+     WHERE e.status = 'open' AND e.deleted_at IS NULL
      ORDER BY e.exam_date DESC NULLS LAST, e.name`,
     [teacherId],
   );
@@ -330,7 +428,12 @@ export async function listTeacherSubjectsForExam(examId: string, teacherId: stri
 
   const allowed = [];
   for (const r of rows) {
-    const ok = await teacherCanTeachClassSubject(teacherId, exam.class_id, r.subject_id, exam.academic_year_id);
+    const ok = await teacherIsAssignedSubjectTeacher(
+      teacherId,
+      exam.class_id,
+      r.subject_id,
+      exam.academic_year_id,
+    );
     if (ok) {
       allowed.push({
         subjectId: r.subject_id,
@@ -342,6 +445,13 @@ export async function listTeacherSubjectsForExam(examId: string, teacherId: stri
     }
   }
   return allowed;
+}
+
+export async function getExamForTeacher(examId: string, teacherId: string, role: string) {
+  const exam = await getExamById(examId);
+  if (role === "admin" || role === "headteacher") return exam;
+  const subjects = await listTeacherSubjectsForExam(examId, teacherId, role);
+  return { ...exam, subjects };
 }
 
 async function assertSubjectSubmitted(examId: string, subjectId: string) {
@@ -357,8 +467,21 @@ async function assertSubjectSubmitted(examId: string, subjectId: string) {
   }
 }
 
-export async function listExamMarks(examId: string, subjectId: string) {
+export async function listExamMarks(
+  examId: string,
+  subjectId: string,
+  teacherId?: string,
+  role?: string,
+) {
   const exam = await getExamRow(examId);
+  if (role && role !== "admin" && role !== "headteacher" && teacherId) {
+    await assertTeacherIsAssignedSubjectTeacher(
+      teacherId,
+      exam.class_id,
+      subjectId,
+      exam.academic_year_id,
+    );
+  }
   const maxScore = Number(exam.max_score);
 
   const { rows: students } = await query<{
@@ -426,15 +549,12 @@ export async function upsertExamMarks(
   }
 
   if (role !== "admin" && role !== "headteacher") {
-    const ok = await teacherCanTeachClassSubject(
+    await assertTeacherIsAssignedSubjectTeacher(
       teacherId,
       exam.class_id,
       input.subjectId,
       exam.academic_year_id,
     );
-    if (!ok) {
-      throw new HttpError(403, "You are not assigned to teach this subject for this class. Contact the administrator.");
-    }
   }
 
   await assertSubjectSubmitted(examId, input.subjectId);
@@ -488,13 +608,12 @@ export async function submitExamMarks(
   }
 
   if (role !== "admin" && role !== "headteacher") {
-    const ok = await teacherCanTeachClassSubject(
+    await assertTeacherIsAssignedSubjectTeacher(
       teacherId,
       exam.class_id,
       subjectId,
       exam.academic_year_id,
     );
-    if (!ok) throw new HttpError(403, "You are not assigned to this subject for this class.");
   }
 
   await assertSubjectSubmitted(examId, subjectId);

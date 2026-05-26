@@ -13,8 +13,20 @@ import {
   listSubjectSubmissionTracking,
 } from "./reportReadiness";
 import type { AlevelReportPayload, CbcReportPayload, ReportTrack } from "./reportTypes";
+import {
+  assertExamReadyForReports,
+  compileAlevelReportFromExam,
+  compileCbcReportWithExam,
+  listExamSubjectTracking,
+  listExamsForReportOptions,
+  tryResolveExamForReports,
+} from "./reportExamLinkage";
 
-export async function getReportReadiness(classId: string, termId: string) {
+export async function listReportExamOptions(classId: string, termId: string) {
+  return listExamsForReportOptions(classId, termId);
+}
+
+export async function getReportReadiness(classId: string, termId: string, examId?: string) {
   const ctx = await getClassContext(classId, termId);
   const { rows } = await query<{ c: number }>(
     `SELECT COUNT(*)::int AS c FROM students WHERE class_id = $1 AND status = 'active'`,
@@ -35,6 +47,31 @@ export async function getReportReadiness(classId: string, termId: string) {
 
   const pending = subjectTracking.filter((s) => s.status !== "submitted");
   const submitted = subjectTracking.filter((s) => s.status === "submitted");
+
+  const examOptions = await listExamsForReportOptions(classId, termId);
+  const resolvedExam = examId ? await tryResolveExamForReports(examId, classId, termId) : null;
+  const examLinkInvalid = Boolean(examId && !resolvedExam);
+  const activeLinkedExamId = resolvedExam?.id ?? null;
+
+  let examTracking: Awaited<ReturnType<typeof listExamSubjectTracking>> | undefined;
+  let examReady = false;
+  if (activeLinkedExamId) {
+    examTracking = await listExamSubjectTracking(activeLinkedExamId, activeStudents);
+    examReady =
+      examTracking.length > 0 && examTracking.every((t) => t.status === "submitted");
+  }
+
+  const termReady =
+    pending.length === 0 && activeStudents > 0 && subjectTracking.length > 0;
+
+  let ready = termReady;
+  if (activeLinkedExamId) {
+    if (ctx.track === "alevel") {
+      ready = examReady && activeStudents > 0;
+    } else {
+      ready = termReady && examReady;
+    }
+  }
 
   const teachersPending = new Map<
     string,
@@ -67,9 +104,15 @@ export async function getReportReadiness(classId: string, termId: string) {
     submittedCount: submitted.length,
     pendingCount: pending.length,
     totalSubjects: subjectTracking.length,
-    ready: pending.length === 0 && activeStudents > 0 && subjectTracking.length > 0,
+    ready,
     pendingSubjectCodes: pending.map((s) => s.subjectCode),
     teachersPending: [...teachersPending.values()],
+    examOptions,
+    examTracking,
+    examReady: activeLinkedExamId ? examReady : undefined,
+    linkedExamId: activeLinkedExamId,
+    examLinkInvalid,
+    termReady,
   };
 }
 
@@ -216,39 +259,70 @@ async function syncDivisionSummary(
   );
 }
 
-export async function generateReportsForClass(classId: string, termId: string) {
-  const readiness = await assertReportReadiness(classId, termId);
+export async function generateReportsForClass(
+  classId: string,
+  termId: string,
+  examId?: string,
+) {
+  const ctx = await getClassContext(classId, termId);
 
   const { rows: students } = await query<{ id: string; full_name: string }>(
     `SELECT id, full_name FROM students WHERE class_id = $1 AND status = 'active' ORDER BY full_name`,
     [classId],
   );
+  const activeStudents = students.length;
+  if (activeStudents === 0) {
+    throw new HttpError(400, "This class has no active students to include on report cards.");
+  }
 
   const reportIds: string[] = [];
   const warnings: string[] = [];
 
+  let exam: Awaited<ReturnType<typeof tryResolveExamForReports>> | undefined;
+  if (examId) {
+    exam = await tryResolveExamForReports(examId, classId, termId);
+    if (!exam) {
+      warnings.push(
+        "The selected exam was deleted or is no longer available. Report cards will use term assessment marks only.",
+      );
+    } else {
+      await assertExamReadyForReports(exam.id, activeStudents);
+    }
+  }
+
+  if (exam && ctx.track === "cbc") {
+    await assertReportReadiness(classId, termId);
+  } else if (!exam) {
+    await assertReportReadiness(classId, termId);
+  } else {
+    // A-Level from active exam only — term assessment scores not required
+  }
+
   for (const student of students) {
     try {
-      if (readiness.track === "cbc") {
-        const payload = await compileCbcReportPayload(
-          student.id,
-          termId,
-          readiness.academicYearId,
-        );
+      if (ctx.track === "cbc") {
+        const payload = exam
+          ? await compileCbcReportWithExam(student.id, termId, ctx.academicYearId, exam)
+          : await compileCbcReportPayload(student.id, termId, ctx.academicYearId);
         if (payload.subjects.length === 0) {
           warnings.push(`${student.full_name}: no CBC competency marks found for this term.`);
           continue;
         }
-        const id = await upsertCbcReport(student.id, termId, readiness.academicYearId, payload);
+        if (exam && !payload.formalExam?.subjects.length) {
+          warnings.push(`${student.full_name}: no marks on exam "${exam.name}" for this student.`);
+        }
+        const id = await upsertCbcReport(student.id, termId, ctx.academicYearId, payload);
         reportIds.push(id);
       } else {
-        const payload = await compileAlevelReportPayload(
-          student.id,
-          termId,
-          readiness.academicYearId,
-        );
+        const payload = exam
+          ? await compileAlevelReportFromExam(student.id, termId, ctx.academicYearId, exam)
+          : await compileAlevelReportPayload(student.id, termId, ctx.academicYearId);
         if (payload.subjects.length === 0) {
-          warnings.push(`${student.full_name}: no A-Level scores found for this term.`);
+          warnings.push(
+            exam
+              ? `${student.full_name}: no exam marks on "${exam.name}" for this student.`
+              : `${student.full_name}: no A-Level scores found for this term.`,
+          );
           continue;
         }
         if (payload.division === "Incomplete") {
@@ -256,7 +330,7 @@ export async function generateReportsForClass(classId: string, termId: string) {
             `${student.full_name}: fewer than three subjects with points — division marked Incomplete.`,
           );
         }
-        const id = await upsertAlevelReport(student.id, termId, readiness.academicYearId, payload);
+        const id = await upsertAlevelReport(student.id, termId, ctx.academicYearId, payload);
         reportIds.push(id);
       }
     } catch (e) {
@@ -271,17 +345,49 @@ export async function generateReportsForClass(classId: string, termId: string) {
   if (reportIds.length === 0) {
     throw new HttpError(
       400,
-      "No report cards were created. Ensure students have submitted assessment marks for this term.",
+      exam
+        ? "No report cards were created. Ensure students have marks on the selected exam (and CBC competencies for O-Level)."
+        : "No report cards were created. Ensure students have submitted assessment marks for this term.",
     );
   }
 
   return {
-    track: readiness.track as ReportTrack,
+    track: ctx.track as ReportTrack,
     reportIds,
     count: reportIds.length,
     warnings,
     skipped: students.length - reportIds.length,
+    sourceExamId: exam?.id ?? null,
+    sourceExamName: exam?.name ?? null,
+    usedTermAssessmentsFallback: Boolean(examId && !exam),
   };
+}
+
+function examIdFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.sourceExamId === "string") return p.sourceExamId;
+  const formal = p.formalExam as { examId?: string } | undefined;
+  if (formal && typeof formal.examId === "string") return formal.examId;
+  return null;
+}
+
+async function activeExamIdSet(examIds: string[]): Promise<Set<string>> {
+  if (examIds.length === 0) return new Set();
+  const { rows } = await query<{ id: string }>(
+    `SELECT id FROM exams WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+    [examIds],
+  );
+  return new Set(rows.map((r) => r.id));
+}
+
+function examLinkStatusForPayload(
+  payload: unknown,
+  activeIds: Set<string>,
+): "none" | "active" | "deleted" {
+  const linked = examIdFromPayload(payload);
+  if (!linked) return "none";
+  return activeIds.has(linked) ? "active" : "deleted";
 }
 
 /** @deprecated Use generateReportsForClass — kept for backward compatibility */
@@ -364,6 +470,7 @@ function payloadToCbcPdf(payload: CbcReportPayload): Readable {
       competency: s.competency,
       rating: s.rating,
     })),
+    formalExam: payload.formalExam,
     daysAttended: payload.daysAttended,
     totalDays: payload.totalDays,
     teacherComment: payload.teacherComment,
@@ -380,6 +487,7 @@ function payloadToAlevelPdf(payload: AlevelReportPayload): Readable {
     combination: payload.combination,
     term: payload.termLabel,
     year: payload.yearName,
+    sourceExamName: payload.sourceExamName,
     subjects: payload.subjects.map((s) => ({
       name: s.name,
       score: String(s.score),
@@ -437,14 +545,19 @@ export async function listClassReports(classId: string, termId: string) {
       student_number: string;
       is_approved: boolean;
       computed_at: Date | null;
+      payload: CbcReportPayload | null;
     }>(
-      `SELECT cr.id, cr.student_id, s.full_name, s.student_number, cr.is_approved, cr.computed_at
+      `SELECT cr.id, cr.student_id, s.full_name, s.student_number, cr.is_approved, cr.computed_at, cr.payload
        FROM cbc_report_cards cr
        JOIN students s ON s.id = cr.student_id
        WHERE s.class_id = $1 AND cr.term_id = $2
        ORDER BY s.full_name`,
       [classId, termId],
     );
+    const linkedIds = rows
+      .map((r) => examIdFromPayload(r.payload))
+      .filter((id): id is string => Boolean(id));
+    const activeIds = await activeExamIdSet([...new Set(linkedIds)]);
     return {
       track: "cbc" as const,
       reports: rows.map((r) => ({
@@ -454,6 +567,7 @@ export async function listClassReports(classId: string, termId: string) {
         studentNumber: r.student_number,
         isApproved: Boolean(r.is_approved),
         computedAt: r.computed_at ? new Date(r.computed_at).toISOString() : null,
+        examLinkStatus: examLinkStatusForPayload(r.payload, activeIds),
       })),
     };
   }
@@ -467,15 +581,20 @@ export async function listClassReports(classId: string, termId: string) {
     computed_at: Date | null;
     division: string | null;
     total_points: number | null;
+    payload: AlevelReportPayload | null;
   }>(
     `SELECT ar.id, ar.student_id, s.full_name, s.student_number,
-            ar.is_approved, ar.computed_at, ar.division, ar.total_points
+            ar.is_approved, ar.computed_at, ar.division, ar.total_points, ar.payload
      FROM alevel_results ar
      JOIN students s ON s.id = ar.student_id
      WHERE s.class_id = $1 AND ar.term_id = $2
      ORDER BY s.full_name`,
     [classId, termId],
   );
+  const linkedIds = rows
+    .map((r) => examIdFromPayload(r.payload))
+    .filter((id): id is string => Boolean(id));
+  const activeIds = await activeExamIdSet([...new Set(linkedIds)]);
   return {
     track: "alevel" as const,
     reports: rows.map((r) => ({
@@ -487,6 +606,7 @@ export async function listClassReports(classId: string, termId: string) {
       computedAt: r.computed_at ? new Date(r.computed_at).toISOString() : null,
       division: r.division,
       totalPoints: r.total_points,
+      examLinkStatus: examLinkStatusForPayload(r.payload, activeIds),
     })),
   };
 }

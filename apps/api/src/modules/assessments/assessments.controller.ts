@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
 import { HttpError } from "../../utils/httpError";
-import { assertTeacherOwnsStudentSubject } from "./assessmentAccess";
+import { assertTeacherOwnsClassSubject, assertTeacherOwnsStudentSubject } from "./assessmentAccess";
 import * as svc from "./assessments.service";
 
 const cbcItemSchema = z.object({
@@ -81,13 +81,33 @@ const alevelCommentSchema = z.object({
   headteacherRemark: z.string().optional(),
 });
 
+function isTeachingRole(role: string) {
+  return role === "subject_teacher" || role === "class_teacher";
+}
+
 export async function getCbc(req: Request, res: Response) {
+  const role = req.user?.role ?? "";
+  const classId = req.query["classId"] as string | undefined;
+  const subjectId = req.query["subjectId"] as string | undefined;
+  const yearId = req.query["yearId"] as string | undefined;
+  const termId = req.query["termId"] as string | undefined;
+  if (isTeachingRole(role)) {
+    if (classId && subjectId && yearId) {
+      await assertTeacherOwnsClassSubject(req.user!.id, classId, subjectId, yearId);
+    } else if (!yearId || !termId) {
+      throw new HttpError(
+        400,
+        "Select academic year and term for an overview, or class, subject, and academic year for a specific mark sheet.",
+      );
+    }
+  }
   const rows = await svc.listCbc({
-    classId: req.query["classId"] as string | undefined,
-    subjectId: req.query["subjectId"] as string | undefined,
+    classId,
+    subjectId,
     strandId: req.query["strandId"] as string | undefined,
-    termId: req.query["termId"] as string | undefined,
-    yearId: req.query["yearId"] as string | undefined,
+    termId,
+    yearId,
+    teacherId: isTeachingRole(role) ? req.user!.id : undefined,
   });
   res.json({ success: true, data: rows });
 }
@@ -110,6 +130,10 @@ export async function postCbcBulk(req: Request, res: Response) {
 
 export async function submitCbc(req: Request, res: Response) {
   const body = submitSchema.parse(req.body);
+  const role = req.user!.role;
+  if (isTeachingRole(role)) {
+    await assertTeacherOwnsClassSubject(req.user!.id, body.classId, body.subjectId, body.yearId);
+  }
   await svc.submitCbc(body.subjectId, body.classId, body.termId, body.yearId, req.user!.id);
   res.json({ success: true, data: { submitted: true } });
 }
@@ -182,12 +206,28 @@ export async function getCbcStatus(req: Request, res: Response) {
 }
 
 export async function getAlevel(req: Request, res: Response) {
+  const role = req.user?.role ?? "";
+  const classId = req.query["classId"] as string | undefined;
+  const subjectId = req.query["subjectId"] as string | undefined;
+  const yearId = req.query["yearId"] as string | undefined;
+  const termId = req.query["termId"] as string | undefined;
+  if (isTeachingRole(role)) {
+    if (classId && subjectId && yearId) {
+      await assertTeacherOwnsClassSubject(req.user!.id, classId, subjectId, yearId);
+    } else if (!yearId || !termId) {
+      throw new HttpError(
+        400,
+        "Select academic year and term for an overview, or class, subject, and academic year for a specific mark sheet.",
+      );
+    }
+  }
   const rows = await svc.listAlevel({
-    classId: req.query["classId"] as string | undefined,
-    subjectId: req.query["subjectId"] as string | undefined,
+    classId,
+    subjectId,
     combinationId: req.query["combinationId"] as string | undefined,
-    termId: req.query["termId"] as string | undefined,
-    yearId: req.query["yearId"] as string | undefined,
+    termId,
+    yearId,
+    teacherId: isTeachingRole(role) ? req.user!.id : undefined,
   });
   res.json({ success: true, data: rows });
 }
@@ -210,6 +250,10 @@ export async function postAlevelBulk(req: Request, res: Response) {
 
 export async function submitAlevel(req: Request, res: Response) {
   const body = submitSchema.parse(req.body);
+  const role = req.user!.role;
+  if (isTeachingRole(role)) {
+    await assertTeacherOwnsClassSubject(req.user!.id, body.classId, body.subjectId, body.yearId);
+  }
   await svc.submitAlevel(body.subjectId, body.classId, body.termId, body.yearId, req.user!.id);
   res.json({ success: true, data: { submitted: true } });
 }

@@ -23,5 +23,25 @@ export async function assertTeacherOwnsStudentSubject(
   yearId: string,
 ) {
   const ok = await svc.teacherAssignedToStudentSubject(teacherId, studentId, subjectId, yearId);
-  if (!ok) throw new HttpError(403, "Teacher is not assigned to this student's subject in selected year");
+  if (!ok) {
+    throw new HttpError(
+      403,
+      "You can only enter marks for students in classes where you are the assigned subject teacher.",
+    );
+  }
+}
+
+export async function assertTeacherOwnsClassSubject(
+  teacherId: string,
+  classId: string,
+  subjectId: string,
+  yearId: string,
+) {
+  const ok = await svc.teacherAssignedToClassSubject(teacherId, classId, subjectId, yearId);
+  if (!ok) {
+    throw new HttpError(
+      403,
+      "You can only submit marks for subjects assigned to you on the class timetable.",
+    );
+  }
 }

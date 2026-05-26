@@ -24,8 +24,15 @@ export async function listOpenExams(req: Request, res: Response) {
   res.json({ success: true, data });
 }
 
+export async function listMarkingSlots(req: Request, res: Response) {
+  if (!req.user) throw new HttpError(401, "Please sign in to continue.");
+  const data = await svc.listTeacherMarkingSlots(req.user.id, req.user.role);
+  res.json({ success: true, data });
+}
+
 export async function getExam(req: Request, res: Response) {
-  const data = await svc.getExamById(req.params.id!);
+  if (!req.user) throw new HttpError(401, "Please sign in to continue.");
+  const data = await svc.getExamForTeacher(req.params.id!, req.user.id, req.user.role);
   res.json({ success: true, data });
 }
 
@@ -43,7 +50,7 @@ export async function updateExam(req: Request, res: Response) {
 }
 
 export async function deleteExam(req: Request, res: Response) {
-  await svc.deleteExam(req.params.id!);
+  await svc.deleteExam(req.params.id!, req.user?.id);
   res.json({ success: true, data: { deleted: true } });
 }
 
@@ -69,11 +76,17 @@ export async function listExamSubjects(req: Request, res: Response) {
 }
 
 export async function getExamMarks(req: Request, res: Response) {
+  if (!req.user) throw new HttpError(401, "Please sign in to continue.");
   const subjectId = req.query.subjectId as string | undefined;
   if (!subjectId) {
     throw new HttpError(400, "Please select a subject to view marks.");
   }
-  const data = await svc.listExamMarks(req.params.id!, subjectId);
+  const data = await svc.listExamMarks(
+    req.params.id!,
+    subjectId,
+    req.user.id,
+    req.user.role,
+  );
   res.json({ success: true, data });
 }
 

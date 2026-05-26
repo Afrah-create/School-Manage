@@ -58,6 +58,28 @@ export function useExamsList(filters: {
   });
 }
 
+export type ExamMarkingSlot = {
+  examId: string;
+  examName: string;
+  examDate: string | null;
+  maxScore: number;
+  classId: string;
+  className: string;
+  classStream: string | null;
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  isSubmitted: boolean;
+  canEdit: boolean;
+};
+
+export function useExamMarkingSlots() {
+  return useQuery({
+    queryKey: ["exams", "marking-slots"],
+    queryFn: () => apiGet<ExamMarkingSlot[]>("/exams/marking-slots"),
+  });
+}
+
 export function useOpenExams() {
   return useQuery({
     queryKey: ["exams", "open"],
@@ -94,6 +116,9 @@ export function useExamAdminActions() {
   const qc = useQueryClient();
   const invalidate = async () => {
     await qc.invalidateQueries({ queryKey: ["exams"] });
+    await qc.invalidateQueries({ queryKey: ["reports-exam-options"] });
+    await qc.invalidateQueries({ queryKey: ["reports-readiness"] });
+    await qc.invalidateQueries({ queryKey: ["reports-list"] });
   };
 
   const create = useMutation({

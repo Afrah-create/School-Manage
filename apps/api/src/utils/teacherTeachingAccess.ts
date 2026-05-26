@@ -1,4 +1,5 @@
 import { query } from "../config/db";
+import { HttpError } from "./httpError";
 import { teacherAssignedToClass } from "./classTeacherAssignments";
 
 /** Roles that may be assigned to teach a class–subject slot (subject marks + attendance). */
@@ -14,6 +15,41 @@ export const TEACHING_ASSIGNMENT_ROLES = new Set([
  * - they are explicitly assigned on class_subjects, or
  * - they are the homeroom (class) teacher for that class and the subject is on the class timetable.
  */
+/** True only when this teacher is the assigned subject teacher on class_subjects. */
+export async function teacherIsAssignedSubjectTeacher(
+  teacherId: string,
+  classId: string,
+  subjectId: string,
+  academicYearId: string,
+): Promise<boolean> {
+  const { rows } = await query<{ ok: number }>(
+    `SELECT 1 AS ok
+     FROM class_subjects cs
+     WHERE cs.class_id = $2
+       AND cs.subject_id = $3
+       AND cs.academic_year_id = $4
+       AND cs.teacher_id = $1
+     LIMIT 1`,
+    [teacherId, classId, subjectId, academicYearId],
+  );
+  return Boolean(rows[0]);
+}
+
+export async function assertTeacherIsAssignedSubjectTeacher(
+  teacherId: string,
+  classId: string,
+  subjectId: string,
+  academicYearId: string,
+): Promise<void> {
+  const ok = await teacherIsAssignedSubjectTeacher(teacherId, classId, subjectId, academicYearId);
+  if (!ok) {
+    throw new HttpError(
+      403,
+      "You can only enter or submit marks for subjects assigned to you on the class timetable. Contact the administrator if an assignment is wrong.",
+    );
+  }
+}
+
 export async function teacherCanTeachClassSubject(
   teacherId: string,
   classId: string,

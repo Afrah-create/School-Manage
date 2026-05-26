@@ -36,6 +36,8 @@ export const alevelReportGenerateSchema = z.object({
 export const reportGenerateSchema = z.object({
   classId: z.string().uuid("Please select a class"),
   termId: z.string().uuid("Please select a term"),
+  /** When set, A-Level scores come from this exam; CBC reports add a formal exam results section. */
+  examId: z.string().uuid().optional(),
 });
 
 export const academicYearSchema = z.object({

@@ -39,20 +39,25 @@ export async function teacherAssignedToStudentSubject(
        ON cs.class_id = st.class_id
       AND cs.subject_id = $3
       AND cs.academic_year_id = $4
-     JOIN classes c ON c.id = st.class_id
+      AND cs.teacher_id = $1
      WHERE st.id = $2
-       AND (
-         cs.teacher_id = $1
-         OR c.class_teacher_id = $1
-         OR EXISTS (
-           SELECT 1 FROM class_teacher_assignments cta
-           WHERE cta.class_id = st.class_id
-             AND cta.teacher_id = $1
-             AND cta.academic_year_id = $4
-         )
-       )
      LIMIT 1`,
     [teacherId, studentId, subjectId, yearId],
+  );
+  return Boolean(rows[0]);
+}
+
+export async function teacherAssignedToClassSubject(
+  teacherId: string,
+  classId: string,
+  subjectId: string,
+  yearId: string,
+) {
+  const { rows } = await query<{ ok: number }>(
+    `SELECT 1 AS ok FROM class_subjects
+     WHERE class_id = $2 AND subject_id = $3 AND academic_year_id = $4 AND teacher_id = $1
+     LIMIT 1`,
+    [teacherId, classId, subjectId, yearId],
   );
   return Boolean(rows[0]);
 }
@@ -63,6 +68,7 @@ export async function listCbc(filters: {
   strandId?: string;
   termId?: string;
   yearId?: string;
+  teacherId?: string;
 }) {
   const where: string[] = [];
   const values: unknown[] = [];
@@ -87,7 +93,17 @@ export async function listCbc(filters: {
     where.push(`ac.academic_year_id = $${i++}`);
     values.push(filters.yearId);
   }
+  if (filters.teacherId) {
+    where.push(`cs.teacher_id = $${i++}`);
+    values.push(filters.teacherId);
+  }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const joinCs = filters.teacherId
+    ? `JOIN class_subjects cs
+         ON cs.class_id = st.class_id
+        AND cs.subject_id = ac.subject_id
+        AND cs.academic_year_id = ac.academic_year_id`
+    : "";
   const { rows } = await query(
     `SELECT
       ac.*,
@@ -95,6 +111,7 @@ export async function listCbc(filters: {
       st.student_number
      FROM assessments_cbc ac
      JOIN students st ON st.id = ac.student_id
+     ${joinCs}
      ${clause}
      ORDER BY st.full_name, ac.strand, ac.competency`,
     values,
@@ -320,6 +337,7 @@ export async function listAlevel(filters: {
   combinationId?: string;
   termId?: string;
   yearId?: string;
+  teacherId?: string;
 }) {
   const where: string[] = [];
   const values: unknown[] = [];
@@ -344,7 +362,17 @@ export async function listAlevel(filters: {
     where.push(`aa.academic_year_id = $${i++}`);
     values.push(filters.yearId);
   }
+  if (filters.teacherId) {
+    where.push(`cs.teacher_id = $${i++}`);
+    values.push(filters.teacherId);
+  }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const joinCs = filters.teacherId
+    ? `JOIN class_subjects cs
+         ON cs.class_id = st.class_id
+        AND cs.subject_id = aa.subject_id
+        AND cs.academic_year_id = aa.academic_year_id`
+    : "";
   const { rows } = await query(
     `SELECT
       aa.*,
@@ -354,6 +382,7 @@ export async function listAlevel(filters: {
       sds.division
      FROM assessments_alevel aa
      JOIN students st ON st.id = aa.student_id
+     ${joinCs}
      LEFT JOIN student_division_summary sds
        ON sds.student_id = aa.student_id
       AND sds.term_id = aa.term_id

@@ -17,7 +17,7 @@ import {
 import { apiGet } from "@/lib/api";
 import { combineQueryStatus } from "@/lib/queryStatus";
 
-type TermRow = { id: string; isActive?: boolean; termNumber?: number };
+type TermRow = { id: string; academicYearId: string; isActive?: boolean; termNumber?: number };
 type CbcRow = { submitted?: boolean; id: string };
 type Stu = { id: string; fullName: string; studentNumber: string };
 
@@ -31,9 +31,13 @@ export default function SubjectTeacherDashboardPage() {
         queryFn: async () => {
           const terms = await apiGet<TermRow[]>("/academic/terms");
           const active = terms.find((t) => t.isActive) ?? terms[0] ?? null;
-          if (!active?.id) return { termId: null as string | null, rows: [] as CbcRow[] };
-          const rows = await apiGet<CbcRow[]>(`/assessments/cbc?termId=${encodeURIComponent(active.id)}`);
-          return { termId: active.id, rows };
+          if (!active?.id || !active.academicYearId) {
+            return { termId: null as string | null, yearId: null as string | null, rows: [] as CbcRow[] };
+          }
+          const rows = await apiGet<CbcRow[]>(
+            `/assessments/cbc?termId=${encodeURIComponent(active.id)}&yearId=${encodeURIComponent(active.academicYearId)}`,
+          );
+          return { termId: active.id, yearId: active.academicYearId, rows };
         },
       },
     ],

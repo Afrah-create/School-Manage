@@ -12,10 +12,21 @@ const {
 export async function getReadiness(req: Request, res: Response): Promise<void> {
   const classId = req.query.classId as string | undefined;
   const termId = req.query.termId as string | undefined;
+  const examId = req.query.examId as string | undefined;
   if (!classId || !termId) {
     throw new HttpError(400, "Please select a class and term to check report readiness.");
   }
-  const data = await svc.getReportReadiness(classId, termId);
+  const data = await svc.getReportReadiness(classId, termId, examId);
+  res.json({ success: true, data });
+}
+
+export async function getExamOptions(req: Request, res: Response): Promise<void> {
+  const classId = req.query.classId as string | undefined;
+  const termId = req.query.termId as string | undefined;
+  if (!classId || !termId) {
+    throw new HttpError(400, "Please select a class and term to list exams.");
+  }
+  const data = await svc.listReportExamOptions(classId, termId);
   res.json({ success: true, data });
 }
 
@@ -31,7 +42,7 @@ export async function listReports(req: Request, res: Response): Promise<void> {
 
 export async function generate(req: Request, res: Response): Promise<void> {
   const body = reportGenerateSchema.parse(req.body);
-  const data = await svc.generateReportsForClass(body.classId, body.termId);
+  const data = await svc.generateReportsForClass(body.classId, body.termId, body.examId);
   res.status(201).json({ success: true, data });
 }
 

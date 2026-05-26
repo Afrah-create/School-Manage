@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ExamScoreGrid } from "@/components/exams/ExamScoreGrid";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -19,9 +20,11 @@ import { getApiErrorMessage } from "@/lib/api";
 import { combineQueryStatus, queryStatus } from "@/lib/queryStatus";
 
 export function TeacherExamMarksPanel({ examId }: { examId: string }) {
+  const searchParams = useSearchParams();
+  const subjectFromUrl = searchParams.get("subjectId") ?? "";
   const examQ = useExam(examId);
   const subjectsQ = useExamSubjects(examId);
-  const [subjectId, setSubjectId] = useState("");
+  const [subjectId, setSubjectId] = useState(subjectFromUrl);
   const marksQ = useExamMarks(examId, subjectId || undefined);
   const actions = useExamMarkActions(examId);
   const [feedback, setFeedback] = useState<{ ok?: string; err?: string }>({});
@@ -32,11 +35,21 @@ export function TeacherExamMarksPanel({ examId }: { examId: string }) {
 
   const subjects = subjectsQ.data ?? [];
   const editable = subjects.filter((s) => s.canEdit);
+  const singleSubject = subjects.length === 1;
 
   useEffect(() => {
+    if (subjectFromUrl && subjects.some((s) => s.subjectId === subjectFromUrl)) {
+      setSubjectId(subjectFromUrl);
+      return;
+    }
     if (!subjectId && editable[0]) setSubjectId(editable[0].subjectId);
     else if (!subjectId && subjects[0]) setSubjectId(subjects[0].subjectId);
-  }, [editable, subjects, subjectId]);
+  }, [editable, subjects, subjectId, subjectFromUrl]);
+
+  const subjectLabel = useMemo(() => {
+    const s = subjects.find((x) => x.subjectId === subjectId);
+    return s ? `${s.subjectCode} — ${s.subjectName}` : "";
+  }, [subjects, subjectId]);
 
   const marksStatus = queryStatus(marksQ);
   const metaStatus = combineQueryStatus([examQ, subjectsQ]);
@@ -90,11 +103,20 @@ export function TeacherExamMarksPanel({ examId }: { examId: string }) {
       >
         {subjects.length === 0 ? (
           <Alert tone="info">
-            You have no subjects on this exam, or marking is not available for your assignments.
+            You have no subjects on this exam. Only subjects assigned to you on the class timetable can be
+            marked here.
           </Alert>
+        ) : singleSubject ? (
+          <p className="text-sm">
+            <span className="text-muted-foreground">Subject: </span>
+            <strong>{subjectLabel}</strong>
+            {subjects[0]?.isSubmitted ? (
+              <span className="ml-2 text-xs text-emerald-700 dark:text-emerald-400">(submitted)</span>
+            ) : null}
+          </p>
         ) : (
           <Select
-            label="Subject"
+            label="Your subject"
             options={subjects.map((s) => ({
               value: s.subjectId,
               label: `${s.subjectCode} — ${s.subjectName}${s.isSubmitted ? " (submitted)" : ""}`,

@@ -12,6 +12,7 @@ const admin = requireExamRoles("admin");
 const leads = requireExamRoles("admin", "headteacher");
 const teachers = requireExamRoles("subject_teacher", "class_teacher", "admin", "headteacher");
 
+examsRouter.get("/marking-slots", teachers, asyncHandler(c.listMarkingSlots));
 examsRouter.get("/open", teachers, asyncHandler(c.listOpenExams));
 examsRouter.get("/", leads, asyncHandler(c.listExams));
 examsRouter.post("/", admin, asyncHandler(c.createExam));
