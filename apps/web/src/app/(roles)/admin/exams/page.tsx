@@ -1,29 +1,32 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import type { AcademicYear, ExamSummary, SchoolClass, Term } from "@uganda-cbc-sms/shared";
 import { AdminExamFormModal } from "@/components/exams/AdminExamFormModal";
-import { AdminExamRowActions } from "@/components/exams/AdminExamRowActions";
-import { ExamStatusBadge } from "@/components/exams/ExamStatusBadge";
+import { AdminExamsFilters } from "@/components/exams/AdminExamsFilters";
+import { AdminExamsTable } from "@/components/exams/AdminExamsTable";
 import { ExamWorkflowGuide } from "@/components/exams/ExamWorkflowGuide";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
-import { EmptyState } from "@/components/feedback/EmptyState";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { TableSkeleton } from "@/components/feedback/TableSkeleton";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Select } from "@/components/ui/Select";
-import { Table, type Column } from "@/components/ui/Table";
 import { useExam, useExamAdminActions, useExamsList } from "@/hooks/useExams";
 import { apiGet, getApiErrorMessage } from "@/lib/api";
 import { examArchiveDialogCopy, examArchiveSuccessMessage } from "@/lib/examDeleteCopy";
 import { combineQueryStatus, queryStatus } from "@/lib/queryStatus";
+
+function countByStatus(exams: ExamSummary[]) {
+  return {
+    draft: exams.filter((e) => e.status === "draft").length,
+    open: exams.filter((e) => e.status === "open").length,
+    closed: exams.filter((e) => e.status === "closed").length,
+  };
+}
 
 export default function AdminExamsPage() {
   const router = useRouter();
@@ -64,6 +67,7 @@ export default function AdminExamsPage() {
   const years = yearsQ.data ?? [];
   const terms = termsQ.data ?? [];
   const classes = classesQ.data ?? [];
+  const exams = examsQ.data ?? [];
 
   useEffect(() => {
     if (years[0] && !yearId) setYearId(years[0].id);
@@ -77,6 +81,8 @@ export default function AdminExamsPage() {
     () => (yearId ? classes.filter((c) => c.academicYearId === yearId) : classes),
     [classes, yearId],
   );
+
+  const statusCounts = useMemo(() => countByStatus(exams), [exams]);
 
   const listStatus = queryStatus(examsQ);
   const metaStatus = combineQueryStatus([yearsQ, classesQ]);
@@ -105,175 +111,103 @@ export default function AdminExamsPage() {
     }
   };
 
-  const columns: Column<ExamSummary>[] = [
-    {
-      key: "name",
-      header: "Exam",
-      render: (r) => (
-        <Link
-          className="font-medium text-brand underline"
-          href={`/admin/exams/${r.id}${r.isArchived ? "?archived=1" : ""}`}
-        >
-          {r.name}
-        </Link>
-      ),
-    },
-    {
-      key: "class",
-      header: "Class",
-      render: (r) => (
-        <span>
-          {r.className}
-          {r.classStream ? ` · ${r.classStream}` : ""}
-        </span>
-      ),
-    },
-    { key: "date", header: "Date", render: (r) => r.examDate ?? "—" },
-    { key: "max", header: "Max", render: (r) => String(r.maxScore) },
-    { key: "subjects", header: "Subjects", render: (r) => String(r.subjectCount ?? "—") },
-    { key: "status", header: "Status", render: (r) => <ExamStatusBadge status={r.status} /> },
-    {
-      key: "actions",
-      header: "",
-      render: (r) => (
-        <AdminExamRowActions
-          exam={r}
-          archivedView={tab === "archived"}
-          busy={
-            actions.open.isPending ||
-            actions.close.isPending ||
-            actions.reopen.isPending ||
-            actions.archive.isPending
-          }
-          onEdit={(exam) => {
-            setEditExamId(exam.id);
-            setFormMode("edit");
-          }}
-          onArchive={setArchiveTarget}
-          onOpen={(exam) =>
-            void runAction(`"${exam.name}" is open for marking.`, () => actions.open.mutateAsync(exam.id))
-          }
-          onClose={(exam) =>
-            void runAction(`"${exam.name}" was closed.`, () => actions.close.mutateAsync({ id: exam.id }))
-          }
-          onReopen={(exam) =>
-            void runAction(`"${exam.name}" was reopened.`, () => actions.reopen.mutateAsync(exam.id))
-          }
-        />
-      ),
-    },
-  ];
+  const actionsBusy =
+    actions.open.isPending ||
+    actions.close.isPending ||
+    actions.reopen.isPending ||
+    actions.archive.isPending;
 
   const formOpen = formMode !== null;
   const editExam = formMode === "edit" ? editExamQ.data : undefined;
   const editReady = formMode !== "edit" || Boolean(editExam);
+
+  const listTitle = tab === "archived" ? `Archived exams (${exams.length})` : `Exams (${exams.length})`;
 
   return (
     <PageWrapper
       title="Exams"
       description="Formal assessments: plan, open for teacher marking, close when complete, then link to report cards"
     >
-      {feedback.ok ? <Alert tone="success">{feedback.ok}</Alert> : null}
-      {feedback.err ? <Alert tone="error">{feedback.err}</Alert> : null}
+      <div className="space-y-6">
+        {feedback.ok ? <Alert tone="success">{feedback.ok}</Alert> : null}
+        {feedback.err ? <Alert tone="error">{feedback.err}</Alert> : null}
 
-      <div className="mb-6 space-y-4">
         <ExamWorkflowGuide />
-        <Card title="Filters">
-          <div className="mb-3 flex gap-2 border-b border-border pb-3">
-            <Button
-              type="button"
-              variant={tab === "active" ? "primary" : "secondary"}
-              className="!px-3 !py-1.5 text-sm"
-              onClick={() => setTab("active")}
-            >
-              Active exams
-            </Button>
-            <Button
-              type="button"
-              variant={tab === "archived" ? "primary" : "secondary"}
-              className="!px-3 !py-1.5 text-sm"
-              onClick={() => setTab("archived")}
-            >
-              Archived
-            </Button>
+
+        <Card>
+          <AdminExamsFilters
+            tab={tab}
+            onTabChange={setTab}
+            years={years}
+            yearId={yearId}
+            onYearChange={(id) => {
+              setYearId(id);
+              setTermId("");
+            }}
+            terms={terms}
+            termId={termId}
+            onTermChange={setTermId}
+            classes={filteredClasses}
+            classId={classId}
+            onClassChange={setClassId}
+            statusFilter={statusFilter}
+            onStatusChange={setStatusFilter}
+            showCreate={tab === "active"}
+            onCreate={() => setFormMode("create")}
+          />
+        </Card>
+
+        {tab === "active" && exams.length > 0 && !statusFilter ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Draft</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{statusCounts.draft}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Open</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{statusCounts.open}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Closed</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{statusCounts.closed}</p>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Select
-              label="Academic year"
-              options={years.map((y) => ({ value: y.id, label: y.name }))}
-              value={yearId}
-              onChange={(e) => {
-                setYearId(e.target.value);
-                setTermId("");
+        ) : null}
+
+        <Card title={listTitle}>
+          <AsyncContent
+            status={tableStatus}
+            loading={<TableSkeleton rows={6} cols={6} />}
+            error={<ErrorState message={tableError} onRetry={() => void examsQ.refetch()} />}
+          >
+            <AdminExamsTable
+              exams={exams}
+              archivedView={tab === "archived"}
+              busy={actionsBusy}
+              onEdit={(exam) => {
+                setEditExamId(exam.id);
+                setFormMode("edit");
               }}
-            />
-            <Select
-              label="Term"
-              options={
-                terms.length
-                  ? terms.map((t) => ({ value: t.id, label: `Term ${t.termNumber}` }))
-                  : [{ value: "", label: "Select a year first" }]
+              onArchive={setArchiveTarget}
+              onOpen={(exam) =>
+                void runAction(`"${exam.name}" is open for marking.`, () => actions.open.mutateAsync(exam.id))
               }
-              value={termId}
-              onChange={(e) => setTermId(e.target.value)}
+              onClose={(exam) =>
+                void runAction(`"${exam.name}" was closed.`, () => actions.close.mutateAsync({ id: exam.id }))
+              }
+              onReopen={(exam) =>
+                void runAction(`"${exam.name}" was reopened.`, () => actions.reopen.mutateAsync(exam.id))
+              }
+              emptyTitle={tab === "archived" ? "No archived exams" : "No exams yet"}
+              emptyDescription={
+                tab === "archived"
+                  ? "Archived exams appear here when you retire an exam from active use."
+                  : "Create an exam for a class and term, configure papers, then open it when teachers should enter marks."
+              }
             />
-            <Select
-              label="Class"
-              options={[
-                { value: "", label: "All classes" },
-                ...filteredClasses.map((c) => ({
-                  value: c.id,
-                  label: `${c.name}${c.stream ? ` · ${c.stream}` : ""}`,
-                })),
-              ]}
-              value={classId}
-              onChange={(e) => setClassId(e.target.value)}
-            />
-            {tab === "active" ? (
-              <Select
-                label="Status"
-                options={[
-                  { value: "", label: "All statuses" },
-                  { value: "draft", label: "Draft" },
-                  { value: "open", label: "Open (marking)" },
-                  { value: "closed", label: "Closed" },
-                ]}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              />
-            ) : (
-              <div className="flex items-end text-sm text-muted-foreground">Archived exams only</div>
-            )}
-          </div>
+          </AsyncContent>
         </Card>
       </div>
-
-      {tab === "active" ? (
-        <div className="mb-4 flex justify-end">
-          <Button onClick={() => setFormMode("create")}>Create exam</Button>
-        </div>
-      ) : null}
-
-      <AsyncContent
-        status={tableStatus}
-        loading={<TableSkeleton rows={6} cols={6} />}
-        error={<ErrorState message={tableError} onRetry={() => void examsQ.refetch()} />}
-      >
-        <Table
-          columns={columns as unknown as Column<Record<string, unknown>>[]}
-          rows={(examsQ.data ?? []) as unknown as Record<string, unknown>[]}
-          emptyState={
-            <EmptyState
-              title={tab === "archived" ? "No archived exams" : "No exams yet"}
-              description={
-                tab === "archived"
-                  ? "Archived exams appear here. Archive an active exam when it should no longer be used."
-                  : "Create an exam for a class and term, then open it when teachers should enter marks."
-              }
-            />
-          }
-        />
-      </AsyncContent>
 
       {formOpen && editReady ? (
         <AdminExamFormModal

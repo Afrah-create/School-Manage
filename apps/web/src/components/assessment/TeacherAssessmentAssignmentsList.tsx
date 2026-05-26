@@ -10,6 +10,7 @@ import { TableSkeleton } from "@/components/feedback/TableSkeleton";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { Table, type Column } from "@/components/ui/Table";
+import { TeacherClassAlevelHomeroomPanel } from "@/components/assessment/TeacherClassAlevelHomeroomPanel";
 import {
   useAssessmentAssignments,
   useAssessmentTerms,
@@ -22,12 +23,15 @@ type Props = {
   track: "cbc" | "alevel";
   emptyTitle: string;
   emptyDescription: string;
+  /** Class teachers: division summary and learner comments for their A-Level homeroom class. */
+  showHomeroom?: boolean;
 };
 
 export function TeacherAssessmentAssignmentsList({
   track,
   emptyTitle,
   emptyDescription,
+  showHomeroom,
 }: Props) {
   const pathname = usePathname();
   const roleBase = pathname.includes("/class-teacher/") ? "/class-teacher" : "/subject-teacher";
@@ -50,7 +54,7 @@ export function TeacherAssessmentAssignmentsList({
     setTermId(terms[0]?.id ?? "");
   }, [yearId, terms, termId]);
 
-  const assignments = useAssessmentAssignments(yearId, termId || undefined);
+  const assignments = useAssessmentAssignments(yearId, termId || undefined, track);
   const status = manualStatus({
     loading: assignments.isLoading,
     error: assignments.isError ? assignments.error : undefined,
@@ -98,7 +102,10 @@ export function TeacherAssessmentAssignmentsList({
       key: "action",
       header: "",
       render: (r) => (
-        <Link className="text-sm font-medium text-brand underline" href={entryHref(r)}>
+        <Link
+          className="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-foreground transition-ui hover:bg-accent"
+          href={entryHref(r)}
+        >
           Enter marks
         </Link>
       ),
@@ -123,6 +130,10 @@ export function TeacherAssessmentAssignmentsList({
 
   return (
     <div className="space-y-4">
+      {showHomeroom && track === "alevel" && yearId && termId ? (
+        <TeacherClassAlevelHomeroomPanel yearId={yearId} termId={termId} />
+      ) : null}
+
       <Card title="Assessment period">
         <div className="grid gap-3 sm:grid-cols-2">
           <Select

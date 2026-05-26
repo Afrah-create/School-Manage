@@ -35,18 +35,23 @@ export function useAssessmentTerms(yearId: string | undefined) {
   });
 }
 
-export function useAssessmentAssignments(yearId: string | undefined, termId?: string) {
+export function useAssessmentAssignments(
+  yearId: string | undefined,
+  termId?: string,
+  track?: "cbc" | "alevel",
+) {
   const classesQ = useQuery({
     queryKey: ["academic-classes"],
     queryFn: () => apiGet<SchoolClass[]>("/academic/classes"),
   });
 
   const assignedQ = useQuery({
-    queryKey: ["assessment-subjects-assigned", yearId, termId],
+    queryKey: ["assessment-subjects-assigned", yearId, termId, track],
     queryFn: async () => {
       const qp = new URLSearchParams();
       if (yearId) qp.set("yearId", yearId);
       if (termId) qp.set("termId", termId);
+      if (track) qp.set("track", track);
       const q = qp.toString();
       return apiGet<AssignedApiRow[]>(`/assessments/subjects-assigned${q ? `?${q}` : ""}`);
     },

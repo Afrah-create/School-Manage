@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { computeGradeFromConfiguredScale, computeUNEBGrade } from "@/utils/gradingClient";
@@ -11,15 +11,23 @@ type Student = { id: string; fullName: string; studentNumber: string };
 export function ALevelScoreGrid({
   students,
   gradingScaleRows,
+  initialScores,
+  disabled,
   onSave,
   onSubmit,
 }: {
   students: Student[];
   gradingScaleRows?: GradingScaleRow[];
+  initialScores?: Record<string, string>;
+  disabled?: boolean;
   onSave: (items: Array<{ studentId: string; score: number }>) => Promise<void>;
   onSubmit: () => Promise<void>;
 }) {
-  const [scores, setScores] = useState<Record<string, string>>({});
+  const [scores, setScores] = useState<Record<string, string>>(initialScores ?? {});
+
+  useEffect(() => {
+    if (initialScores) setScores(initialScores);
+  }, [initialScores]);
 
   const parsed = useMemo(
     () =>
@@ -62,6 +70,7 @@ export function ALevelScoreGrid({
                     type="number"
                     min={0}
                     max={100}
+                    disabled={disabled}
                     value={scores[row.id] ?? ""}
                     onChange={(e) => setScores((p) => ({ ...p, [row.id]: e.target.value }))}
                     error={scores[row.id] && !row.valid ? "0-100 only" : undefined}
@@ -74,8 +83,9 @@ export function ALevelScoreGrid({
           </tbody>
         </table>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
+          disabled={disabled}
           onClick={() =>
             void onSave(
               parsed
@@ -84,10 +94,10 @@ export function ALevelScoreGrid({
             )
           }
         >
-          Save Progress
+          Save progress
         </Button>
-        <Button variant="secondary" onClick={() => void onSubmit()}>
-          Submit & Lock
+        <Button variant="secondary" disabled={disabled} onClick={() => void onSubmit()}>
+          Submit & lock
         </Button>
       </div>
     </div>

@@ -547,33 +547,44 @@ export async function alevelStatus(classId: string, termId: string, yearId: stri
   return rows;
 }
 
-export async function subjectsAssigned(teacherId: string, classId?: string, termId?: string, yearId?: string) {
-  const where: string[] = ["(cs.teacher_id = $1 OR c.class_teacher_id = $1)"];
+export async function subjectsAssigned(
+  teacherId: string,
+  opts?: { classId?: string; termId?: string; yearId?: string; track?: "cbc" | "alevel" },
+) {
+  const where: string[] = ["cs.teacher_id = $1"];
   const values: unknown[] = [teacherId];
   let i = 2;
-  if (classId) {
+  if (opts?.classId) {
     where.push(`cs.class_id = $${i++}`);
-    values.push(classId);
+    values.push(opts.classId);
   }
-  if (termId) {
+  if (opts?.termId) {
     where.push(`(cs.term_id = $${i++} OR cs.term_id IS NULL)`);
-    values.push(termId);
+    values.push(opts.termId);
   }
-  if (yearId) {
+  if (opts?.yearId) {
     where.push(`cs.academic_year_id = $${i++}`);
-    values.push(yearId);
+    values.push(opts.yearId);
+  }
+  if (opts?.track === "alevel") {
+    where.push(`c.level = 'A_LEVEL'`);
+  } else if (opts?.track === "cbc") {
+    where.push(`c.level = 'O_LEVEL'`);
   }
   const { rows } = await query(
     `SELECT DISTINCT
       cs.subject_id AS "subjectId",
       s.name AS "subjectName",
       s.code AS "subjectCode",
-      cs.class_id AS "classId"
+      cs.class_id AS "classId",
+      c.name AS "className",
+      c.stream AS "classStream",
+      c.level AS "classLevel"
      FROM class_subjects cs
      JOIN subjects s ON s.id = cs.subject_id
      JOIN classes c ON c.id = cs.class_id
      WHERE ${where.join(" AND ")}
-     ORDER BY s.code`,
+     ORDER BY c.name, c.stream NULLS LAST, s.code`,
     values,
   );
   return rows;

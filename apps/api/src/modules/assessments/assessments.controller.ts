@@ -101,13 +101,15 @@ export async function getCbc(req: Request, res: Response) {
       );
     }
   }
+  const markSheet =
+    Boolean(classId && subjectId && termId && yearId) && isTeachingRole(role);
   const rows = await svc.listCbc({
     classId,
     subjectId,
     strandId: req.query["strandId"] as string | undefined,
     termId,
     yearId,
-    teacherId: isTeachingRole(role) ? req.user!.id : undefined,
+    teacherId: isTeachingRole(role) && !markSheet ? req.user!.id : undefined,
   });
   res.json({ success: true, data: rows });
 }
@@ -221,13 +223,15 @@ export async function getAlevel(req: Request, res: Response) {
       );
     }
   }
+  const markSheet =
+    Boolean(classId && subjectId && termId && yearId) && isTeachingRole(role);
   const rows = await svc.listAlevel({
     classId,
     subjectId,
     combinationId: req.query["combinationId"] as string | undefined,
     termId,
     yearId,
-    teacherId: isTeachingRole(role) ? req.user!.id : undefined,
+    teacherId: isTeachingRole(role) && !markSheet ? req.user!.id : undefined,
   });
   res.json({ success: true, data: rows });
 }
@@ -311,12 +315,15 @@ export async function getAlevelStatus(req: Request, res: Response) {
 }
 
 export async function getSubjectsAssigned(req: Request, res: Response) {
-  const rows = await svc.subjectsAssigned(
-    req.user!.id,
-    req.query["classId"] as string | undefined,
-    req.query["termId"] as string | undefined,
-    req.query["yearId"] as string | undefined,
-  );
+  const trackRaw = req.query["track"] as string | undefined;
+  const track =
+    trackRaw === "alevel" || trackRaw === "cbc" ? (trackRaw as "alevel" | "cbc") : undefined;
+  const rows = await svc.subjectsAssigned(req.user!.id, {
+    classId: req.query["classId"] as string | undefined,
+    termId: req.query["termId"] as string | undefined,
+    yearId: req.query["yearId"] as string | undefined,
+    track,
+  });
   res.json({ success: true, data: rows });
 }
 
