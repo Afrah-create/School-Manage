@@ -570,6 +570,9 @@ export async function subjectsAssigned(
     where.push(`c.level = 'A_LEVEL'`);
   } else if (opts?.track === "cbc") {
     where.push(`c.level = 'O_LEVEL'`);
+    where.push(
+      `EXISTS (SELECT 1 FROM cbc_strands st WHERE st.subject_id = cs.subject_id)`,
+    );
   }
   const { rows } = await query(
     `SELECT DISTINCT

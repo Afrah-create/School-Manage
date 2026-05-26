@@ -7,7 +7,7 @@ export default function SubjectTeacherCbcListPage() {
   return (
     <PageWrapper
       title="CBC assessment"
-      description="Each row is a class–subject you are assigned to teach. Open a row to enter competency ratings for the term."
+      description="Term competency ratings (A–D) for O-Level subjects with CBC strands configured. Formal exams are under Exams."
     >
       <TeacherAssessmentAssignmentsList
         track="cbc"

@@ -54,9 +54,13 @@ export type ReportReadiness = {
     status: string;
   }>;
   subjectTracking: SubjectSubmissionTrack[];
+  /** Full class timetable tracking when term list is narrowed for a linked exam. */
+  allSubjectTracking?: SubjectSubmissionTrack[];
   submittedCount: number;
   pendingCount: number;
   totalSubjects: number;
+  /** Exam papers on the linked formal exam (CBC); term CBC not required for these. */
+  examPaperSubjectCount?: number;
   ready: boolean;
   pendingSubjectCodes: string[];
   teachersPending: Array<{
@@ -114,7 +118,8 @@ export function useReportExamOptions(classId: string | undefined, termId: string
         `/reports/exam-options?classId=${encodeURIComponent(classId!)}&termId=${encodeURIComponent(termId!)}`,
       ),
     enabled: Boolean(classId && termId),
-    staleTime: 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData,
   });
 }
 

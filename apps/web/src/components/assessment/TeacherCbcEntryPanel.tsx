@@ -24,10 +24,12 @@ type StrandRow = {
   competencies?: string[];
 };
 
+function roleBase(pathname: string): "/class-teacher" | "/subject-teacher" {
+  return pathname.includes("/class-teacher/") ? "/class-teacher" : "/subject-teacher";
+}
+
 function cbcListHref(pathname: string) {
-  return pathname.includes("/class-teacher/")
-    ? "/class-teacher/assessment/cbc"
-    : "/subject-teacher/assessment/cbc";
+  return `${roleBase(pathname)}/assessment/cbc`;
 }
 
 export function TeacherCbcEntryPanel() {
@@ -92,7 +94,9 @@ export function TeacherCbcEntryPanel() {
   });
 
   const submitted = Boolean(
-    (cbcQ.data as Array<{ submitted?: boolean }> | undefined)?.some((r) => r.submitted),
+    (cbcQ.data as Array<{ is_submitted?: boolean; submitted?: boolean }> | undefined)?.some(
+      (r) => r.is_submitted === true || r.submitted === true,
+    ),
   );
 
   if (!contextReady) {
@@ -147,8 +151,18 @@ export function TeacherCbcEntryPanel() {
       >
         {activeStrands.length === 0 ? (
           <Alert tone="info">
-            No CBC strands are configured for this subject. Ask an administrator to add strands under Academic → CBC
-            strands.
+            <p>
+              No CBC strands are configured for this subject, so term competency ratings cannot be entered here.
+              Ask an administrator to add strands under <strong>Academic → CBC strands</strong> if you need term
+              CBC marks.
+            </p>
+            <p className="mt-2">
+              If you need to enter <strong>formal exam</strong> scores (e.g. MT III), use{" "}
+              <Link href={`${roleBase(pathname)}/exams`} className="font-medium text-brand hover:underline">
+                Exams
+              </Link>{" "}
+              — not CBC Assessment.
+            </p>
           </Alert>
         ) : students.length === 0 ? (
           <Alert tone="info">No students are enrolled in this class.</Alert>

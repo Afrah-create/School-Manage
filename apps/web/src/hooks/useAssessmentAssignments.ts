@@ -18,6 +18,8 @@ type AssignedApiRow = {
   subjectId: string;
   subjectName: string;
   subjectCode: string;
+  className?: string;
+  classStream?: string | null;
 };
 
 export function useAssessmentYears() {
@@ -64,8 +66,8 @@ export function useAssessmentAssignments(
     const cls = classById.get(r.classId);
     return {
       classId: r.classId,
-      className: cls?.name ?? "Class",
-      classStream: cls?.stream ?? null,
+      className: r.className ?? cls?.name ?? "Class",
+      classStream: r.classStream ?? cls?.stream ?? null,
       subjectId: r.subjectId,
       subjectName: r.subjectName,
       subjectCode: r.subjectCode,

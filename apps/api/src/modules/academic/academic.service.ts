@@ -636,7 +636,19 @@ export type TeacherAssignmentRow = {
 export async function getTeacherAssignments(
   teacherId: string,
   academicYearId: string,
+  filters?: { classId?: string; level?: string },
 ): Promise<TeacherAssignmentRow[]> {
+  const values: unknown[] = [teacherId, academicYearId];
+  const where: string[] = ["cs.teacher_id = $1", "cs.academic_year_id = $2"];
+  let i = 3;
+  if (filters?.classId) {
+    where.push(`cs.class_id = $${i++}`);
+    values.push(filters.classId);
+  }
+  if (filters?.level) {
+    where.push(`c.level = $${i++}`);
+    values.push(filters.level);
+  }
   const { rows } = await query(
     `SELECT
        cs.id AS class_subject_id,
@@ -650,10 +662,9 @@ export async function getTeacherAssignments(
      JOIN subjects s ON s.id = cs.subject_id
      LEFT JOIN terms t ON t.id = cs.term_id
      JOIN academic_years ay ON ay.id = cs.academic_year_id
-     WHERE cs.teacher_id = $1
-       AND cs.academic_year_id = $2
+     WHERE ${where.join(" AND ")}
      ORDER BY c.name, c.stream, s.name`,
-    [teacherId, academicYearId],
+    values,
   );
   return rows.map((r) => {
     const x = r as Record<string, unknown>;
@@ -698,9 +709,10 @@ export type TeachersWorkloadSummary = {
 
 export async function getTeachersWorkloadSummary(
   academicYearId: string,
-  classId?: string,
+  filters?: { classId?: string; level?: string },
 ): Promise<TeachersWorkloadSummary> {
-  const classFilter = classId ?? null;
+  const classFilter = filters?.classId ?? null;
+  const levelFilter = filters?.level ?? null;
 
   const { rows: slotRows } = await query<{
     total: number;
@@ -709,12 +721,14 @@ export async function getTeachersWorkloadSummary(
   }>(
     `SELECT
        COUNT(*)::int AS total,
-       COUNT(*) FILTER (WHERE teacher_id IS NOT NULL)::int AS assigned,
-       COUNT(*) FILTER (WHERE teacher_id IS NULL)::int AS unassigned
-     FROM class_subjects
-     WHERE academic_year_id = $1
-       AND ($2::uuid IS NULL OR class_id = $2::uuid)`,
-    [academicYearId, classFilter],
+       COUNT(*) FILTER (WHERE cs.teacher_id IS NOT NULL)::int AS assigned,
+       COUNT(*) FILTER (WHERE cs.teacher_id IS NULL)::int AS unassigned
+     FROM class_subjects cs
+     JOIN classes c ON c.id = cs.class_id
+     WHERE cs.academic_year_id = $1
+       AND ($2::uuid IS NULL OR cs.class_id = $2::uuid)
+       AND ($3::text IS NULL OR c.level = $3::text)`,
+    [academicYearId, classFilter, levelFilter],
   );
   const slots = slotRows[0] ?? { total: 0, assigned: 0, unassigned: 0 };
 
@@ -734,12 +748,18 @@ export async function getTeachersWorkloadSummary(
        ON cs.teacher_id = u.id
       AND cs.academic_year_id = $1
       AND ($2::uuid IS NULL OR cs.class_id = $2::uuid)
+     LEFT JOIN classes c ON c.id = cs.class_id
      WHERE u.deleted_at IS NULL
        AND u.is_active = true
        AND u.role = ANY($3::text[])
+       AND (
+         cs.id IS NULL
+         OR $4::text IS NULL
+         OR c.level = $4::text
+       )
      GROUP BY u.id, u.full_name, u.role
      ORDER BY assignment_count DESC, u.full_name`,
-    [academicYearId, classFilter, TEACHING_STAFF_ROLES],
+    [academicYearId, classFilter, TEACHING_STAFF_ROLES, levelFilter],
   );
 
   const teachers = rows.map((r) => ({
@@ -1021,7 +1041,7 @@ export async function assertTeacherCanTeachClassSubjects(
 
 export async function getUnassignedClassSubjects(
   academicYearId: string,
-  filters?: { classId?: string; teacherId?: string },
+  filters?: { classId?: string; teacherId?: string; level?: string },
 ): Promise<UnassignedClassSubjectRow[]> {
   const values: unknown[] = [academicYearId];
   const where: string[] = ["cs.teacher_id IS NULL", "cs.academic_year_id = $1"];
@@ -1029,6 +1049,10 @@ export async function getUnassignedClassSubjects(
   if (filters?.classId) {
     where.push(`cs.class_id = $${i++}`);
     values.push(filters.classId);
+  }
+  if (filters?.level) {
+    where.push(`c.level = $${i++}`);
+    values.push(filters.level);
   }
   if (filters?.teacherId) {
     where.push(teacherEligibilitySql(`$${i++}`));

@@ -10,7 +10,9 @@ import { TableSkeleton } from "@/components/feedback/TableSkeleton";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { Table, type Column } from "@/components/ui/Table";
+import { TeacherAssessmentScopeNote } from "@/components/assessment/TeacherAssessmentScopeNote";
 import { TeacherClassAlevelHomeroomPanel } from "@/components/assessment/TeacherClassAlevelHomeroomPanel";
+import { useExamMarkingSlots } from "@/hooks/useExams";
 import {
   useAssessmentAssignments,
   useAssessmentTerms,
@@ -34,7 +36,9 @@ export function TeacherAssessmentAssignmentsList({
   showHomeroom,
 }: Props) {
   const pathname = usePathname();
-  const roleBase = pathname.includes("/class-teacher/") ? "/class-teacher" : "/subject-teacher";
+  const roleBase: "/class-teacher" | "/subject-teacher" = pathname.includes("/class-teacher/")
+    ? "/class-teacher"
+    : "/subject-teacher";
   const entryPath = `${roleBase}/assessment/${track}/entry`;
   const yearsQ = useAssessmentYears();
   const [yearId, setYearId] = useState("");
@@ -53,6 +57,10 @@ export function TeacherAssessmentAssignmentsList({
     if (termId && terms.some((t) => t.id === termId)) return;
     setTermId(terms[0]?.id ?? "");
   }, [yearId, terms, termId]);
+
+  const examSlotsQ = useExamMarkingSlots();
+  const openExamCount =
+    track === "cbc" ? (examSlotsQ.data?.filter((s) => s.canEdit).length ?? 0) : undefined;
 
   const assignments = useAssessmentAssignments(yearId, termId || undefined, track);
   const status = manualStatus({
@@ -134,6 +142,12 @@ export function TeacherAssessmentAssignmentsList({
         <TeacherClassAlevelHomeroomPanel yearId={yearId} termId={termId} />
       ) : null}
 
+      <TeacherAssessmentScopeNote
+        track={track}
+        roleBase={roleBase}
+        openExamCount={openExamCount}
+      />
+
       <Card title="Assessment period">
         <div className="grid gap-3 sm:grid-cols-2">
           <Select
@@ -167,7 +181,21 @@ export function TeacherAssessmentAssignmentsList({
             onRetry={() => void assignments.refetch()}
           />
         }
-        empty={<EmptyState title={emptyTitle} description={emptyDescription} />}
+        empty={
+          <EmptyState
+            title={emptyTitle}
+            description={
+              track === "cbc"
+                ? `${emptyDescription} Formal exam papers for subjects you teach are listed under Exams.`
+                : emptyDescription
+            }
+            action={
+              track === "cbc"
+                ? { label: "Go to Exams", href: `${roleBase}/exams` }
+                : undefined
+            }
+          />
+        }
       >
         <Table
           columns={columns as unknown as Column<Record<string, unknown>>[]}

@@ -143,11 +143,17 @@ export const bulkAssignTeacherSchema = z.object({
   classSubjectIds: z.array(z.string().uuid()).min(1, "Select at least one class-subject row"),
 });
 
+const academicLevelQuerySchema = z
+  .enum(["o_level", "a_level", "O_LEVEL", "A_LEVEL"])
+  .transform((v) => (v === "o_level" ? "O_LEVEL" : v === "a_level" ? "A_LEVEL" : v))
+  .optional();
+
 /** Query: teacher assignments or unassigned list */
 export const teacherAssignmentsQuerySchema = z.object({
   academicYearId: z.string().uuid(),
   classId: z.string().uuid().optional(),
   teacherId: z.string().uuid().optional(),
+  level: academicLevelQuerySchema,
 });
 
 /** Query: teachers eligible to teach given subject(s) in a class context */

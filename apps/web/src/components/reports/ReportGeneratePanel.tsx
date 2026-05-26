@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SchoolClass } from "@uganda-cbc-sms/shared";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -21,12 +21,23 @@ import {
   useReportReadiness,
   type ClassReportRow,
   type ExamSubjectTrack,
+  type ReportExamOption,
+  type ReportReadiness,
   type SubjectSubmissionTrack,
 } from "@/hooks/useReports";
 import { getApiErrorMessage } from "@/lib/api";
 import { queryStatus } from "@/lib/queryStatus";
 
 type MarksSource = "term" | "exam";
+
+function pickDefaultExam(exams: ReportExamOption[]): ReportExamOption | undefined {
+  return (
+    exams.find((e) => e.isDefault && e.readyForReports) ??
+    exams.find((e) => e.readyForReports) ??
+    exams.find((e) => e.isDefault) ??
+    exams[0]
+  );
+}
 
 function examTrackingAsSubjectRows(rows: ExamSubjectTrack[]): SubjectSubmissionTrack[] {
   return rows.map((t) => ({
@@ -43,6 +54,21 @@ function examTrackingAsSubjectRows(rows: ExamSubjectTrack[]): SubjectSubmissionT
     status: t.status === "not_applicable" ? "submitted" : t.status,
     lastSubmittedAt: null,
   }));
+}
+
+function examSubmissionTrackerPayload(data: ReportReadiness): ReportReadiness {
+  const tracking = examTrackingAsSubjectRows(data.examTracking ?? []);
+  const submitted = tracking.filter((r) => r.status === "submitted").length;
+  const pending = tracking.filter((r) => r.status !== "submitted").length;
+  return {
+    ...data,
+    subjectTracking: tracking,
+    submittedCount: submitted,
+    totalSubjects: tracking.length,
+    pendingCount: pending,
+    teachersPending: [],
+    ready: Boolean(data.examReady),
+  };
 }
 
 export function ReportGeneratePanel({
@@ -62,50 +88,57 @@ export function ReportGeneratePanel({
   const [marksSource, setMarksSource] = useState<MarksSource>(initialMarksSource ?? "term");
   const [examId, setExamId] = useState(initialExamId ?? "");
   const [setAsOfficial, setSetAsOfficial] = useState(true);
+  const userPickedSource = useRef(false);
+  const appliedInitialExam = useRef(false);
+  const contextKey = useRef(`${classId}:${termId}`);
 
   const examsQ = useReportExamOptions(classId, termId);
   const exams = useMemo(() => examsQ.data ?? [], [examsQ.data]);
-
-  useEffect(() => {
-    if (!initialExamId || examsQ.isLoading) return;
-    if (exams.some((e) => e.id === initialExamId)) {
-      setMarksSource("exam");
-      setExamId(initialExamId);
-    } else {
-      setMarksSource("term");
-      setExamId("");
-    }
-  }, [initialExamId, exams, examsQ.isLoading]);
-
   const examsLoaded = !examsQ.isLoading && examsQ.isFetched;
-  const selectedExamValid = Boolean(examsLoaded && examId && exams.some((e) => e.id === examId));
-  const staleExamSelection = marksSource === "exam" && Boolean(examId) && examsLoaded && !selectedExamValid;
 
+  /** Reset when class/term context changes (not on every exam list refetch). */
   useEffect(() => {
-    if (!examsLoaded || marksSource !== "exam") return;
-    if (selectedExamValid) return;
-    if (exams.length === 0) {
-      setMarksSource("term");
-      setExamId("");
-      return;
-    }
+    const nextKey = `${classId}:${termId}`;
+    if (contextKey.current === nextKey) return;
+    contextKey.current = nextKey;
+    userPickedSource.current = false;
+    appliedInitialExam.current = false;
     setMarksSource("term");
     setExamId("");
-  }, [examsLoaded, marksSource, selectedExamValid, exams.length]);
+  }, [classId, termId]);
 
+  /** Deep link from an exam detail page — apply once per class/term context. */
   useEffect(() => {
-    if (marksSource !== "exam" || !examsLoaded || examId) return;
-    if (exams.length === 0) {
+    if (!initialExamId || !examsLoaded || appliedInitialExam.current || userPickedSource.current) return;
+    if (!exams.some((e) => e.id === initialExamId)) return;
+    appliedInitialExam.current = true;
+    setMarksSource("exam");
+    setExamId(initialExamId);
+  }, [initialExamId, examsLoaded, exams, classId, termId]);
+
+  const examInList = Boolean(examId && exams.some((e) => e.id === examId));
+  const selectedExamValid = Boolean(examsLoaded && examInList);
+  const staleExamSelection = marksSource === "exam" && Boolean(examId) && examsLoaded && !examInList;
+
+  const onMarksSourceChange = (next: MarksSource) => {
+    userPickedSource.current = true;
+    if (next === "term") {
       setMarksSource("term");
+      setExamId("");
       return;
     }
-    const pick =
-      exams.find((e) => e.isDefault && e.readyForReports) ??
-      exams.find((e) => e.readyForReports) ??
-      exams.find((e) => e.isDefault) ??
-      exams[0];
+    if (!exams.length) return;
+    const pick = pickDefaultExam(exams);
+    setMarksSource("exam");
     setExamId(pick?.id ?? "");
-  }, [marksSource, examsLoaded, examId, exams]);
+  };
+
+  const onExamChange = (id: string) => {
+    userPickedSource.current = true;
+    setExamId(id);
+    if (id) setMarksSource("exam");
+    else if (exams.length) setExamId(pickDefaultExam(exams)?.id ?? "");
+  };
 
   const readinessExamId =
     marksSource === "exam" && examId ? examId : undefined;
@@ -128,7 +161,7 @@ export function ReportGeneratePanel({
   const isAlevel = listQ.data?.track === "alevel" || readinessQ.data?.track === "alevel";
   const isCbc = !isAlevel;
   const termReady = readinessQ.data?.termReady ?? readinessQ.data?.ready;
-  const selectedExam = selectedExamValid ? exams.find((e) => e.id === examId) : undefined;
+  const selectedExam = examInList ? exams.find((e) => e.id === examId) : undefined;
   const examNotClosed = !useTermOnly && Boolean(readinessQ.data?.examNotClosed);
   const examReadyForRelease = Boolean(selectedExam?.readyForReports);
   const reports = listQ.data?.reports ?? [];
@@ -142,10 +175,7 @@ export function ReportGeneratePanel({
 
   const examTrackingDisplay = useMemo(() => {
     if (useTermOnly || !readinessQ.data?.examTracking?.length) return null;
-    return {
-      ...readinessQ.data,
-      subjectTracking: examTrackingAsSubjectRows(readinessQ.data.examTracking),
-    };
+    return examSubmissionTrackerPayload(readinessQ.data);
   }, [readinessQ.data, useTermOnly]);
 
   const columns: Column<ClassReportRow>[] = [
@@ -311,15 +341,16 @@ export function ReportGeneratePanel({
               { value: "exam", label: "Formal exam" },
             ]}
             value={marksSource}
-            onChange={(e) => setMarksSource(e.target.value as MarksSource)}
+            onChange={(e) => onMarksSourceChange(e.target.value as MarksSource)}
           />
           {marksSource === "exam" ? (
             <div className="space-y-2">
               <Select
                 label="Official formal exam"
                 options={examOptions}
-                value={selectedExamValid ? examId : ""}
-                onChange={(e) => setExamId(e.target.value)}
+                value={examInList ? examId : ""}
+                disabled={!exams.length || examsQ.isLoading}
+                onChange={(e) => onExamChange(e.target.value)}
               />
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input
@@ -382,8 +413,10 @@ export function ReportGeneratePanel({
         {marksSource === "exam" && isCbc ? (
           <div className="mt-3">
             <Alert tone="info">
-              O-Level reports include <strong>competency ratings</strong> from term assessments plus a{" "}
-              <strong>formal exam results</strong> section. Both must be ready before release.
+              O-Level reports combine <strong>term CBC competencies</strong> (subjects not on the exam) with{" "}
+              <strong>formal exam marks</strong> for each exam paper. Subjects on{" "}
+              <strong>{readinessQ.data?.defaultExamName ?? selectedExam?.name ?? "the selected exam"}</strong> do
+              not need a separate term submission.
             </Alert>
           </div>
         ) : null}
@@ -413,7 +446,7 @@ export function ReportGeneratePanel({
               <strong>Assessment</strong> for S1 B / Term 1.
             </>
           ) : marksSource === "exam" && isCbc
-              ? "Required for CBC competencies on the report card."
+              ? "Only class subjects that are not on the formal exam need term CBC submission here."
               : marksSource === "exam" && isAlevel
                 ? "Not used for scores when releasing from an exam (comments only)."
                 : "Track which teachers have submitted term marks before you release report cards."}
@@ -446,13 +479,28 @@ export function ReportGeneratePanel({
             </div>
           ) : readinessQ.data && marksSource === "exam" && isCbc ? (
             <div className="space-y-4">
+              {(readinessQ.data.examPaperSubjectCount ?? 0) > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  <strong>{readinessQ.data.examPaperSubjectCount}</strong> subject
+                  {readinessQ.data.examPaperSubjectCount === 1 ? "" : "s"} on the formal exam use exam marks
+                  only
+                  {readinessQ.data.totalSubjects > 0
+                    ? `; ${readinessQ.data.totalSubjects} still need term CBC below.`
+                    : " — no additional term CBC submission is required."}
+                </p>
+              ) : null}
               {readinessQ.data.pendingCount > 0 ? (
                 <Alert tone="info">
                   {readinessQ.data.pendingCount} term subject
                   {readinessQ.data.pendingCount === 1 ? "" : "s"} still need submission.
                 </Alert>
+              ) : readinessQ.data.totalSubjects === 0 &&
+                (readinessQ.data.examPaperSubjectCount ?? 0) > 0 ? (
+                <Alert tone="success">
+                  All class subjects are on the formal exam — term CBC submission is not required.
+                </Alert>
               ) : (
-                <Alert tone="success">All term assessment subjects submitted.</Alert>
+                <Alert tone="success">All required term assessment subjects are submitted.</Alert>
               )}
               <MarksSubmissionTracker data={readinessQ.data} />
             </div>
@@ -540,7 +588,7 @@ export function ReportGeneratePanel({
                     : marksSource === "exam" && !selectedExamValid
                       ? "Select the official exam for this class and term."
                       : marksSource === "exam" && isCbc
-                        ? "Complete term assessments and the formal exam, then try again."
+                        ? "Complete term CBC for subjects not on the exam, and ensure the formal exam is closed and submitted."
                         : marksSource === "exam"
                           ? "Submit all subjects on the exam, close it, then try again."
                           : "Submit all subject assessments for this class and term, then try again."}

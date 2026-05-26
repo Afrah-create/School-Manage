@@ -78,8 +78,8 @@ export function TeacherExamMarkingList({ basePath }: { basePath: string }) {
       }
       empty={
         <EmptyState
-          title="No exams for your subjects"
-          description="When an administrator opens an exam that includes a subject you teach, it will appear here."
+          title="No open exams for your subjects"
+          description="When an administrator opens a formal exam and you are the assigned subject teacher on the class timetable, your papers appear here for score entry."
         />
       }
     >

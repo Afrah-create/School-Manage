@@ -153,15 +153,21 @@ export default function SubjectTeacherDashboardPage() {
               <div className="space-y-2 text-sm">
                 <Link
                   className="block text-blue-600 hover:underline dark:text-blue-400"
+                  href="/subject-teacher/exams"
+                >
+                  Open exams (formal marking)
+                </Link>
+                <Link
+                  className="block text-blue-600 hover:underline dark:text-blue-400"
                   href="/subject-teacher/assessment/cbc"
                 >
-                  CBC assessment
+                  CBC assessment (term competencies)
                 </Link>
                 <Link
                   className="block text-blue-600 hover:underline dark:text-blue-400"
                   href="/subject-teacher/assessment/alevel"
                 >
-                  A-Level assessment
+                  A-Level assessment (term scores)
                 </Link>
               </div>
             </DashboardPanel>

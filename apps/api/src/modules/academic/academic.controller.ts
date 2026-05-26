@@ -220,11 +220,12 @@ export async function getTeachersWorkloadSummary(req: Request, res: Response): P
   const queryParams = teacherAssignmentsQuerySchema.parse(req.query) as {
     academicYearId: string;
     classId?: string;
+    level?: string;
   };
-  const data = await svc.getTeachersWorkloadSummary(
-    queryParams.academicYearId,
-    queryParams.classId,
-  );
+  const data = await svc.getTeachersWorkloadSummary(queryParams.academicYearId, {
+    classId: queryParams.classId,
+    level: queryParams.level,
+  });
   res.json({
     success: true,
     data,
@@ -233,10 +234,17 @@ export async function getTeachersWorkloadSummary(req: Request, res: Response): P
 }
 
 export async function getTeacherWorkload(req: Request, res: Response): Promise<void> {
-  const queryParams = teacherAssignmentsQuerySchema.parse(req.query) as { academicYearId: string };
+  const queryParams = teacherAssignmentsQuerySchema.parse(req.query) as {
+    academicYearId: string;
+    classId?: string;
+    level?: string;
+  };
   const teacherId = req.params["teacherId"]!;
-  const assignments = await svc.getTeacherAssignments(teacherId, queryParams.academicYearId);
-  const totalCount = await svc.getTeacherAssignmentCount(teacherId, queryParams.academicYearId);
+  const assignments = await svc.getTeacherAssignments(teacherId, queryParams.academicYearId, {
+    classId: queryParams.classId,
+    level: queryParams.level,
+  });
+  const totalCount = assignments.length;
   res.json({
     success: true,
     data: { assignments, totalCount },
@@ -249,10 +257,12 @@ export async function getUnassignedClassSubjects(req: Request, res: Response): P
     academicYearId: string;
     classId?: string;
     teacherId?: string;
+    level?: string;
   };
   const unassigned = await svc.getUnassignedClassSubjects(queryParams.academicYearId, {
     classId: queryParams.classId,
     teacherId: queryParams.teacherId,
+    level: queryParams.level,
   });
   res.json({
     success: true,

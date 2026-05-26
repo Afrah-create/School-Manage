@@ -1,19 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { AcademicYear, SchoolClass } from "@uganda-cbc-sms/shared";
+import { AcademicLevelScope } from "@/components/academic/AcademicLevelScope";
 import {
   TeacherWorkloadChart,
   type TeacherWorkloadSummary,
 } from "@/components/academic/TeacherWorkloadChart";
+import { TeacherTeachableSubjectsPanel } from "@/components/academic/TeacherTeachableSubjectsPanel";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { Table, type Column } from "@/components/ui/Table";
+import { useAcademicLevelScope } from "@/hooks/useAcademicLevelScope";
 import { useTeachingStaff } from "@/hooks/useTeachingStaff";
+import {
+  classDisplayName,
+  filterClassesByLevel,
+  levelLabel,
+  levelShortLabel,
+} from "@/lib/academicLevel";
 import { apiGet, apiPost } from "@/lib/api";
 
 type TeacherAssignment = {
@@ -43,12 +53,14 @@ const REMOVE_BTN =
   "inline-flex items-center rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground transition-ui hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function AdminTeacherAssignmentsPage() {
+  const searchParams = useSearchParams();
+  const { level, setLevel, hrefWithLevel } = useAcademicLevelScope("O_LEVEL");
   const { staff: teachers, options: teacherOptions, loading: staffLoading } = useTeachingStaff();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
-  const [academicYearId, setAcademicYearId] = useState("");
+  const [academicYearId, setAcademicYearId] = useState(searchParams.get("academicYearId") ?? "");
   const [classFilterId, setClassFilterId] = useState("");
-  const [teacherId, setTeacherId] = useState("");
+  const [teacherId, setTeacherId] = useState(searchParams.get("teacherId") ?? "");
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
   const [unassigned, setUnassigned] = useState<UnassignedRow[]>([]);
   const [selectedUnassigned, setSelectedUnassigned] = useState<string[]>([]);
@@ -60,12 +72,28 @@ export default function AdminTeacherAssignmentsPage() {
   const [workloadSummary, setWorkloadSummary] = useState<TeacherWorkloadSummary | null>(null);
   const [workloadLoading, setWorkloadLoading] = useState(true);
 
+  const levelClasses = useMemo(
+    () => filterClassesByLevel(classes, level, academicYearId),
+    [classes, level, academicYearId],
+  );
+
   const classFilterOptions = useMemo(
     () => [
-      { value: "", label: "All classes" },
-      ...classes.map((c) => ({ value: c.id, label: `${c.name} ${c.stream}` })),
+      { value: "", label: `All ${levelShortLabel(level)} classes` },
+      ...levelClasses.map((c) => ({ value: c.id, label: classDisplayName(c) })),
     ],
-    [classes],
+    [levelClasses, level],
+  );
+
+  useEffect(() => {
+    if (classFilterId && !levelClasses.some((c) => c.id === classFilterId)) {
+      setClassFilterId("");
+    }
+  }, [classFilterId, levelClasses]);
+
+  const selectedTeacher = useMemo(
+    () => teachers.find((t) => t.id === teacherId) ?? null,
+    [teachers, teacherId],
   );
 
   const loadLookups = async (): Promise<{ yearId: string; teacherIdResolved: string }> => {
@@ -83,23 +111,18 @@ export default function AdminTeacherAssignmentsPage() {
     return { yearId, teacherIdResolved };
   };
 
-  const loadTeacherDataWith = async (yId: string, tId: string) => {
+  const loadTeacherDataWith = async (yId: string, tId: string, classId?: string) => {
     if (!yId || !tId) {
       setAssignments([]);
       return;
     }
+    const q = new URLSearchParams({ academicYearId: yId, level });
+    const resolvedClassId = classId ?? classFilterId;
+    if (resolvedClassId) q.set("classId", resolvedClassId);
     const data = await apiGet<{ assignments: TeacherAssignment[]; totalCount: number }>(
-      `/academic/teachers/${encodeURIComponent(tId)}/assignments?academicYearId=${encodeURIComponent(yId)}`,
+      `/academic/teachers/${encodeURIComponent(tId)}/assignments?${q.toString()}`,
     );
-    let rows = data.assignments;
-    if (classFilterId) {
-      const cls = classes.find((c) => c.id === classFilterId);
-      if (cls) {
-        const label = `${cls.name} ${cls.stream}`;
-        rows = rows.filter((r) => `${r.className} ${r.classStream}` === label);
-      }
-    }
-    setAssignments(rows);
+    setAssignments(data.assignments);
   };
 
   const loadWorkloadSummaryWith = async (yId: string, classId?: string) => {
@@ -107,7 +130,7 @@ export default function AdminTeacherAssignmentsPage() {
       setWorkloadSummary(null);
       return;
     }
-    const q = new URLSearchParams({ academicYearId: yId });
+    const q = new URLSearchParams({ academicYearId: yId, level });
     if (classId) q.set("classId", classId);
     const data = await apiGet<TeacherWorkloadSummary>(`/academic/workload-summary?${q.toString()}`);
     setWorkloadSummary(data);
@@ -118,7 +141,7 @@ export default function AdminTeacherAssignmentsPage() {
       setUnassigned([]);
       return;
     }
-    const q = new URLSearchParams({ academicYearId: yId });
+    const q = new URLSearchParams({ academicYearId: yId, level });
     if (classId) q.set("classId", classId);
     if (tId) q.set("teacherId", tId);
     const data = await apiGet<{ unassigned: UnassignedRow[]; count: number }>(
@@ -151,6 +174,31 @@ export default function AdminTeacherAssignmentsPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffLoading]);
+
+  useEffect(() => {
+    if (staffLoading || loading || !academicYearId) return;
+    void refreshForLevelChange();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level]);
+
+  const refreshForLevelChange = async () => {
+    if (!academicYearId) return;
+    setSectionBusy(true);
+    setWorkloadLoading(true);
+    setErr(null);
+    try {
+      await Promise.all([
+        loadTeacherDataWith(academicYearId, teacherId),
+        loadUnassignedWith(academicYearId, teacherId || undefined, classFilterId || undefined),
+        loadWorkloadSummaryWith(academicYearId, classFilterId || undefined),
+      ]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to refresh level data");
+    } finally {
+      setSectionBusy(false);
+      setWorkloadLoading(false);
+    }
+  };
 
   const refreshForYearChange = async (yearId: string) => {
     setSectionBusy(true);
@@ -328,12 +376,15 @@ export default function AdminTeacherAssignmentsPage() {
 
   return (
     <PageWrapper
-      title="Teacher workload"
-      description="Assign subject teachers to class offerings for the academic year (Uganda CBC / UNEB structure)"
+      title="Subject teachers"
+      description={`Single place to set teachable subjects and assign ${levelShortLabel(level)} class–subject slots`}
     >
-      <div className="mb-3">
-        <Link href="/admin/academic" className="text-sm font-medium text-brand hover:underline">
-          ← Back to Academic
+      <div className="mb-3 flex flex-wrap items-center gap-4">
+        <Link href={hrefWithLevel("/admin/academic/assignments")} className="text-sm font-medium text-brand hover:underline">
+          ← Teaching assignments
+        </Link>
+        <Link href="/admin/academic" className="text-sm text-muted-foreground hover:text-foreground">
+          Academic hub
         </Link>
       </div>
       <div className="mb-4 space-y-2">
@@ -341,10 +392,19 @@ export default function AdminTeacherAssignmentsPage() {
         {err ? <Alert tone="error">{err}</Alert> : null}
       </div>
 
+      <Card title="School level">
+        <AcademicLevelScope
+          level={level}
+          onLevelChange={setLevel}
+          description={`Showing ${levelLabel(level)} classes and eligible teachers only.`}
+        />
+      </Card>
+
       <Card title="Filters">
         <p className="mb-3 text-sm text-muted-foreground">
-          First assign subjects to each class under Class-subject assignments, then allocate teachers here.
-          Only teachers registered for a subject (or without specializations yet) appear for that slot.
+          This is the only page for assigning teachers to class–subject slots. Step 2 (Class subjects) adds subjects
+          to the timetable; assign the teacher here. Teachable-subject qualifications are managed below for the
+          selected teacher.
         </p>
         <div className="grid gap-3 md:grid-cols-3">
           <Select
@@ -379,6 +439,21 @@ export default function AdminTeacherAssignmentsPage() {
           />
         </div>
       </Card>
+
+      {teacherId &&
+      selectedTeacher &&
+      (selectedTeacher.role === "subject_teacher" || selectedTeacher.role === "class_teacher") ? (
+        <Card title="Teachable subjects (qualifications)">
+          <TeacherTeachableSubjectsPanel
+            teacherId={teacherId}
+            teacherName={selectedTeacher.fullName}
+            highlightLevel={level}
+            onSaved={() => {
+              void loadUnassignedWith(academicYearId, teacherId, classFilterId || undefined);
+            }}
+          />
+        </Card>
+      ) : null}
 
       <Card title="Workload overview">
         <TeacherWorkloadChart

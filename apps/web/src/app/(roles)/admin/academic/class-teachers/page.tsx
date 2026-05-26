@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { AcademicYear, SchoolClass } from "@uganda-cbc-sms/shared";
+import { AcademicLevelScope } from "@/components/academic/AcademicLevelScope";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +12,12 @@ import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { Table, type Column } from "@/components/ui/Table";
 import { useTeachingStaff } from "@/hooks/useTeachingStaff";
+import { useAcademicLevelScope } from "@/hooks/useAcademicLevelScope";
+import {
+  classDisplayName,
+  filterClassesByLevel,
+  levelShortLabel,
+} from "@/lib/academicLevel";
 import { apiGet, apiPut } from "@/lib/api";
 
 type ClassTeacherAssignment = {
@@ -35,6 +42,7 @@ export default function AdminClassTeachersPage() {
   const searchParams = useSearchParams();
   const initialClassId = searchParams.get("classId") ?? "";
   const initialYearId = searchParams.get("academicYearId") ?? "";
+  const { level, setLevel, hrefWithLevel } = useAcademicLevelScope("O_LEVEL");
   const { staff, loading: staffLoading } = useTeachingStaff();
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
@@ -49,11 +57,18 @@ export default function AdminClassTeachersPage() {
   const [ok, setOk] = useState<string | null>(null);
 
   const classOptions = useMemo(() => {
-    const filtered = academicYearId
-      ? classes.filter((c) => c.academicYearId === academicYearId)
-      : classes;
-    return filtered.map((c) => ({ value: c.id, label: `${c.name} ${c.stream}` }));
-  }, [classes, academicYearId]);
+    const filtered = filterClassesByLevel(
+      academicYearId ? classes.filter((c) => c.academicYearId === academicYearId) : classes,
+      level,
+    );
+    return filtered.map((c) => ({ value: c.id, label: classDisplayName(c) }));
+  }, [classes, academicYearId, level]);
+
+  useEffect(() => {
+    if (classId && !classOptions.some((o) => o.value === classId)) {
+      setClassId(classOptions[0]?.value ?? "");
+    }
+  }, [classId, classOptions]);
 
   const teacherChecklist = useMemo(
     () =>
@@ -70,7 +85,10 @@ export default function AdminClassTeachersPage() {
     setClasses(c);
     const yearId = academicYearId || initialYearId || y[0]?.id || "";
     if (yearId && yearId !== academicYearId) setAcademicYearId(yearId);
-    const yearClasses = yearId ? c.filter((x) => x.academicYearId === yearId) : c;
+    const yearClasses = filterClassesByLevel(
+      yearId ? c.filter((x) => x.academicYearId === yearId) : c,
+      level,
+    );
     const pickClass =
       (initialClassId && yearClasses.find((x) => x.id === initialClassId)) ||
       yearClasses[0];
@@ -149,11 +167,17 @@ export default function AdminClassTeachersPage() {
   return (
     <PageWrapper
       title="Class teachers"
-      description="Assign multiple teachers to each class. One homeroom teacher leads the class with the board."
+      description={`Step 1 — assign homeroom and class teachers for ${levelShortLabel(level)} classes`}
     >
-      <div className="mb-3">
-        <Link href="/admin/academic" className="text-sm font-medium text-brand hover:underline">
-          ← Back to Academic
+      <div className="mb-3 flex flex-wrap items-center gap-4">
+        <Link
+          href={hrefWithLevel("/admin/academic/assignments", { academicYearId })}
+          className="text-sm font-medium text-brand hover:underline"
+        >
+          ← Teaching assignments
+        </Link>
+        <Link href="/admin/academic" className="text-sm text-muted-foreground hover:text-foreground">
+          Academic hub
         </Link>
       </div>
       <div className="mb-4 space-y-2">
@@ -161,11 +185,20 @@ export default function AdminClassTeachersPage() {
         {err ? <Alert tone="error">{err}</Alert> : null}
       </div>
 
+      <div className="mb-4">
+        <Card title="School level">
+          <AcademicLevelScope
+            level={level}
+            onLevelChange={setLevel}
+            description={`Only ${levelShortLabel(level)} classes appear below. Switch level to configure the other track.`}
+          />
+        </Card>
+      </div>
+
       <Card title="Select class">
         <p className="mb-3 text-sm text-muted-foreground">
-          A class may have many teachers. The homeroom teacher is the class head for reports and leadership; other
-          teachers support the same learners. Subject teaching load is still managed under Class subjects and Teacher
-          workload.
+          A class may have many teachers. The homeroom teacher is the class head for reports and leadership. Subject
+          teaching is managed in steps 2 and 3 on the teaching assignments page.
         </p>
         <div className="grid gap-3 md:grid-cols-2">
           <Select
@@ -184,6 +217,15 @@ export default function AdminClassTeachersPage() {
             onChange={(e) => setClassId(e.target.value)}
           />
         </div>
+        {classOptions.length === 0 && academicYearId ? (
+          <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+            No {levelShortLabel(level)} classes for this year. Create them under{" "}
+            <Link href={hrefWithLevel("/admin/academic/classes")} className="font-medium text-brand hover:underline">
+              Classes
+            </Link>
+            .
+          </p>
+        ) : null}
       </Card>
 
       <Card title="Assign teachers">

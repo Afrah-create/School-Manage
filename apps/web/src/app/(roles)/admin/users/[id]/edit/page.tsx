@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -14,8 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
-import type { Subject } from "@uganda-cbc-sms/shared";
-import { apiGet, apiPatch, apiPut } from "@/lib/api";
+import { apiGet, apiPatch } from "@/lib/api";
 
 type Form = z.infer<typeof updateUserSchema>;
 type UserDetail = {
@@ -37,9 +37,6 @@ export default function AdminUsersEditPage() {
   const [loading, setLoading] = useState(true);
   const [systemAccount, setSystemAccount] = useState(false);
   const [notes, setNotes] = useState("");
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [specializationIds, setSpecializationIds] = useState<string[]>([]);
-  const [specLoading, setSpecLoading] = useState(false);
 
   const form = useForm<Form>({
     resolver: zodResolver(updateUserSchema),
@@ -57,10 +54,7 @@ export default function AdminUsersEditPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [user, subjectCatalog] = await Promise.all([
-          apiGet<UserDetail>(`/users/${encodeURIComponent(id)}`),
-          apiGet<Subject[]>("/academic/subjects"),
-        ]);
+        const user = await apiGet<UserDetail>(`/users/${encodeURIComponent(id)}`);
         form.reset({
           fullName: user.fullName,
           email: user.email,
@@ -69,20 +63,6 @@ export default function AdminUsersEditPage() {
         });
         setSystemAccount(Boolean(user.systemAccount));
         setNotes(user.notes ?? "");
-        setSubjects(subjectCatalog);
-        if (user.role === "subject_teacher" || user.role === "class_teacher") {
-          setSpecLoading(true);
-          try {
-            const specs = await apiGet<{ subjectId: string }[]>(
-              `/academic/teachers/${encodeURIComponent(id)}/specializations`,
-            );
-            setSpecializationIds(specs.map((s) => s.subjectId));
-          } catch {
-            setSpecializationIds([]);
-          } finally {
-            setSpecLoading(false);
-          }
-        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Failed to load user");
       } finally {
@@ -102,11 +82,6 @@ export default function AdminUsersEditPage() {
         isActive: v.isActive,
       });
       await apiPatch(`/users/${encodeURIComponent(id)}/notes`, { notes });
-      if (v.role === "subject_teacher" || v.role === "class_teacher") {
-        await apiPut(`/academic/teachers/${encodeURIComponent(id)}/specializations`, {
-          subjectIds: specializationIds,
-        });
-      }
       setOk("User updated successfully.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to update user");
@@ -157,45 +132,18 @@ export default function AdminUsersEditPage() {
               />
             </div>
             {showSpecializations ? (
-              <div className="rounded-md border border-border p-3">
-                <p className="mb-2 text-sm font-medium text-foreground">Teachable subjects</p>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  Subject teachers: subjects they may teach across classes. Class teachers: optional subjects
-                  outside their homeroom class — they can always teach any subject offered to the class they head.
-                  Leave empty to allow any subject at the matching level until specializations are set.
+              <div className="rounded-md border border-border bg-muted/20 p-3">
+                <p className="text-sm font-medium text-foreground">Teachable subjects & workload</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Manage O-Level and A-Level qualifications and class–subject assignments on the Subject teachers
+                  page — one place for all teacher–subject setup.
                 </p>
-                {specLoading ? (
-                  <p className="text-sm text-muted-foreground">Loading specializations…</p>
-                ) : (
-                  <div className="max-h-48 space-y-2 overflow-auto">
-                    {(["O_LEVEL", "A_LEVEL"] as const).map((level) => {
-                      const levelSubjects = subjects.filter((s) => s.level === level);
-                      if (levelSubjects.length === 0) return null;
-                      return (
-                        <div key={level}>
-                          <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-                            {level === "O_LEVEL" ? "O-Level (CBC)" : "A-Level (UNEB)"}
-                          </p>
-                          {levelSubjects.map((s) => (
-                            <label key={s.id} className="flex items-center gap-2 py-0.5 text-sm">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded border-border"
-                                checked={specializationIds.includes(s.id)}
-                                onChange={(e) =>
-                                  setSpecializationIds((prev) =>
-                                    e.target.checked ? [...prev, s.id] : prev.filter((x) => x !== s.id),
-                                  )
-                                }
-                              />
-                              {s.code} — {s.name}
-                            </label>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <Link
+                  href={`/admin/academic/teacher-assignments?teacherId=${encodeURIComponent(id)}`}
+                  className="mt-3 inline-flex text-sm font-medium text-brand hover:underline"
+                >
+                  Open Subject teachers →
+                </Link>
               </div>
             ) : null}
             <div>

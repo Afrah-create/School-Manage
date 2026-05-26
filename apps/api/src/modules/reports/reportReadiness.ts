@@ -297,10 +297,28 @@ export async function listSubjectSubmissionTracking(
   });
 }
 
+export async function listExamPaperSubjectIds(examId: string): Promise<string[]> {
+  const { rows } = await query<{ subject_id: string }>(
+    `SELECT subject_id FROM exam_subjects WHERE exam_id = $1`,
+    [examId],
+  );
+  return rows.map((r) => r.subject_id);
+}
+
+/** Term CBC is not required for subjects that have a paper on the linked formal exam. */
+export function termTrackingExcludingExamPapers(
+  subjectTracking: SubjectSubmissionTrack[],
+  examPaperSubjectIds: string[],
+): SubjectSubmissionTrack[] {
+  if (examPaperSubjectIds.length === 0) return subjectTracking;
+  const onExam = new Set(examPaperSubjectIds);
+  return subjectTracking.filter((s) => !onExam.has(s.subjectId));
+}
+
 export async function assertReportReadiness(
   classId: string,
   termId: string,
-  options?: { allowPartial?: boolean },
+  options?: { allowPartial?: boolean; linkedExamId?: string },
 ) {
   const ctx = await getClassContext(classId, termId);
 
@@ -328,12 +346,22 @@ export async function assertReportReadiness(
     );
   }
 
-  const pending = subjectTracking.filter((s) => s.status !== "submitted");
+  let requiredTracking = subjectTracking;
+  if (options?.linkedExamId && ctx.track === "cbc") {
+    const examPaperIds = await listExamPaperSubjectIds(options.linkedExamId);
+    requiredTracking = termTrackingExcludingExamPapers(subjectTracking, examPaperIds);
+  }
+
+  const pending = requiredTracking.filter((s) => s.status !== "submitted");
   if (pending.length > 0 && !options?.allowPartial) {
     const names = pending.map((s) => s.subjectCode).join(", ");
+    const examHint =
+      options?.linkedExamId && ctx.track === "cbc"
+        ? " (Subjects on the formal exam use exam marks instead of term CBC.)"
+        : "";
     throw new HttpError(
       400,
-      `Report cards cannot be generated yet. These subjects still need submitted marks: ${names}. Follow up with the teachers listed in submission tracking.`,
+      `Report cards cannot be generated yet. These subjects still need submitted term assessment marks: ${names}.${examHint} Follow up with the teachers listed in submission tracking.`,
     );
   }
 

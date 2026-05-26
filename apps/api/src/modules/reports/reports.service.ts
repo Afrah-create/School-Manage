@@ -8,6 +8,8 @@ import {
 } from "./reportCompiler";
 import {
   assertReportReadiness,
+  listExamPaperSubjectIds,
+  termTrackingExcludingExamPapers,
   getClassContext,
   listSubjectReadiness,
   listSubjectSubmissionTracking,
@@ -90,9 +92,6 @@ export async function getReportReadiness(classId: string, termId: string, examId
     ),
   ]);
 
-  const pending = subjectTracking.filter((s) => s.status !== "submitted");
-  const submitted = subjectTracking.filter((s) => s.status === "submitted");
-
   const [examOptions, termDefault] = await Promise.all([
     listExamsForReportOptions(classId, termId),
     getTermReportDefault(classId, termId),
@@ -104,15 +103,31 @@ export async function getReportReadiness(classId: string, termId: string, examId
 
   let examTracking: Awaited<ReturnType<typeof listExamSubjectTracking>> | undefined;
   let examReady = false;
+  let examPaperSubjectIds: string[] = [];
   if (activeLinkedExamId) {
     examTracking = await listExamSubjectTracking(activeLinkedExamId, activeStudents);
     const subjectsSubmitted =
       examTracking.length > 0 && examTracking.every((t) => t.status === "submitted");
     examReady = subjectsSubmitted && !examNotClosed;
+    if (ctx.track === "cbc") {
+      examPaperSubjectIds = await listExamPaperSubjectIds(activeLinkedExamId);
+    }
   }
 
+  const termSubjectTracking =
+    examPaperSubjectIds.length > 0
+      ? termTrackingExcludingExamPapers(subjectTracking, examPaperSubjectIds)
+      : subjectTracking;
+
+  const pending = termSubjectTracking.filter((s) => s.status !== "submitted");
+  const submitted = termSubjectTracking.filter((s) => s.status === "submitted");
+
   const termReady =
-    pending.length === 0 && activeStudents > 0 && subjectTracking.length > 0;
+    activeStudents > 0 &&
+    pending.length === 0 &&
+    (ctx.track === "cbc" && activeLinkedExamId
+      ? termSubjectTracking.length > 0 || examPaperSubjectIds.length > 0
+      : subjectTracking.length > 0);
 
   let ready = termReady;
   if (examLinkInvalid) {
@@ -154,10 +169,12 @@ export async function getReportReadiness(classId: string, termId: string, examId
     termNumber: ctx.termNumber,
     activeStudents,
     subjects,
-    subjectTracking,
+    subjectTracking: termSubjectTracking,
+    allSubjectTracking: subjectTracking,
     submittedCount: submitted.length,
     pendingCount: pending.length,
-    totalSubjects: subjectTracking.length,
+    totalSubjects: termSubjectTracking.length,
+    examPaperSubjectCount: examPaperSubjectIds.length,
     ready,
     pendingSubjectCodes: pending.map((s) => s.subjectCode),
     teachersPending: [...teachersPending.values()],
@@ -349,7 +366,7 @@ export async function generateReportsForClass(
   }
 
   if (exam && ctx.track === "cbc") {
-    await assertReportReadiness(classId, termId);
+    await assertReportReadiness(classId, termId, { linkedExamId: exam.id });
   } else if (!exam) {
     await assertReportReadiness(classId, termId);
   } else {
