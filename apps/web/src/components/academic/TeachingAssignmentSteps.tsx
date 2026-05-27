@@ -47,10 +47,17 @@ export function TeachingAssignmentSteps({
       href: hrefWithLevel("/admin/academic/teacher-assignments", yearQ),
       cta: "Subject teachers",
     },
+    {
+      n: 4,
+      title: "Weekly timetable",
+      body: `Schedule when each ${track} class–subject slot occurs (periods and days). Publish for teachers.`,
+      href: hrefWithLevel("/admin/academic/timetable", yearQ),
+      cta: "Timetable builder",
+    },
   ];
 
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {steps.map((s) => (
         <Card key={s.n}>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Step {s.n}</p>

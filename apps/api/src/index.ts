@@ -14,6 +14,7 @@ import { academicRouter } from "./modules/academic/academic.routes";
 import { feesRouter } from "./modules/fees/fees.routes";
 import { reportsRouter } from "./modules/reports/reports.routes";
 import { studentsRouter } from "./modules/students/students.routes";
+import { timetableRouter } from "./modules/timetable/timetable.routes";
 import { usersRouter } from "./modules/users/users.routes";
 
 // Load API-local env first, then workspace root env as fallback.
@@ -43,6 +44,7 @@ app.use("/api/assessments", assessmentsRouter);
 app.use("/api/exams", examsRouter);
 app.use("/api/fees", feesRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/timetable", timetableRouter);
 app.use("/api/analytics", analyticsRouter);
 
 app.use((_req, res) => {

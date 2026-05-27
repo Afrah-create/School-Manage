@@ -79,7 +79,7 @@ export default function AdminAcademicHubPage() {
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-foreground">Teaching assignments</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          Assign class teachers and subject teachers in a clear 3-step flow. O-Level (CBC) and A-Level (UNEB) are
+          Assign class teachers, subject teachers, and weekly timetables in a clear 4-step flow. O-Level (CBC) and A-Level (UNEB) are
           configured separately — switch level on the assignments page.
         </p>
         <div className="grid gap-4 md:grid-cols-2">
@@ -150,6 +150,14 @@ export default function AdminAcademicHubPage() {
             <li>
               <strong className="font-medium text-foreground">Subject teachers</strong> — who teaches each
               class–subject slot (marks, exams, assessments).
+            </li>
+            <li>
+              <strong className="font-medium text-foreground">Weekly timetable</strong> — when each lesson occurs;
+              publish for teachers on{" "}
+              <Link href="/admin/academic/timetable" className="text-brand hover:underline">
+                Timetable builder
+              </Link>
+              .
             </li>
           </ol>
         </Card>
