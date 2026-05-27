@@ -13,3 +13,20 @@ attendanceRouter.post(
   asyncHandler(c.postAttendance),
 );
 attendanceRouter.get("/", asyncHandler(c.getAttendance));
+attendanceRouter.get("/register", asyncHandler(c.getAttendanceRegister));
+attendanceRouter.put(
+  "/register",
+  requireRoles("class_teacher", "subject_teacher", "admin", "headteacher"),
+  asyncHandler(c.putAttendanceRegister),
+);
+attendanceRouter.post(
+  "/register/submit",
+  requireRoles("class_teacher", "subject_teacher", "admin", "headteacher"),
+  asyncHandler(c.postAttendanceRegisterSubmit),
+);
+attendanceRouter.get("/range", asyncHandler(c.getAttendanceRange));
+attendanceRouter.get(
+  "/admin/overview",
+  requireRoles("admin", "headteacher"),
+  asyncHandler(c.getAttendanceAdminOverview),
+);

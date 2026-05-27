@@ -84,6 +84,55 @@ export const attendanceSchema = z.object({
   status: z.enum(["present", "absent", "late"]),
 });
 
+export const attendanceStatusSchema = z.enum(["present", "absent", "late"]);
+
+export const attendanceRegisterQuerySchema = z.object({
+  classId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const attendanceRegisterRowSchema = z.object({
+  studentId: z.string().uuid(),
+  status: attendanceStatusSchema,
+});
+
+export const attendanceRegisterSaveSchema = z.object({
+  classId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  rows: z.array(attendanceRegisterRowSchema).min(1),
+});
+
+export const attendanceRegisterSubmitSchema = attendanceRegisterQuerySchema;
+
+export const attendanceRangeQuerySchema = z.object({
+  classId: z.string().uuid(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+const optionalUuidFilter = z
+  .string()
+  .uuid()
+  .optional()
+  .or(z.literal(""))
+  .transform((v) => (v === "" || v === undefined ? undefined : v));
+
+export const attendanceAdminOverviewQuerySchema = z
+  .object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    academicYearId: optionalUuidFilter,
+    classId: optionalUuidFilter,
+    level: z
+      .enum(["o_level", "a_level", "O_LEVEL", "A_LEVEL"])
+      .optional()
+      .transform((v) => {
+        if (!v) return undefined;
+        return v === "o_level" || v === "O_LEVEL" ? "O_LEVEL" : "A_LEVEL";
+      }),
+  })
+  .refine((q) => q.from <= q.to, { message: "from must be on or before to" });
+
 export const STUDENT_BROWSE_STATUSES = ["active", "transferred", "withdrawn", "all"] as const;
 
 export const studentBrowseQuerySchema = z.object({
@@ -105,4 +154,11 @@ export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 export type PromoteStudentsInput = z.infer<typeof promoteStudentsSchema>;
 export type WithdrawStudentInput = z.infer<typeof withdrawStudentSchema>;
 export type AttendanceInput = z.infer<typeof attendanceSchema>;
+export type AttendanceStatus = z.infer<typeof attendanceStatusSchema>;
+export type AttendanceRegisterQuery = z.infer<typeof attendanceRegisterQuerySchema>;
+export type AttendanceRegisterRowInput = z.infer<typeof attendanceRegisterRowSchema>;
+export type AttendanceRegisterSaveInput = z.infer<typeof attendanceRegisterSaveSchema>;
+export type AttendanceRegisterSubmitInput = z.infer<typeof attendanceRegisterSubmitSchema>;
+export type AttendanceRangeQuery = z.infer<typeof attendanceRangeQuerySchema>;
+export type AttendanceAdminOverviewQuery = z.infer<typeof attendanceAdminOverviewQuerySchema>;
 export type StudentBrowseQuery = z.infer<typeof studentBrowseQuerySchema>;
