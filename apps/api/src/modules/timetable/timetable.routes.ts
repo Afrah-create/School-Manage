@@ -26,6 +26,7 @@ timetableRouter.put("/templates/:id/periods", leads, asyncHandler(c.replacePerio
 timetableRouter.get("/templates/:id/days", leads, asyncHandler(c.getDays));
 timetableRouter.put("/templates/:id/days", leads, asyncHandler(c.replaceDays));
 timetableRouter.get("/templates/:id/class-subjects", leads, asyncHandler(c.getClassSubjects));
+timetableRouter.get("/templates/:id/slot-occupancy", leads, asyncHandler(c.getSlotOccupancy));
 timetableRouter.get("/templates/:id/grid", leads, asyncHandler(c.getGrid));
 timetableRouter.put("/templates/:id/grid/class/:classId", leads, asyncHandler(c.saveClassGrid));
 timetableRouter.post("/templates/:id/validate", leads, asyncHandler(c.validateTemplate));

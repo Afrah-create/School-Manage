@@ -13,6 +13,7 @@ const {
   timetablePeriodsBulkSchema,
   timetablePublishSchema,
   timetableBrowseQuerySchema,
+  timetableSlotOccupancyQuerySchema,
   timetableTemplateQuerySchema,
 } = sharedSchemas;
 
@@ -137,6 +138,17 @@ export async function getClassSubjects(req: Request, res: Response): Promise<voi
   const id = String(req.params["id"] ?? "");
   const q = timetableClassSubjectsQuerySchema.parse(req.query);
   const data = await svc.listClassSubjectsForTemplate(id, q.classId);
+  res.json({ success: true, data });
+}
+
+export async function getSlotOccupancy(req: Request, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return;
+  }
+  const id = String(req.params["id"] ?? "");
+  const q = timetableSlotOccupancyQuerySchema.parse(req.query);
+  const data = await svc.getSlotOccupancy(id, q.excludeClassId);
   res.json({ success: true, data });
 }
 

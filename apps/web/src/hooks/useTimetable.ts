@@ -13,6 +13,7 @@ import type {
   TimetableBrowseQuery,
   TimetablePublicationLogEntry,
   TimetablePublishInput,
+  TimetableSlotOccupancyView,
   TimetableTemplate,
   TimetableTemplateOverview,
   TimetableTemplateQuery,
@@ -109,6 +110,18 @@ export function useTimetableClassSubjects(templateId: string, classId: string) {
         `/timetable/templates/${encodeURIComponent(templateId)}/class-subjects?classId=${encodeURIComponent(classId)}`,
       ),
     enabled: Boolean(templateId && classId),
+  });
+}
+
+export function useTimetableSlotOccupancy(templateId: string, excludeClassId: string) {
+  return useQuery({
+    queryKey: ["timetable-slot-occupancy", templateId, excludeClassId],
+    queryFn: () =>
+      apiGet<TimetableSlotOccupancyView>(
+        `/timetable/templates/${encodeURIComponent(templateId)}/slot-occupancy?excludeClassId=${encodeURIComponent(excludeClassId)}`,
+      ),
+    enabled: Boolean(templateId && excludeClassId),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -231,7 +244,10 @@ export function useTimetableMutations(scope: TimetableScope) {
         `/timetable/templates/${encodeURIComponent(templateId)}/grid/class/${encodeURIComponent(classId)}`,
         payload,
       ),
-    onSuccess: (_, v) => void invalidateAll(v.templateId),
+    onSuccess: (_, v) => {
+      void invalidateAll(v.templateId);
+      void qc.invalidateQueries({ queryKey: ["timetable-slot-occupancy", v.templateId] });
+    },
   });
 
   const validate = useMutation({

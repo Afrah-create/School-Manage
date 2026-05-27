@@ -10,6 +10,8 @@ import type {
   TimetablePeriod,
   TimetablePeriodsBulkInput,
   TimetablePublicationLogEntry,
+  TimetableSlotOccupancyView,
+  TimetableSlotOccupant,
   TimetablePublishInput,
   TimetableTemplate,
   TimetableTemplateOverview,
@@ -185,6 +187,73 @@ export async function listTemplates(filters: TimetableTemplateQuery): Promise<Ti
   return Promise.all(rows.map((r) => mapTemplate(r as TemplateRow)));
 }
 
+async function findActivePublishedTemplate(
+  academicYearId: string,
+  termId: string,
+  level: "O_LEVEL" | "A_LEVEL",
+): Promise<TemplateRow | null> {
+  const { rows } = await query(
+    `SELECT *
+     FROM timetable_templates
+     WHERE academic_year_id = $1
+       AND term_id = $2
+       AND level = ANY($3::text[])
+       AND status = 'published'
+     ORDER BY version DESC, updated_at DESC
+     LIMIT 1`,
+    [academicYearId, termId, levelSqlVariants(level)],
+  );
+  return (rows[0] as TemplateRow | undefined) ?? null;
+}
+
+async function copyClassEntriesFromPublishedIfEmpty(
+  draftTemplateId: string,
+  classId: string,
+): Promise<void> {
+  const draftRow = await getTemplateRow(draftTemplateId);
+  if (draftRow.status !== "draft") return;
+
+  const { rows: countRows } = await query<{ c: number }>(
+    `SELECT COUNT(*)::int AS c FROM timetable_entries WHERE template_id = $1 AND class_id = $2`,
+    [draftTemplateId, classId],
+  );
+  if ((countRows[0]?.c ?? 0) > 0) return;
+
+  const published = await findActivePublishedTemplate(
+    draftRow.academic_year_id,
+    draftRow.term_id,
+    normalizeLevel(draftRow.level),
+  );
+  if (!published || published.id === draftTemplateId) return;
+
+  const targetYear = draftRow.academic_year_id;
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `INSERT INTO timetable_entries (template_id, day_of_week, period_id, class_id, class_subject_id, teacher_id)
+       SELECT
+         $1,
+         se.day_of_week,
+         tp.id,
+         se.class_id,
+         tcs.id,
+         tcs.teacher_id
+       FROM timetable_entries se
+       JOIN timetable_periods sp ON sp.id = se.period_id
+       JOIN timetable_periods tp ON tp.template_id = $1 AND tp.period_number = sp.period_number
+       JOIN class_subjects scs ON scs.id = se.class_subject_id
+       JOIN class_subjects tcs
+         ON tcs.class_id = se.class_id
+        AND tcs.subject_id = scs.subject_id
+        AND tcs.academic_year_id = $2
+       WHERE se.template_id = $3
+         AND se.class_id = $4`,
+      [draftTemplateId, targetYear, published.id, classId],
+    );
+    await client.query(`UPDATE timetable_templates SET updated_at = NOW() WHERE id = $1`, [draftTemplateId]);
+  });
+}
+
 export async function getOrCreateDraft(filters: TimetableTemplateQuery): Promise<TimetableTemplate> {
   const level = normalizeLevel(filters.level);
   const existing = await query(
@@ -200,11 +269,24 @@ export async function getOrCreateDraft(filters: TimetableTemplateQuery): Promise
   if (existing.rows[0]) {
     return mapTemplate(existing.rows[0] as TemplateRow);
   }
-  return createTemplate({
+  const created = await createTemplate({
     academicYearId: filters.academicYearId,
     termId: filters.termId,
     level,
   });
+  const published = await findActivePublishedTemplate(
+    filters.academicYearId,
+    filters.termId,
+    level,
+  );
+  if (published) {
+    return cloneTemplate({
+      sourceTemplateId: published.id,
+      targetTemplateId: created.id,
+      copyEntries: true,
+    });
+  }
+  return created;
 }
 
 export async function createTemplate(input: CreateTimetableTemplateInput): Promise<TimetableTemplate> {
@@ -352,6 +434,73 @@ export async function listClassSubjectsForTemplate(
   }));
 }
 
+export async function getSlotOccupancy(
+  templateId: string,
+  excludeClassId?: string,
+): Promise<TimetableSlotOccupancyView> {
+  await getTemplateRow(templateId);
+
+  const params: unknown[] = [templateId];
+  let excludeSql = "";
+  if (excludeClassId) {
+    params.push(excludeClassId);
+    excludeSql = `AND e.class_id <> $${params.length}::uuid`;
+  }
+
+  const { rows } = await query<{
+    day_of_week: number;
+    period_id: string;
+    class_id: string;
+    class_name: string;
+    class_stream: string | null;
+    subject_code: string;
+    subject_name: string;
+    teacher_id: string | null;
+    teacher_name: string | null;
+    class_subject_id: string;
+  }>(
+    `SELECT
+       e.day_of_week,
+       e.period_id,
+       e.class_id,
+       c.name AS class_name,
+       c.stream AS class_stream,
+       s.code AS subject_code,
+       s.name AS subject_name,
+       e.teacher_id,
+       u.full_name AS teacher_name,
+       e.class_subject_id
+     FROM timetable_entries e
+     JOIN classes c ON c.id = e.class_id
+     JOIN class_subjects cs ON cs.id = e.class_subject_id
+     JOIN subjects s ON s.id = cs.subject_id
+     LEFT JOIN users u ON u.id = e.teacher_id
+     WHERE e.template_id = $1
+       ${excludeSql}
+     ORDER BY e.day_of_week, e.period_id`,
+    params,
+  );
+
+  const bySlot: Record<string, TimetableSlotOccupant[]> = {};
+  for (const r of rows) {
+    const key = `${r.day_of_week}:${r.period_id}`;
+    const list = bySlot[key] ?? [];
+    list.push({
+      classId: r.class_id,
+      className: r.class_name,
+      classStream: r.class_stream ?? "",
+      subjectCode: r.subject_code,
+      subjectName: r.subject_name,
+      teacherId: r.teacher_id,
+      teacherName: r.teacher_name,
+      classSubjectId: r.class_subject_id,
+    });
+    bySlot[key] = list;
+  }
+
+  return { bySlot };
+}
+
 async function validateClassSubjectSlot(
   templateRow: TemplateRow,
   classId: string,
@@ -449,7 +598,11 @@ export async function saveClassGrid(
 }
 
 export async function getClassGrid(templateId: string, classId: string): Promise<TimetableGridView> {
-  const tpl = await getTemplate(templateId);
+  const tplRow = await getTemplateRow(templateId);
+  if (tplRow.status === "draft") {
+    await copyClassEntriesFromPublishedIfEmpty(templateId, classId);
+  }
+  const tpl = await mapTemplate(tplRow);
   const periods = await getPeriods(templateId);
   const days = await getDays(templateId);
   const schoolDays = days.filter((d) => d.isSchoolDay);
@@ -981,6 +1134,8 @@ export async function getTemplateOverview(templateId: string): Promise<Timetable
   const meta = metaQ.rows[0];
   if (!meta) throw new HttpError(404, "Timetable template not found");
 
+  const templateLevel = normalizeLevel(tpl.level);
+
   const [classesQ, teachersQ] = await Promise.all([
     query<{
       class_id: string;
@@ -992,13 +1147,18 @@ export async function getTemplateOverview(templateId: string): Promise<Timetable
          c.id AS class_id,
          c.name AS class_name,
          c.stream AS class_stream,
-         COUNT(*)::int AS lesson_count
-       FROM timetable_entries e
-       JOIN classes c ON c.id = e.class_id
-       WHERE e.template_id = $1
-       GROUP BY c.id, c.name, c.stream
-       ORDER BY c.name, c.stream`,
-      [templateId],
+         COALESCE(ec.lesson_count, 0)::int AS lesson_count
+       FROM classes c
+       LEFT JOIN (
+         SELECT class_id, COUNT(*)::int AS lesson_count
+         FROM timetable_entries
+         WHERE template_id = $1
+         GROUP BY class_id
+       ) ec ON ec.class_id = c.id
+       WHERE c.academic_year_id = $2
+         AND c.level = ANY($3::text[])
+       ORDER BY c.name, c.stream NULLS LAST, c.stream`,
+      [templateId, tpl.academicYearId, levelSqlVariants(templateLevel)],
     ),
     query<{ teacher_id: string; teacher_name: string; lesson_count: number }>(
       `SELECT

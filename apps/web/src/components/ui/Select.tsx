@@ -1,7 +1,7 @@
 import { forwardRef } from "react";
 import type { SelectHTMLAttributes } from "react";
 
-type Option = { value: string; label: string };
+type Option = { value: string; label: string; disabled?: boolean };
 
 type Props = SelectHTMLAttributes<HTMLSelectElement> & {
   label?: string;
@@ -30,7 +30,7 @@ export const Select = forwardRef<HTMLSelectElement, Props>(function Select(
         {...rest}
       >
         {options.map((o, idx) => (
-          <option key={`${idx}-${o.label}`} value={o.value}>
+          <option key={`${idx}-${o.label}`} value={o.value} disabled={o.disabled}>
             {o.label}
           </option>
         ))}

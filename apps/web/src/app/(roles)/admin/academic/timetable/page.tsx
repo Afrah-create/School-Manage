@@ -27,6 +27,7 @@ import { useAcademicLevelScope } from "@/hooks/useAcademicLevelScope";
 import {
   useTimetableClassGrid,
   useTimetableClassSubjects,
+  useTimetableSlotOccupancy,
   useTimetableDays,
   useTimetableDraft,
   useTimetableMutations,
@@ -157,6 +158,7 @@ function AdminTimetablePageContent() {
   const periodsQ = useTimetablePeriods(templateId);
   const daysQ = useTimetableDays(templateId);
   const classSubjectsQ = useTimetableClassSubjects(templateId, classId);
+  const slotOccupancyQ = useTimetableSlotOccupancy(templateId, classId);
   const classGridQ = useTimetableClassGrid(templateId, classId);
   const teacherGridQ = useTimetableTeacherGrid(templateId, teacherId);
   const publicationLogQ = useTimetablePublicationLog(templateId);
@@ -278,7 +280,9 @@ function AdminTimetablePageContent() {
     >
       <p className="-mt-4 mb-4 text-sm text-muted-foreground">
         Start on <strong className="font-medium text-foreground">View published</strong> to browse live and archived
-        timetables. Use <strong className="font-medium text-foreground">Periods &amp; days</strong>,{" "}
+        timetables. Opening the builder after publish starts a new draft copied from the live schedule; each class grid
+        also picks up that class&apos;s published lessons if the draft row is still empty. Use{" "}
+        <strong className="font-medium text-foreground">Periods &amp; days</strong>,{" "}
         <strong className="font-medium text-foreground">By class</strong>, and{" "}
         <strong className="font-medium text-foreground">Publish</strong> to edit drafts. Subjects and teachers are set
         under{" "}
@@ -416,6 +420,7 @@ function AdminTimetablePageContent() {
                 <TimetableClassGrid
                   grid={classGridQ.data}
                   slotOptions={classSubjectsQ.data ?? []}
+                  slotOccupancy={slotOccupancyQ.data}
                   editable={editable}
                   saving={mutations.saveClassGrid.isPending}
                   onSave={async (entries) => {

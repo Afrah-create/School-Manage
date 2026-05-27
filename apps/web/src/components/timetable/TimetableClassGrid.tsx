@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { TimetableClassSubjectOption, TimetableGridView } from "@uganda-cbc-sms/shared";
+import type {
+  TimetableClassSubjectOption,
+  TimetableGridView,
+  TimetableSlotOccupancyView,
+} from "@uganda-cbc-sms/shared";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { classDisplayName } from "@/lib/academicLevel";
+import {
+  countDraftConflicts,
+  getAssignmentConflict,
+  slotKey,
+} from "@/lib/timetableSlotValidation";
 
 const DAY_LABELS: Record<number, string> = {
   1: "Mon",
@@ -25,12 +35,14 @@ type CellDraft = {
 export function TimetableClassGrid({
   grid,
   slotOptions,
+  slotOccupancy,
   editable,
   saving,
   onSave,
 }: {
   grid: TimetableGridView;
   slotOptions: TimetableClassSubjectOption[];
+  slotOccupancy?: TimetableSlotOccupancyView;
   editable: boolean;
   saving?: boolean;
   onSave: (entries: CellDraft[]) => Promise<void>;
@@ -44,28 +56,57 @@ export function TimetableClassGrid({
     const next: Record<string, string> = {};
     for (const cell of grid.cells) {
       if (cell.classSubjectId) {
-        next[`${cell.dayOfWeek}:${cell.periodId}`] = cell.classSubjectId;
+        next[slotKey(cell.dayOfWeek, cell.periodId)] = cell.classSubjectId;
       }
     }
     setDraft(next);
   }, [grid]);
 
-  const optionItems = useMemo(
-    () => [
-      { value: "", label: "— Free —" },
-      ...slotOptions.map((s) => ({
-        value: s.classSubjectId,
-        label: `${s.subjectCode} · ${s.teacherName ?? "Unassigned"}`,
-      })),
-    ],
-    [slotOptions],
+  const conflictCount = useMemo(
+    () => countDraftConflicts(draft, slotOptions, slotOccupancy, grid.periods),
+    [draft, slotOptions, slotOccupancy, grid.periods],
   );
 
+  const buildOptionsForCell = (cellKeyValue: string, currentValue: string) => {
+    const items: Array<{ value: string; label: string; disabled?: boolean }> = [
+      { value: "", label: "— Free —" },
+    ];
+
+    for (const s of slotOptions) {
+      const conflict = getAssignmentConflict(
+        cellKeyValue,
+        s.classSubjectId,
+        draft,
+        slotOptions,
+        slotOccupancy,
+        grid.periods,
+      );
+      const isCurrent = s.classSubjectId === currentValue;
+      const blocked = Boolean(conflict) && !isCurrent;
+
+      let label = `${s.subjectCode} · ${s.teacherName ?? "Unassigned"}`;
+      if (blocked && conflict) {
+        const short =
+          conflict.length > 72 ? `${conflict.slice(0, 69)}…` : conflict;
+        label = `${label} — ${short}`;
+      }
+
+      items.push({
+        value: s.classSubjectId,
+        label,
+        disabled: blocked,
+      });
+    }
+
+    return items;
+  };
+
   const save = async () => {
+    if (conflictCount > 0) return;
     const entries: CellDraft[] = [];
     for (const day of schoolDays) {
       for (const period of teachingPeriods) {
-        const key = `${day.dayOfWeek}:${period.id}`;
+        const key = slotKey(day.dayOfWeek, period.id);
         const classSubjectId = draft[key];
         if (classSubjectId) {
           entries.push({ dayOfWeek: day.dayOfWeek, periodId: period.id, classSubjectId });
@@ -77,13 +118,27 @@ export function TimetableClassGrid({
 
   return (
     <div className="space-y-4">
+      {editable ? (
+        <p className="text-xs text-muted-foreground">
+          Options marked in the list are unavailable because the teacher is already booked in that
+          period in another class. Fix highlighted cells before saving.
+        </p>
+      ) : null}
+
+      {conflictCount > 0 ? (
+        <Alert tone="info">
+          {conflictCount} slot{conflictCount === 1 ? "" : "s"} still clash with another class or need a
+          subject teacher. Adjust those cells before saving.
+        </Alert>
+      ) : null}
+
       <div className="overflow-x-auto rounded-lg border border-border">
         <table className="min-w-full divide-y divide-border text-sm">
           <thead className="bg-muted">
             <tr>
               <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Period</th>
               {schoolDays.map((d) => (
-                <th key={d.dayOfWeek} className="min-w-[140px] px-3 py-2 text-left font-semibold text-muted-foreground">
+                <th key={d.dayOfWeek} className="min-w-[160px] px-3 py-2 text-left font-semibold text-muted-foreground">
                   {DAY_LABELS[d.dayOfWeek] ?? d.dayOfWeek}
                 </th>
               ))}
@@ -109,24 +164,53 @@ export function TimetableClassGrid({
                     </div>
                   </td>
                   {schoolDays.map((day) => {
-                    const key = `${day.dayOfWeek}:${period.id}`;
+                    const key = slotKey(day.dayOfWeek, period.id);
                     const value = draft[key] ?? "";
                     const selected = slotOptions.find((s) => s.classSubjectId === value);
+                    const cellConflict =
+                      value && editable
+                        ? getAssignmentConflict(
+                            key,
+                            value,
+                            draft,
+                            slotOptions,
+                            slotOccupancy,
+                            grid.periods,
+                          )
+                        : null;
+
+                    const otherClasses = (slotOccupancy?.bySlot[key] ?? []).filter(
+                      (o) => o.classSubjectId !== value,
+                    );
+
                     return (
                       <td key={key} className="px-2 py-2 align-top">
                         {editable ? (
-                          <Select
-                            options={optionItems}
-                            value={value}
-                            onChange={(e) =>
-                              setDraft((prev) => {
-                                const next = { ...prev };
-                                if (e.target.value) next[key] = e.target.value;
-                                else delete next[key];
-                                return next;
-                              })
-                            }
-                          />
+                          <div className="space-y-1">
+                            {otherClasses.length > 0 ? (
+                              <p className="text-[10px] leading-tight text-muted-foreground">
+                                {otherClasses
+                                  .map(
+                                    (o) =>
+                                      `${classDisplayName({ name: o.className, stream: o.classStream })} (${o.subjectCode})`,
+                                  )
+                                  .join(" · ")}
+                              </p>
+                            ) : null}
+                            <Select
+                              options={buildOptionsForCell(key, value)}
+                              value={value}
+                              error={cellConflict ?? undefined}
+                              onChange={(e) =>
+                                setDraft((prev) => {
+                                  const next = { ...prev };
+                                  if (e.target.value) next[key] = e.target.value;
+                                  else delete next[key];
+                                  return next;
+                                })
+                              }
+                            />
+                          </div>
                         ) : selected ? (
                           <div className="rounded-md border border-border bg-muted/30 px-2 py-1">
                             <div className="font-medium text-foreground">{selected.subjectCode}</div>
@@ -147,7 +231,12 @@ export function TimetableClassGrid({
       </div>
       {editable ? (
         <div className="flex justify-end">
-          <Button type="button" loading={saving} onClick={() => void save()}>
+          <Button
+            type="button"
+            loading={saving}
+            disabled={conflictCount > 0}
+            onClick={() => void save()}
+          >
             Save class timetable
           </Button>
         </div>

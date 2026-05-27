@@ -89,10 +89,13 @@ export function TimetablePublishedViewer({ academicYearId, termId, level }: Prop
 
   const classOptions = useMemo(
     () =>
-      (overviewQ.data?.classes ?? []).map((c) => ({
-        value: c.classId,
-        label: classDisplayName({ name: c.className, stream: c.classStream }),
-      })),
+      (overviewQ.data?.classes ?? []).map((c) => {
+        const base = classDisplayName({ name: c.className, stream: c.classStream });
+        return {
+          value: c.classId,
+          label: c.lessonCount > 0 ? `${base} (${c.lessonCount} lessons)` : base,
+        };
+      }),
     [overviewQ.data?.classes],
   );
 

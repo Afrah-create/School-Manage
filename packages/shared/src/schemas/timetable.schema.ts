@@ -68,6 +68,10 @@ export const timetableClassSubjectsQuerySchema = z.object({
   classId: z.string().uuid(),
 });
 
+export const timetableSlotOccupancyQuerySchema = z.object({
+  excludeClassId: z.string().uuid().optional(),
+});
+
 export const timetablePublishSchema = z.object({
   acknowledgeWarnings: z.boolean().default(false),
 });
@@ -209,6 +213,23 @@ export type TimetableClassSubjectOption = {
   subjectCode: string;
   teacherId: string | null;
   teacherName: string | null;
+};
+
+export type TimetableSlotOccupancyQuery = z.infer<typeof timetableSlotOccupancyQuerySchema>;
+
+export type TimetableSlotOccupant = {
+  classId: string;
+  className: string;
+  classStream: string;
+  subjectCode: string;
+  subjectName: string;
+  teacherId: string | null;
+  teacherName: string | null;
+  classSubjectId: string;
+};
+
+export type TimetableSlotOccupancyView = {
+  bySlot: Record<string, TimetableSlotOccupant[]>;
 };
 
 export type TimetableGridView = {
