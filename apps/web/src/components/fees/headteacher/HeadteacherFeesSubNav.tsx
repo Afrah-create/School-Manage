@@ -4,15 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS: { href: string; label: string; exact?: boolean }[] = [
-  { href: "/bursar/fees", label: "Collections hub", exact: true },
-  { href: "/bursar/fees/invoices", label: "Invoices & billing" },
-  { href: "/bursar/fees/payments", label: "Record payment" },
-  { href: "/bursar/fees/payments/history", label: "Payment history" },
-  { href: "/bursar/fees/schedules", label: "Fee schedules" },
-  { href: "/bursar/fees/reports", label: "Reports" },
+  { href: "/headteacher/fees", label: "Overview", exact: true },
+  { href: "/headteacher/fees/reports", label: "Term reports" },
+  { href: "/headteacher/fees/payments", label: "Payments" },
+  { href: "/headteacher/fees/invoices", label: "Invoices" },
 ];
 
-export function BursarFeesSubNav() {
+export function HeadteacherFeesSubNav() {
   const pathname = usePathname();
 
   return (

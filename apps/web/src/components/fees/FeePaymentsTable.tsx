@@ -3,7 +3,8 @@
 import Link from "next/link";
 import type { FeePayment } from "@uganda-cbc-sms/shared";
 import { Table, type Column } from "@/components/ui/Table";
-import { formatUgx, paymentMethodLabel } from "@/lib/formatMoney";
+import { MoneyAmount } from "@/components/ui/MoneyAmount";
+import { paymentMethodLabel } from "@/lib/formatMoney";
 
 export function FeePaymentsTable({
   rows,
@@ -32,7 +33,7 @@ export function FeePaymentsTable({
     {
       key: "amount",
       header: "Amount (UGX)",
-      render: (r) => <span className="tabular-nums font-medium">{formatUgx(r.amount)}</span>,
+      render: (r) => <MoneyAmount amount={r.amount} size="sm" tone="positive" />,
     },
     {
       key: "method",

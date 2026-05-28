@@ -20,10 +20,13 @@ type Form = z.infer<typeof feePaymentSchema>;
 export function PaymentForm({
   studentId,
   studentName,
+  defaultInvoiceId,
   onSuccess,
 }: {
   studentId: string;
   studentName?: string;
+  /** Pre-select invoice (e.g. from Collect link on active bills) */
+  defaultInvoiceId?: string;
   onSuccess?: (receiptNumber: string) => void;
 }) {
   const invoicesQ = useFeeInvoices(studentId);
@@ -53,10 +56,15 @@ export function PaymentForm({
   }, [studentId]);
 
   useEffect(() => {
-    if (invoices[0] && !form.getValues("invoiceId")) {
-      form.setValue("invoiceId", invoices[0].id);
+    if (invoices.length === 0) return;
+    const preferred =
+      defaultInvoiceId && invoices.some((i) => i.id === defaultInvoiceId)
+        ? defaultInvoiceId
+        : invoices[0]!.id;
+    if (form.getValues("invoiceId") !== preferred) {
+      form.setValue("invoiceId", preferred);
     }
-  }, [invoices, form]);
+  }, [invoices, form, defaultInvoiceId]);
 
   const method = form.watch("method");
   const selectedInvoiceId = form.watch("invoiceId");

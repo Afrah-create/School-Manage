@@ -102,6 +102,12 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
         activePrefix: "/headteacher/attendance",
       },
       {
+        href: "/headteacher/fees",
+        label: "Finance",
+        icon: "creditCard",
+        activePrefix: "/headteacher/fees",
+      },
+      {
         href: "/headteacher/users",
         label: "Users",
         icon: "graduationCap",

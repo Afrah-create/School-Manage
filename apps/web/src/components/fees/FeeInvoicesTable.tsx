@@ -4,17 +4,22 @@ import Link from "next/link";
 import type { FeeInvoice } from "@uganda-cbc-sms/shared";
 import { Badge } from "@/components/ui/Badge";
 import { Table, type Column } from "@/components/ui/Table";
-import { formatUgx } from "@/lib/formatMoney";
+import { MoneyAmount } from "@/components/ui/MoneyAmount";
 
 export function FeeInvoicesTable({
   rows,
   invoiceBasePath = "/bursar/fees/invoices",
   studentBasePath = "/bursar/students",
+  paymentsBasePath = "/bursar/fees/payments",
+  showCollectAction = true,
   emptyMessage = "No invoices found.",
 }: {
   rows: FeeInvoice[];
   invoiceBasePath?: string;
   studentBasePath?: string;
+  paymentsBasePath?: string;
+  /** Show quick link to record payment when balance > 0 */
+  showCollectAction?: boolean;
   emptyMessage?: string;
 }) {
   const columns: Column<FeeInvoice>[] = [
@@ -45,20 +50,22 @@ export function FeeInvoicesTable({
     {
       key: "billed",
       header: "Billed",
-      render: (r) => <span className="tabular-nums">{formatUgx(r.totalAmount)}</span>,
+      render: (r) => <MoneyAmount amount={r.totalAmount} size="sm" />,
     },
     {
       key: "paid",
       header: "Paid",
-      render: (r) => <span className="tabular-nums">{formatUgx(r.amountPaid)}</span>,
+      render: (r) => <MoneyAmount amount={r.amountPaid} size="sm" tone="positive" />,
     },
     {
       key: "balance",
       header: "Balance",
       render: (r) => (
-        <span className={`tabular-nums font-medium ${Number(r.balance) > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
-          {formatUgx(r.balance)}
-        </span>
+        <MoneyAmount
+          amount={r.balance}
+          size="sm"
+          tone={Number(r.balance) > 0 ? "warning" : "positive"}
+        />
       ),
     },
     {
@@ -74,11 +81,24 @@ export function FeeInvoicesTable({
     {
       key: "actions",
       header: "",
-      render: (r) => (
-        <Link className="text-xs font-medium text-brand hover:underline" href={`${invoiceBasePath}/${r.id}`}>
-          View
-        </Link>
-      ),
+      render: (r) => {
+        const hasBalance = Number(r.balance) > 0;
+        return (
+          <div className="flex flex-wrap justify-end gap-2">
+            {showCollectAction && hasBalance ? (
+              <Link
+                className="text-xs font-semibold text-brand hover:underline"
+                href={`${paymentsBasePath}?studentId=${encodeURIComponent(r.studentId)}&invoiceId=${encodeURIComponent(r.id)}`}
+              >
+                Collect
+              </Link>
+            ) : null}
+            <Link className="text-xs font-medium text-muted-foreground hover:text-brand hover:underline" href={`${invoiceBasePath}/${r.id}`}>
+              Details
+            </Link>
+          </div>
+        );
+      },
     },
   ];
 

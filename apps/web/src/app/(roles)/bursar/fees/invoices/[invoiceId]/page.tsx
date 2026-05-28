@@ -10,7 +10,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { useFeeInvoice } from "@/hooks/useFees";
-import { formatUgx } from "@/lib/formatMoney";
+import { MoneyAmount } from "@/components/ui/MoneyAmount";
 import { queryStatus } from "@/lib/queryStatus";
 
 export default function BursarInvoiceDetailPage() {
@@ -63,15 +63,25 @@ export default function BursarInvoiceDetailPage() {
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Total billed</dt>
-                  <dd className="tabular-nums font-medium">{formatUgx(inv.totalAmount)} UGX</dd>
+                  <dd>
+                    <MoneyAmount amount={inv.totalAmount} size="md" />
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Amount paid</dt>
-                  <dd className="tabular-nums">{formatUgx(inv.amountPaid)} UGX</dd>
+                  <dd>
+                    <MoneyAmount amount={inv.amountPaid} size="md" tone="positive" />
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Balance</dt>
-                  <dd className="tabular-nums font-semibold">{formatUgx(inv.balance)} UGX</dd>
+                  <dd>
+                    <MoneyAmount
+                      amount={inv.balance}
+                      size="md"
+                      tone={balance > 0 ? "warning" : "positive"}
+                    />
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Status</dt>
@@ -92,6 +102,7 @@ export default function BursarInvoiceDetailPage() {
                 <PaymentForm
                   studentId={inv.studentId}
                   studentName={inv.studentName}
+                  defaultInvoiceId={inv.id}
                   onSuccess={() => void invoiceQ.refetch()}
                 />
               </Card>

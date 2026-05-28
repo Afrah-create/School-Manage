@@ -8,7 +8,7 @@ export default function BursarFeesLayout({ children }: { children: React.ReactNo
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-foreground">Finance</h1>
         <p className="text-muted-foreground">
-          Bill students, record payments, and track collections against official fee schedules.
+          Track active bills, record payments, and follow up on arrears — all from one place.
         </p>
       </div>
       <BursarFeesSubNav />

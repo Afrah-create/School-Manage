@@ -4,12 +4,12 @@ import { useMemo } from "react";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { FormSkeleton } from "@/components/feedback/FormSkeleton";
-import { BursarCollectionsHub } from "@/components/fees/bursar/BursarCollectionsHub";
+import { HeadteacherFinanceOverview } from "@/components/fees/headteacher/HeadteacherFinanceOverview";
 import { useFeeInvoices, useFeePayments } from "@/hooks/useFees";
 import { computeInvoiceStats } from "@/lib/feeFinanceStats";
 import { queryStatus } from "@/lib/queryStatus";
 
-export default function BursarFeesOverviewPage() {
+export default function HeadteacherFeesOverviewPage() {
   const invoicesQ = useFeeInvoices();
   const paymentsQ = useFeePayments();
   const status = queryStatus(invoicesQ);
@@ -23,12 +23,12 @@ export default function BursarFeesOverviewPage() {
       loading={<FormSkeleton fields={4} />}
       error={
         <ErrorState
-          message={invoicesQ.error instanceof Error ? invoicesQ.error.message : "Could not load fees."}
+          message={invoicesQ.error instanceof Error ? invoicesQ.error.message : "Could not load finance data."}
           onRetry={() => void invoicesQ.refetch()}
         />
       }
     >
-      <BursarCollectionsHub stats={stats} rows={rows} payments={paymentsQ.data ?? []} />
+      <HeadteacherFinanceOverview stats={stats} rows={rows} payments={paymentsQ.data ?? []} />
     </AsyncContent>
   );
 }

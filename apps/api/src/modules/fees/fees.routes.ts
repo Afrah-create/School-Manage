@@ -6,7 +6,7 @@ import * as c from "./fees.controller";
 
 const admin = requireRoles("admin");
 const bursarTeam = requireRoles("bursar", "admin");
-const financeReaders = requireRoles("bursar", "admin");
+const financeReaders = requireRoles("bursar", "admin", "headteacher");
 const financeReportsReaders = requireRoles("bursar", "admin", "headteacher");
 const balanceReaders = requireRoles("bursar", "admin", "headteacher");
 

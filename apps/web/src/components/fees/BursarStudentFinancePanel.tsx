@@ -28,7 +28,14 @@ export function BursarStudentFinancePanel({
     <div className="space-y-6">
       <FeeBalanceCard studentId={studentId} />
       <Card title="Record payment">
-        <PaymentForm studentId={studentId} studentName={studentName} />
+        <PaymentForm
+          studentId={studentId}
+          studentName={studentName}
+          onSuccess={() => {
+            void invoicesQ.refetch();
+            void paymentsQ.refetch();
+          }}
+        />
       </Card>
       <Card title="Invoices">
         <div className="mb-3 flex justify-end">

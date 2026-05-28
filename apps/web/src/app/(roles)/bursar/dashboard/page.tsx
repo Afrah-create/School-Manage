@@ -23,9 +23,10 @@ import { combineQueryStatus } from "@/lib/queryStatus";
 type Kpis = { activeStudents: string; totalFeesDue: string; totalFeesPaid: string };
 
 const QUICK_LINKS = [
-  { href: "/bursar/students", label: "Find student", icon: Users },
+  { href: "/bursar/fees", label: "Collections hub", icon: Receipt },
   { href: "/bursar/fees/payments", label: "Record payment", icon: CreditCard },
-  { href: "/bursar/fees/invoices", label: "Invoices", icon: Receipt },
+  { href: "/bursar/fees/invoices?tab=active", label: "Active bills", icon: Receipt },
+  { href: "/bursar/students", label: "Find student", icon: Users },
   { href: "/bursar/fees/schedules", label: "Fee schedules", icon: FileDown },
   { href: "/bursar/fees/reports", label: "Financial reports", icon: FileDown },
 ];
@@ -59,13 +60,13 @@ export default function BursarDashboardPage() {
     ? [
         {
           label: "Fees due (UGX)",
-          value: formatUgx(kpis.totalFeesDue),
+          value: formatUgx(kpis.totalFeesDue, { compact: true }),
           delta: "On all invoices",
           deltaTone: "neutral" as const,
         },
         {
           label: "Fees collected (UGX)",
-          value: formatUgx(kpis.totalFeesPaid),
+          value: formatUgx(kpis.totalFeesPaid, { compact: true }),
           delta: "Recorded payments",
           deltaTone: "positive" as const,
         },
@@ -77,7 +78,9 @@ export default function BursarDashboardPage() {
         },
         {
           label: "Collection gap (UGX)",
-          value: formatUgx(Math.max(0, Number(kpis.totalFeesDue) - Number(kpis.totalFeesPaid))),
+          value: formatUgx(Math.max(0, Number(kpis.totalFeesDue) - Number(kpis.totalFeesPaid)), {
+            compact: true,
+          }),
           delta: "Outstanding",
           deltaTone: "neutral" as const,
         },
