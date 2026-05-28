@@ -6,7 +6,6 @@ import { PaymentForm } from "@/components/fees/PaymentForm";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { FormSkeleton } from "@/components/feedback/FormSkeleton";
-import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -23,12 +22,10 @@ export default function BursarInvoiceDetailPage() {
   const balance = Number(inv?.balance ?? 0);
 
   return (
-    <PageWrapper title="Invoice detail" description="View billing and record payments against this invoice.">
-      <div className="mb-4">
-        <Link className="text-sm text-brand hover:underline" href="/bursar/fees/invoices">
-          ← Back to invoices
-        </Link>
-      </div>
+    <div className="space-y-6">
+      <Link className="text-sm text-brand hover:underline" href="/bursar/fees/invoices">
+        ← Back to invoices
+      </Link>
       <AsyncContent
         status={status}
         loading={<FormSkeleton fields={5} />}
@@ -46,7 +43,10 @@ export default function BursarInvoiceDetailPage() {
                 <div>
                   <dt className="text-muted-foreground">Student</dt>
                   <dd>
-                    <Link className="font-medium text-brand hover:underline" href={`/bursar/students/${inv.studentId}`}>
+                    <Link
+                      className="font-medium text-brand hover:underline"
+                      href={`/bursar/students/${inv.studentId}`}
+                    >
                       {inv.studentName ?? "Student"}
                     </Link>
                     {inv.studentNumber ? (
@@ -89,7 +89,11 @@ export default function BursarInvoiceDetailPage() {
             </Card>
             {balance > 0 ? (
               <Card title="Record payment">
-                <PaymentForm studentId={inv.studentId} />
+                <PaymentForm
+                  studentId={inv.studentId}
+                  studentName={inv.studentName}
+                  onSuccess={() => void invoiceQ.refetch()}
+                />
               </Card>
             ) : (
               <Alert tone="success">This invoice is fully paid.</Alert>
@@ -97,6 +101,6 @@ export default function BursarInvoiceDetailPage() {
           </div>
         ) : null}
       </AsyncContent>
-    </PageWrapper>
+    </div>
   );
 }

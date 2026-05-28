@@ -2,7 +2,9 @@ import type {
   FeeBulkInvoiceInput,
   FeeInvoiceInput,
   FeePaymentInput,
+  FeeStructureCopyInput,
   FeeStructureInput,
+  FeeStructurePatchInput,
 } from "@uganda-cbc-sms/shared";
 import type { PoolClient } from "pg";
 import { query, withTransaction } from "../../config/db";
@@ -19,6 +21,7 @@ const INVOICE_SELECT = `
   SELECT fi.*,
          s.full_name AS student_name,
          s.student_number,
+         s.class_id,
          CONCAT('Term ', t.term_number::text) AS term_label,
          ay.name AS year_name
   FROM fee_invoices fi
@@ -33,6 +36,17 @@ const PAYMENT_SELECT = `
   FROM fee_payments fp
   JOIN students s ON s.id = fp.student_id`;
 
+const STRUCTURE_SELECT = `
+  SELECT fs.*,
+         c.name AS class_name,
+         c.stream AS class_stream,
+         CONCAT('Term ', t.term_number::text) AS term_label,
+         ay.name AS year_name
+  FROM fee_structures fs
+  JOIN classes c ON c.id = fs.class_id
+  JOIN terms t ON t.id = fs.term_id
+  JOIN academic_years ay ON ay.id = t.academic_year_id`;
+
 function amt(v: string | number): string {
   if (typeof v === "number") return v.toFixed(2);
   return String(v);
@@ -46,27 +60,157 @@ function parseAmount(v: string | number): number {
   return n;
 }
 
+async function hasInvoicesForClassTerm(classId: string, termId: string): Promise<boolean> {
+  const { rows } = await query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM fee_invoices fi
+     JOIN students s ON s.id = fi.student_id
+     WHERE s.class_id = $1 AND fi.term_id = $2`,
+    [classId, termId],
+  );
+  return Number(rows[0]?.n ?? 0) > 0;
+}
+
+async function getFeeStructureById(structureId: string) {
+  const { rows } = await query(`${STRUCTURE_SELECT} WHERE fs.id = $1`, [structureId]);
+  if (rows.length === 0) {
+    throw new HttpError(404, "We could not find that fee structure row.");
+  }
+  return mapFeeStructure(rows[0] as Record<string, unknown>);
+}
+
 export async function createFeeStructure(input: FeeStructureInput) {
+  parseAmount(input.amount);
   try {
     const { rows } = await query(
       `INSERT INTO fee_structures (class_id, term_id, category, amount)
        VALUES ($1, $2, $3, $4::numeric)
-       RETURNING *`,
-      [input.classId, input.termId, input.category, amt(input.amount)],
+       RETURNING id`,
+      [input.classId, input.termId, input.category.trim(), amt(input.amount)],
     );
-    return mapFeeStructure(rows[0] as Record<string, unknown>);
+    return getFeeStructureById(String(rows[0]!.id));
   } catch (e: unknown) {
     const err = e as { code?: string };
     if (err.code === "23505") {
       throw new HttpError(400, "A fee structure already exists for this class, term, and category.");
     }
+    if (e instanceof HttpError) throw e;
     throw new HttpError(500, "We could not save the fee structure. Please try again.");
   }
 }
 
-export async function listFeeStructures() {
-  const { rows } = await query(`SELECT * FROM fee_structures ORDER BY category, created_at DESC`);
+export async function listFeeStructures(filters?: { classId?: string; termId?: string }) {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (filters?.classId) {
+    params.push(filters.classId);
+    clauses.push(`fs.class_id = $${params.length}`);
+  }
+  if (filters?.termId) {
+    params.push(filters.termId);
+    clauses.push(`fs.term_id = $${params.length}`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const { rows } = await query(
+    `${STRUCTURE_SELECT} ${where}
+     ORDER BY ay.name DESC, t.term_number, c.name, c.stream, fs.category`,
+    params,
+  );
   return rows.map((r) => mapFeeStructure(r as Record<string, unknown>));
+}
+
+export async function updateFeeStructure(structureId: string, input: FeeStructurePatchInput) {
+  const existing = await query<{ class_id: string; term_id: string; category: string }>(
+    `SELECT class_id, term_id, category FROM fee_structures WHERE id = $1`,
+    [structureId],
+  );
+  if (existing.rows.length === 0) {
+    throw new HttpError(404, "We could not find that fee structure row.");
+  }
+  const row = existing.rows[0]!;
+  const invoiced = await hasInvoicesForClassTerm(row.class_id, row.term_id);
+
+  if (input.category != null && input.category.trim() !== row.category) {
+    if (invoiced) {
+      throw new HttpError(
+        409,
+        "Cannot change the category after invoices have been issued for this class and term.",
+      );
+    }
+  }
+
+  parseAmount(input.amount);
+  const category = input.category?.trim() ?? row.category;
+
+  try {
+    await query(
+      `UPDATE fee_structures SET amount = $1::numeric, category = $2 WHERE id = $3`,
+      [amt(input.amount), category, structureId],
+    );
+    return getFeeStructureById(structureId);
+  } catch (e: unknown) {
+    const err = e as { code?: string };
+    if (err.code === "23505") {
+      throw new HttpError(400, "A fee structure already exists for this class, term, and category.");
+    }
+    if (e instanceof HttpError) throw e;
+    throw new HttpError(500, "We could not update the fee structure. Please try again.");
+  }
+}
+
+export async function deleteFeeStructure(structureId: string) {
+  const existing = await query<{ class_id: string; term_id: string }>(
+    `SELECT class_id, term_id FROM fee_structures WHERE id = $1`,
+    [structureId],
+  );
+  if (existing.rows.length === 0) {
+    throw new HttpError(404, "We could not find that fee structure row.");
+  }
+  const row = existing.rows[0]!;
+  if (await hasInvoicesForClassTerm(row.class_id, row.term_id)) {
+    throw new HttpError(
+      409,
+      "Cannot remove fee categories after invoices have been issued for this class and term.",
+    );
+  }
+  await query(`DELETE FROM fee_structures WHERE id = $1`, [structureId]);
+}
+
+export async function copyFeeStructures(input: FeeStructureCopyInput) {
+  if (input.sourceClassId === input.targetClassId && input.sourceTermId === input.targetTermId) {
+    throw new HttpError(400, "Source and target class/term must be different.");
+  }
+
+  const { rows: sourceRows } = await query<{ category: string; amount: string }>(
+    `SELECT category, amount::text AS amount FROM fee_structures
+     WHERE class_id = $1 AND term_id = $2`,
+    [input.sourceClassId, input.sourceTermId],
+  );
+  if (sourceRows.length === 0) {
+    throw new HttpError(400, "No fee structure exists for the source class and term.");
+  }
+
+  let created = 0;
+  let skipped = 0;
+
+  await withTransaction(async (client: PoolClient) => {
+    for (const src of sourceRows) {
+      try {
+        const ins = await client.query(
+          `INSERT INTO fee_structures (class_id, term_id, category, amount)
+           VALUES ($1, $2, $3, $4::numeric)
+           ON CONFLICT (class_id, term_id, category) DO NOTHING
+           RETURNING id`,
+          [input.targetClassId, input.targetTermId, src.category, src.amount],
+        );
+        if (ins.rows.length > 0) created += 1;
+        else skipped += 1;
+      } catch {
+        skipped += 1;
+      }
+    }
+  });
+
+  return { created, skipped };
 }
 
 export async function createInvoice(input: FeeInvoiceInput) {

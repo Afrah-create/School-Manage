@@ -7,6 +7,8 @@ const {
   feeInvoiceSchema,
   feePaymentSchema,
   feeStructureSchema,
+  feeStructurePatchSchema,
+  feeStructureCopySchema,
   feeBulkInvoiceSchema,
 } = sharedSchemas;
 
@@ -16,9 +18,32 @@ export async function postStructure(req: Request, res: Response): Promise<void> 
   res.status(201).json({ success: true, data: row, message: "Fee structure saved." });
 }
 
-export async function getStructure(_req: Request, res: Response): Promise<void> {
-  const rows = await svc.listFeeStructures();
+export async function getStructure(req: Request, res: Response): Promise<void> {
+  const classId = req.query["classId"] as string | undefined;
+  const termId = req.query["termId"] as string | undefined;
+  const rows = await svc.listFeeStructures({ classId, termId });
   res.json({ success: true, data: rows });
+}
+
+export async function patchStructure(req: Request, res: Response): Promise<void> {
+  const body = feeStructurePatchSchema.parse(req.body);
+  const row = await svc.updateFeeStructure(req.params["structureId"]!, body);
+  res.json({ success: true, data: row, message: "Fee structure updated." });
+}
+
+export async function deleteStructure(req: Request, res: Response): Promise<void> {
+  await svc.deleteFeeStructure(req.params["structureId"]!);
+  res.json({ success: true, data: null, message: "Fee category removed." });
+}
+
+export async function postStructureCopy(req: Request, res: Response): Promise<void> {
+  const body = feeStructureCopySchema.parse(req.body);
+  const result = await svc.copyFeeStructures(body);
+  const message =
+    result.created === 0
+      ? `No categories copied (${result.skipped} already existed on the target).`
+      : `Copied ${result.created} categor${result.created === 1 ? "y" : "ies"}${result.skipped ? `; ${result.skipped} skipped (already on target).` : "."}`;
+  res.status(201).json({ success: true, data: result, message });
 }
 
 export async function postInvoice(req: Request, res: Response): Promise<void> {

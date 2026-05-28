@@ -75,7 +75,10 @@ export default function BursarStudentProfilePage() {
                 </div>
               </div>
             </Card>
-            <BursarStudentFinancePanel studentId={studentQ.data.id} />
+            <BursarStudentFinancePanel
+              studentId={studentQ.data.id}
+              studentName={studentQ.data.fullName}
+            />
           </div>
         ) : null}
       </AsyncContent>

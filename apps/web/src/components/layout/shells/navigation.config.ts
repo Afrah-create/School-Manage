@@ -31,7 +31,12 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
         icon: "barChart3",
         activePrefix: "/admin/attendance",
       },
-      { href: "/admin/fees/overview", label: "Fees", icon: "creditCard", activePrefix: "/admin/fees" },
+      {
+        href: "/admin/fees/structure",
+        label: "Fees",
+        icon: "creditCard",
+        activePrefix: "/admin/fees",
+      },
       { href: "/admin/users", label: "Users", icon: "graduationCap", activePrefix: "/admin/users" },
       { href: "/admin/settings", label: "Settings", icon: "school", activePrefix: "/admin/settings" },
       {
@@ -195,30 +200,11 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
     items: [
       { href: "/bursar/dashboard", label: "Dashboard", icon: "home" },
       { href: "/bursar/students", label: "Students", icon: "users", activePrefix: "/bursar/students" },
-      { href: "/bursar/fees", label: "Fee overview", icon: "creditCard", exactMatch: true },
       {
-        href: "/bursar/fees/invoices",
-        label: "Invoices",
-        icon: "receipt",
-        activePrefix: "/bursar/fees/invoices",
-      },
-      {
-        href: "/bursar/fees/payments",
-        label: "Record payment",
+        href: "/bursar/fees",
+        label: "Finance",
         icon: "creditCard",
-        activePrefix: "/bursar/fees/payments",
-      },
-      {
-        href: "/bursar/fees/payments/history",
-        label: "Payment history",
-        icon: "fileText",
-        activePrefix: "/bursar/fees/payments/history",
-      },
-      {
-        href: "/bursar/fees/reports",
-        label: "Financial reports",
-        icon: "fileBarChart2",
-        activePrefix: "/bursar/fees/reports",
+        activePrefix: "/bursar/fees",
       },
     ],
   },

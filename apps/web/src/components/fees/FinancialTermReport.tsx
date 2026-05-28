@@ -14,6 +14,7 @@ import { useFeeTermReport } from "@/hooks/useFees";
 import { apiGet } from "@/lib/api";
 import { formatUgx } from "@/lib/formatMoney";
 import { queryStatus } from "@/lib/queryStatus";
+import { toast } from "@/lib/toast";
 
 export function FinancialTermReport() {
   const [termId, setTermId] = useState("");
@@ -54,6 +55,7 @@ export function FinancialTermReport() {
     a.download = `fee-report-term-${termId.slice(0, 8)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success("Report downloaded as CSV.", "Export complete");
   };
 
   return (

@@ -7,7 +7,6 @@ import { FormSkeleton } from "@/components/feedback/FormSkeleton";
 import { BulkInvoiceForm } from "@/components/fees/BulkInvoiceForm";
 import { FeeInvoicesTable } from "@/components/fees/FeeInvoicesTable";
 import { InvoiceCreateForm } from "@/components/fees/InvoiceCreateForm";
-import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Card } from "@/components/ui/Card";
 import { useFeeInvoices } from "@/hooks/useFees";
 import { queryStatus } from "@/lib/queryStatus";
@@ -18,8 +17,8 @@ export default function BursarInvoicesListPage() {
   const [tab, setTab] = useState<"list" | "create" | "bulk">("list");
 
   return (
-    <PageWrapper title="Invoices" description="Create, bill, and track student fee invoices by term.">
-      <div className="mb-4 flex flex-wrap gap-2 border-b border-border pb-2">
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2 border-b border-border pb-2">
         {(
           [
             ["list", "All invoices"],
@@ -45,7 +44,7 @@ export default function BursarInvoicesListPage() {
           <InvoiceCreateForm onCreated={() => void invoicesQ.refetch()} />
         </Card>
       ) : tab === "bulk" ? (
-        <Card title="Bill entire class">
+        <Card title="Bill entire class from fee schedule">
           <BulkInvoiceForm onDone={() => void invoicesQ.refetch()} />
         </Card>
       ) : (
@@ -55,7 +54,9 @@ export default function BursarInvoicesListPage() {
             loading={<FormSkeleton fields={4} />}
             error={
               <ErrorState
-                message={invoicesQ.error instanceof Error ? invoicesQ.error.message : "Could not load invoices."}
+                message={
+                  invoicesQ.error instanceof Error ? invoicesQ.error.message : "Could not load invoices."
+                }
                 onRetry={() => void invoicesQ.refetch()}
               />
             }
@@ -64,6 +65,6 @@ export default function BursarInvoicesListPage() {
           </AsyncContent>
         </Card>
       )}
-    </PageWrapper>
+    </div>
   );
 }

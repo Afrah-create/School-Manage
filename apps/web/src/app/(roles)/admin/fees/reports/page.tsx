@@ -2,6 +2,6 @@
 
 import { FinancialTermReport } from "@/components/fees/FinancialTermReport";
 
-export default function BursarFinancialReportsPage() {
+export default function AdminFeesReportsPage() {
   return <FinancialTermReport />;
 }

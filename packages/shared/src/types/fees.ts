@@ -9,6 +9,7 @@ export type FeeInvoice = {
   createdAt: string;
   studentName?: string;
   studentNumber?: string;
+  classId?: string;
   termLabel?: string;
   yearName?: string;
 };
@@ -44,6 +45,15 @@ export type FeeStructure = {
   category: string;
   amount: string;
   createdAt: string;
+  className?: string;
+  classStream?: string | null;
+  termLabel?: string;
+  yearName?: string;
+};
+
+export type FeeStructureCopyResult = {
+  created: number;
+  skipped: number;
 };
 
 export type FeeTermReport = {

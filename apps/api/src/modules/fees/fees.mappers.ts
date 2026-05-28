@@ -14,6 +14,7 @@ export function mapFeeInvoice(row: Row): FeeInvoice {
     createdAt: row.created_at ? new Date(String(row.created_at)).toISOString() : new Date().toISOString(),
     studentName: row.student_name != null ? String(row.student_name) : undefined,
     studentNumber: row.student_number != null ? String(row.student_number) : undefined,
+    classId: row.class_id != null ? String(row.class_id) : undefined,
     termLabel: row.term_label != null ? String(row.term_label) : undefined,
     yearName: row.year_name != null ? String(row.year_name) : undefined,
   };
@@ -43,6 +44,10 @@ export function mapFeeStructure(row: Row): FeeStructure {
     category: String(row.category),
     amount: String(row.amount ?? "0"),
     createdAt: row.created_at ? new Date(String(row.created_at)).toISOString() : new Date().toISOString(),
+    className: row.class_name != null ? String(row.class_name) : undefined,
+    classStream: row.class_stream != null ? String(row.class_stream) : null,
+    termLabel: row.term_label != null ? String(row.term_label) : undefined,
+    yearName: row.year_name != null ? String(row.year_name) : undefined,
   };
 }
 

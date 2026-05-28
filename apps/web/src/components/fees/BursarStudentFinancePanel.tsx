@@ -12,7 +12,13 @@ import { Card } from "@/components/ui/Card";
 import { useFeeInvoices, useFeePayments } from "@/hooks/useFees";
 import { queryStatus } from "@/lib/queryStatus";
 
-export function BursarStudentFinancePanel({ studentId }: { studentId: string }) {
+export function BursarStudentFinancePanel({
+  studentId,
+  studentName,
+}: {
+  studentId: string;
+  studentName?: string;
+}) {
   const invoicesQ = useFeeInvoices(studentId);
   const paymentsQ = useFeePayments(studentId);
   const invStatus = queryStatus(invoicesQ);
@@ -22,7 +28,7 @@ export function BursarStudentFinancePanel({ studentId }: { studentId: string }) 
     <div className="space-y-6">
       <FeeBalanceCard studentId={studentId} />
       <Card title="Record payment">
-        <PaymentForm studentId={studentId} />
+        <PaymentForm studentId={studentId} studentName={studentName} />
       </Card>
       <Card title="Invoices">
         <div className="mb-3 flex justify-end">

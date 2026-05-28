@@ -15,6 +15,9 @@ export const feesRouter = Router();
 feesRouter.use(requireAuth);
 
 feesRouter.post("/structure", admin, asyncHandler(c.postStructure));
+feesRouter.post("/structure/copy", admin, asyncHandler(c.postStructureCopy));
+feesRouter.patch("/structure/:structureId", admin, asyncHandler(c.patchStructure));
+feesRouter.delete("/structure/:structureId", admin, asyncHandler(c.deleteStructure));
 feesRouter.get("/structure", financeReportsReaders, asyncHandler(c.getStructure));
 feesRouter.post("/invoices", bursarTeam, asyncHandler(c.postInvoice));
 feesRouter.post("/invoices/bulk", bursarTeam, asyncHandler(c.postBulkInvoices));

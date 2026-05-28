@@ -32,3 +32,18 @@ export const feeBulkInvoiceSchema = z.object({
 });
 
 export type FeeBulkInvoiceInput = z.infer<typeof feeBulkInvoiceSchema>;
+
+export const feeStructurePatchSchema = z.object({
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/).or(z.number().positive()),
+  category: z.string().min(1).max(100).optional(),
+});
+
+export const feeStructureCopySchema = z.object({
+  sourceClassId: z.string().uuid(),
+  sourceTermId: z.string().uuid(),
+  targetClassId: z.string().uuid(),
+  targetTermId: z.string().uuid(),
+});
+
+export type FeeStructurePatchInput = z.infer<typeof feeStructurePatchSchema>;
+export type FeeStructureCopyInput = z.infer<typeof feeStructureCopySchema>;

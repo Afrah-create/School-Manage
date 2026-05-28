@@ -195,6 +195,7 @@ export type {
   FeePaymentResult,
   FeeBalance,
   FeeStructure,
+  FeeStructureCopyResult,
   FeeTermReport,
   BulkInvoiceResult,
 } from "./fees";

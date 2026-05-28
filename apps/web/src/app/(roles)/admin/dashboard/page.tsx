@@ -248,8 +248,8 @@ export default function AdminDashboardPage() {
                 <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/reports">
                   Open reports center
                 </Link>
-                <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/fees/overview">
-                  View fees overview
+                <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/fees/structure">
+                  Configure fee structure
                 </Link>
                 <Link className="block text-blue-600 hover:underline dark:text-blue-400" href="/admin/assessment">
                   Assessment overview - monitor CBC and A-Level progress

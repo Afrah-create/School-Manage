@@ -26,6 +26,7 @@ const QUICK_LINKS = [
   { href: "/bursar/students", label: "Find student", icon: Users },
   { href: "/bursar/fees/payments", label: "Record payment", icon: CreditCard },
   { href: "/bursar/fees/invoices", label: "Invoices", icon: Receipt },
+  { href: "/bursar/fees/schedules", label: "Fee schedules", icon: FileDown },
   { href: "/bursar/fees/reports", label: "Financial reports", icon: FileDown },
 ];
 

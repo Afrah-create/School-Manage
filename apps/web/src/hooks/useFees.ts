@@ -7,12 +7,25 @@ import type {
   FeePayment,
   FeePaymentResult,
   FeeStructure,
+  FeeStructureCopyResult,
   FeeTermReport,
 } from "@uganda-cbc-sms/shared";
-import { feeBulkInvoiceSchema, feeInvoiceSchema, feePaymentSchema } from "@uganda-cbc-sms/shared";
+import {
+  feeBulkInvoiceSchema,
+  feeInvoiceSchema,
+  feePaymentSchema,
+  feeStructureCopySchema,
+  feeStructurePatchSchema,
+  feeStructureSchema,
+} from "@uganda-cbc-sms/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import type { z } from "zod";
+
+export type FeeStructureFilters = {
+  classId?: string;
+  termId?: string;
+};
 
 export const feesKeys = {
   all: ["fees"] as const,
@@ -21,8 +34,17 @@ export const feesKeys = {
   payments: (studentId?: string) => ["fees", "payments", studentId ?? "all"] as const,
   balance: (studentId: string) => ["fees", "balance", studentId] as const,
   report: (termId: string) => ["fees", "report", termId] as const,
-  structures: ["fees", "structures"] as const,
+  structures: (filters?: FeeStructureFilters) =>
+    ["fees", "structures", filters?.classId ?? "", filters?.termId ?? ""] as const,
 };
+
+function structureQuery(filters?: FeeStructureFilters): string {
+  const p = new URLSearchParams();
+  if (filters?.classId) p.set("classId", filters.classId);
+  if (filters?.termId) p.set("termId", filters.termId);
+  const qs = p.toString();
+  return `/fees/structure${qs ? `?${qs}` : ""}`;
+}
 
 export function useFeeInvoices(studentId?: string) {
   const qp = studentId ? `?studentId=${encodeURIComponent(studentId)}` : "";
@@ -58,10 +80,10 @@ export function useFeeBalance(studentId: string | undefined) {
   });
 }
 
-export function useFeeStructures() {
+export function useFeeStructures(filters?: FeeStructureFilters) {
   return useQuery({
-    queryKey: feesKeys.structures,
-    queryFn: () => apiGet<FeeStructure[]>("/fees/structure"),
+    queryKey: feesKeys.structures(filters),
+    queryFn: () => apiGet<FeeStructure[]>(structureQuery(filters)),
     staleTime: 60_000,
   });
 }
@@ -87,6 +109,10 @@ export function useFeeActions() {
     }
   };
 
+  const invalidateStructures = async () => {
+    await qc.invalidateQueries({ queryKey: ["fees", "structures"] });
+  };
+
   const createInvoice = useMutation({
     mutationFn: (body: z.infer<typeof feeInvoiceSchema>) =>
       apiPost<FeeInvoice>("/fees/invoices", body),
@@ -105,5 +131,44 @@ export function useFeeActions() {
     onSuccess: (_d, vars) => void invalidateFinance(vars.studentId),
   });
 
-  return { createInvoice, bulkInvoices, recordPayment, invalidateFinance };
+  const createStructure = useMutation({
+    mutationFn: (body: z.infer<typeof feeStructureSchema>) =>
+      apiPost<FeeStructure>("/fees/structure", body),
+    onSuccess: () => void invalidateStructures(),
+  });
+
+  const updateStructure = useMutation({
+    mutationFn: ({
+      structureId,
+      body,
+    }: {
+      structureId: string;
+      body: z.infer<typeof feeStructurePatchSchema>;
+    }) => apiPatch<FeeStructure>(`/fees/structure/${encodeURIComponent(structureId)}`, body),
+    onSuccess: () => void invalidateStructures(),
+  });
+
+  const deleteStructure = useMutation({
+    mutationFn: (structureId: string) =>
+      apiDelete<null>(`/fees/structure/${encodeURIComponent(structureId)}`),
+    onSuccess: () => void invalidateStructures(),
+  });
+
+  const copyStructure = useMutation({
+    mutationFn: (body: z.infer<typeof feeStructureCopySchema>) =>
+      apiPost<FeeStructureCopyResult>("/fees/structure/copy", body),
+    onSuccess: () => void invalidateStructures(),
+  });
+
+  return {
+    createInvoice,
+    bulkInvoices,
+    recordPayment,
+    createStructure,
+    updateStructure,
+    deleteStructure,
+    copyStructure,
+    invalidateFinance,
+    invalidateStructures,
+  };
 }
