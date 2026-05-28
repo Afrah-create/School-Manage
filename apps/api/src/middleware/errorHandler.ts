@@ -1,8 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import type { AuditCategory } from "@uganda-cbc-sms/shared";
-import { writeAuditLog } from "../modules/audit/audit.service";
-import { HttpError } from "../utils/httpError";
+import { writeAuditLog } from "../modules/audit/audit.service.js";
+import { writeSecurityAuditLog } from "../modules/security/securityAudit.service.js";
+import { HttpError } from "../utils/httpError.js";
 
 function friendlyZodMessage(err: ZodError): string {
   return err.errors
@@ -57,32 +58,86 @@ async function logHttpError(req: Request, status: number, message: string, actio
   });
 }
 
+function errorCode(status: number): string {
+  if (status === 400) return "VALIDATION_ERROR";
+  if (status === 401) return "UNAUTHORIZED";
+  if (status === 403) return "FORBIDDEN";
+  if (status === 404) return "NOT_FOUND";
+  if (status === 423) return "ACCOUNT_LOCKED";
+  if (status === 429) return "RATE_LIMITED";
+  return "INTERNAL_ERROR";
+}
+
 export function errorHandler(
   err: unknown,
   req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
+  const isProd = process.env.NODE_ENV === "production";
+
   if (err instanceof ZodError) {
     const msg = friendlyZodMessage(err);
     void logHttpError(req, 400, msg, "VALIDATION_ERROR");
-    res.status(400).json({ success: false, error: msg });
+    res.status(400).json({ success: false, error: msg, code: "VALIDATION_ERROR" });
     return;
   }
+
   if (err instanceof HttpError) {
     void logHttpError(req, err.status, err.message, `HTTP_${err.status}`);
-    res.status(err.status).json({ success: false, error: err.message });
+    res.status(err.status).json({
+      success: false,
+      error: err.message,
+      code: errorCode(err.status),
+    });
     return;
   }
+
+  const rateLimitStatus =
+    err instanceof Error && "status" in err && (err as { status?: number }).status === 429
+      ? 429
+      : null;
+  if (rateLimitStatus === 429) {
+    res.status(429).json({
+      success: false,
+      error: "Too many requests. Please wait before retrying.",
+      code: "RATE_LIMITED",
+    });
+    return;
+  }
+
   const message = err instanceof Error ? err.message : "Internal server error";
   const status =
     err instanceof Error && "status" in err && typeof (err as { status?: number }).status === "number"
       ? (err as { status: number }).status
       : 500;
-  console.error(err);
-  void logHttpError(req, status >= 400 && status < 600 ? status : 500, message, "INTERNAL_ERROR");
-  res.status(status >= 400 && status < 600 ? status : 500).json({
+
+  if (!isProd) {
+    console.error(err);
+  } else {
+    console.error(message);
+  }
+
+  const httpStatus = status >= 400 && status < 600 ? status : 500;
+  void logHttpError(req, httpStatus, message, "INTERNAL_ERROR");
+
+  if (httpStatus >= 500) {
+    writeSecurityAuditLog({
+      eventType: "internal_error",
+      ipAddress: req.ip ?? null,
+      userId: req.user?.id ?? null,
+      severity: "critical",
+      details: {
+        message,
+        stack: err instanceof Error && !isProd ? err.stack : undefined,
+        path: req.originalUrl,
+      },
+    });
+  }
+
+  res.status(httpStatus).json({
     success: false,
-    error: message,
+    error: isProd && httpStatus >= 500 ? "An internal error occurred." : message,
+    code: errorCode(httpStatus),
   });
 }

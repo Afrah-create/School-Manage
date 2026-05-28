@@ -10,7 +10,13 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { query, withTransaction } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
-import { signToken } from "../../utils/jwt";
+import {
+  clearLoginAttemptsForEmail,
+  logLoginAttempt,
+  maxLoginAttempts,
+} from "../../middleware/accountLockout.js";
+import { signToken, verifyToken, tokenRemainingSeconds } from "../../utils/jwt";
+import { blacklistToken } from "../../utils/tokenBlacklist.js";
 import { toUserPublic } from "../../utils/userMapper";
 import { logUserAction } from "../users/audit.service";
 
@@ -75,7 +81,11 @@ export async function login(
       throw new HttpError(403, "Account deactivated — contact administrator.");
     }
     if (user.locked_until && user.locked_until.getTime() > Date.now()) {
-      throw new HttpError(403, "Account locked. Try again after 30 minutes or contact administrator.");
+      logLoginAttempt(normalizeEmail(input.email), meta.ipAddress, false);
+      throw new HttpError(
+        423,
+        "Account locked after 5 failed attempts. Contact your administrator.",
+      );
     }
     if (user.locked_until && user.locked_until.getTime() <= Date.now()) {
       await query(
@@ -88,8 +98,9 @@ export async function login(
 
     const ok = await bcrypt.compare(input.password, user.password_hash);
     if (!ok) {
+      logLoginAttempt(normalizeEmail(input.email), meta.ipAddress, false);
       const attempts = Math.max(user.failed_login_attempts ?? 0, user.login_attempts ?? 0) + 1;
-      const lock = attempts >= 5;
+      const lock = attempts >= maxLoginAttempts();
       await query(
         `UPDATE users
          SET failed_login_attempts = $1,
@@ -108,8 +119,16 @@ export async function login(
         userAgent: meta.userAgent,
         metadata: { failedAttempts: attempts, locked: lock },
       });
+      if (lock) {
+        throw new HttpError(
+          423,
+          "Account locked after 5 failed attempts. Contact your administrator.",
+        );
+      }
       throw generic();
     }
+
+    logLoginAttempt(normalizeEmail(input.email), meta.ipAddress, true);
 
     await query(
       `UPDATE users
@@ -168,7 +187,7 @@ export async function login(
   }
 }
 
-export async function logout(sessionId: string): Promise<void> {
+export async function logout(sessionId: string, bearerToken?: string): Promise<void> {
   const { rows } = await query<{ user_id: string }>(
     `UPDATE auth_sessions
      SET revoked_at = NOW()
@@ -177,6 +196,14 @@ export async function logout(sessionId: string): Promise<void> {
     [sessionId],
   );
   const userId = rows[0]?.user_id;
+  if (bearerToken) {
+    try {
+      const payload = verifyToken(bearerToken);
+      await blacklistToken(payload.jti, tokenRemainingSeconds(payload.exp));
+    } catch {
+      /* token already invalid */
+    }
+  }
   if (userId) {
     await logUserAction({
       userId,

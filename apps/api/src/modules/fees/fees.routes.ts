@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import { requireRoles } from "../../middleware/rbac";
+import { feePaymentLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as c from "./fees.controller";
 
@@ -28,7 +29,7 @@ feesRouter.post("/invoices/bulk/preview", bursarTeam, asyncHandler(c.postBulkInv
 feesRouter.post("/invoices/bulk", bursarTeam, asyncHandler(c.postBulkInvoices));
 feesRouter.get("/invoices/:invoiceId", financeReaders, asyncHandler(c.getInvoice));
 feesRouter.get("/invoices", financeReaders, asyncHandler(c.getInvoices));
-feesRouter.post("/payments", bursarTeam, asyncHandler(c.postPayment));
+feesRouter.post("/payments", feePaymentLimiter, bursarTeam, asyncHandler(c.postPayment));
 feesRouter.get("/payments", financeReaders, asyncHandler(c.getPayments));
 feesRouter.get("/balance/:studentId", balanceReaders, asyncHandler(c.getBalance));
 feesRouter.get("/reports", financeReportsReaders, asyncHandler(c.getReports));

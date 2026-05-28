@@ -263,38 +263,44 @@ export const assessmentFilterSchema = z.object({
   combinationId: z.string().uuid().optional(),
 });
 
-export const submitAssessmentSchema = z.object({
-  subjectId: z.string().uuid(),
-  classId: z.string().uuid(),
-  termId: z.string().uuid(),
-  yearId: z.string().uuid(),
-});
+export const submitAssessmentSchema = z
+  .object({
+    subjectId: z.string().uuid(),
+    classId: z.string().uuid(),
+    termId: z.string().uuid(),
+    yearId: z.string().uuid(),
+  })
+  .strict();
 
-export const cbcAssessmentUpsertSchema = z.object({
-  studentId: z.string().uuid(),
-  subjectId: z.string().uuid(),
-  strand: z.string().min(1).max(255),
-  competency: z.string().min(1).max(255),
-  rating: cbcRatingSchema,
-  termId: z.string().uuid(),
-  yearId: z.string().uuid(),
-});
+export const cbcAssessmentUpsertSchema = z
+  .object({
+    studentId: z.string().uuid(),
+    subjectId: z.string().uuid(),
+    strand: z.string().min(1).max(255),
+    competency: z.string().min(1).max(255),
+    rating: cbcRatingSchema,
+    termId: z.string().uuid(),
+    yearId: z.string().uuid(),
+  })
+  .strict();
 
-export const cbcAssessmentBulkSchema = z.object({
-  assessments: z
-    .array(
-      z.object({
-        studentId: z.string().uuid(),
-        subjectId: z.string().uuid(),
-        strand: z.string().min(1).max(255),
-        competency: z.string().min(1).max(255),
-        rating: cbcRatingSchema,
-      }),
-    )
-    .min(1),
-  termId: z.string().uuid(),
-  yearId: z.string().uuid(),
-});
+export const cbcAssessmentBulkSchema = z
+  .object({
+    assessments: z
+      .array(
+        z.object({
+          studentId: z.string().uuid(),
+          subjectId: z.string().uuid(),
+          strand: z.string().min(1).max(255),
+          competency: z.string().min(1).max(255),
+          rating: cbcRatingSchema,
+        }),
+      )
+      .min(1),
+    termId: z.string().uuid(),
+    yearId: z.string().uuid(),
+  })
+  .strict();
 
 export const cbcProjectAssessmentSchema = z.object({
   studentId: z.string().uuid(),
@@ -313,15 +319,18 @@ export const cbcCommentUpdateSchema = z.object({
   headteacherComment: z.string().max(5000).optional(),
 });
 
-export const alevelAssessmentUpsertSchema = z.object({
-  studentId: z.string().uuid(),
-  subjectId: z.string().uuid(),
-  score: z.coerce.number().min(0).max(100),
-  termId: z.string().uuid(),
-  yearId: z.string().uuid(),
-});
+export const alevelAssessmentUpsertSchema = z
+  .object({
+    studentId: z.string().uuid(),
+    subjectId: z.string().uuid(),
+    score: z.coerce.number().min(0).max(100),
+    termId: z.string().uuid(),
+    yearId: z.string().uuid(),
+  })
+  .strict();
 
-export const alevelAssessmentBulkSchema = z.object({
+export const alevelAssessmentBulkSchema = z
+  .object({
   assessments: z
     .array(
       z.object({
@@ -333,7 +342,8 @@ export const alevelAssessmentBulkSchema = z.object({
     .min(1),
   termId: z.string().uuid(),
   yearId: z.string().uuid(),
-});
+})
+  .strict();
 
 export const alevelCommentUpdateSchema = z.object({
   termId: z.string().uuid(),

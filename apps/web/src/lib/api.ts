@@ -16,12 +16,43 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+function secondsUntilRateLimitReset(headers: Record<string, unknown> | undefined): number | null {
+  if (!headers) return null;
+  const retryAfter = headers["retry-after"];
+  if (typeof retryAfter === "string" && retryAfter.trim()) {
+    const n = Number(retryAfter);
+    if (Number.isFinite(n) && n > 0) return Math.ceil(n);
+  }
+  const reset = headers["ratelimit-reset"];
+  if (typeof reset === "string" && reset.trim()) {
+    const resetSec = Number(reset);
+    if (Number.isFinite(resetSec)) {
+      const wait = resetSec - Math.floor(Date.now() / 1000);
+      if (wait > 0) return wait;
+    }
+  }
+  return null;
+}
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     const cfg = err.config;
     const path = `${cfg?.baseURL ?? ""}${cfg?.url ?? ""}`;
     const isLoginRequest = /\b\/auth\/login\b/.test(path) || String(cfg?.url ?? "").includes("/auth/login");
+
+    if (err.response?.status === 429) {
+      const wait = secondsUntilRateLimitReset(err.response.headers as Record<string, unknown>);
+      const suffix = wait != null ? ` Please wait about ${wait} second${wait === 1 ? "" : "s"}.` : " Please wait a moment.";
+      err.message = `Too many requests.${suffix}`;
+    }
+
+    if (err.response?.status === 423 && isLoginRequest) {
+      const fromBody = messageFromApiBody(err.response.data);
+      err.message =
+        fromBody ??
+        "Your account is locked after too many failed sign-in attempts. Contact your administrator.";
+    }
 
     if (err.response?.status === 401 && typeof window !== "undefined" && !isLoginRequest) {
       const auth = useAuthStore.getState();
@@ -149,7 +180,17 @@ function axiosFailureToMessage(err: AxiosError<unknown>): string {
     return "That can't be done because it conflicts with existing data. Refresh the page and try again.";
   }
   if (status === 429) {
-    return "Too many attempts. Please wait a moment and try again.";
+    const wait = secondsUntilRateLimitReset(err.response?.headers as Record<string, unknown>);
+    if (wait != null) {
+      return `Too many requests. Please wait about ${wait} second${wait === 1 ? "" : "s"} and try again.`;
+    }
+    return "Too many requests. Please wait a moment and try again.";
+  }
+  if (status === 423) {
+    return (
+      messageFromApiBody(err.response?.data) ??
+      "Your account is locked after too many failed sign-in attempts. Contact your administrator."
+    );
   }
   if (status != null && status >= 500) {
     return "Something went wrong on our side. Please try again in a few minutes.";

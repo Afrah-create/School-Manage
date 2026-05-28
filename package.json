@@ -14,5 +14,11 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "overrides": {
+    "tar": "7.5.15",
+    "@mapbox/node-pre-gyp": {
+      "tar": "7.5.15"
+    }
   }
 }

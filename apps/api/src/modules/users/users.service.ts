@@ -375,6 +375,12 @@ export async function activateUser(id: string, actorId: string, meta: UserActorM
 }
 
 export async function unlockUser(id: string, actorId: string, meta: UserActorMeta = {}) {
+  const emailRow = await query<{ email: string }>(
+    `SELECT email FROM users WHERE id = $1 AND deleted_at IS NULL`,
+    [id],
+  );
+  if (emailRow.rowCount === 0) throw new HttpError(404, "User not found");
+
   const r = await query(
     `UPDATE users
      SET locked_at = NULL, locked_until = NULL, locked_reason = NULL, failed_login_attempts = 0, login_attempts = 0, updated_at = NOW()
@@ -382,6 +388,9 @@ export async function unlockUser(id: string, actorId: string, meta: UserActorMet
     [id],
   );
   if (r.rowCount === 0) throw new HttpError(404, "User not found");
+
+  const { clearLoginAttemptsForEmail } = await import("../../middleware/accountLockout.js");
+  await clearLoginAttemptsForEmail(emailRow.rows[0]!.email);
   await logUserAction({
     userId: id,
     actorId,

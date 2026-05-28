@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { assessmentSubmitLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { requireAuth } from "../../middleware/auth";
 import { requireAssessmentRoles } from "./assessmentAccess";
@@ -7,6 +8,11 @@ import * as c from "./assessments.controller";
 export const assessmentsRouter = Router();
 
 assessmentsRouter.use(requireAuth);
+
+assessmentsRouter.use((req, res, next) => {
+  if (req.method === "POST") return assessmentSubmitLimiter(req, res, next);
+  next();
+});
 
 assessmentsRouter.get(
   "/cbc",

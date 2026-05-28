@@ -47,7 +47,10 @@ export async function logout(req: Request, res: Response): Promise<void> {
     });
     return;
   }
-  await authService.logout(req.user.sessionId);
+  const bearer = req.headers.authorization?.startsWith("Bearer ")
+    ? req.headers.authorization.slice(7)
+    : undefined;
+  await authService.logout(req.user.sessionId, bearer);
   res.json({ success: true, data: { message: "Logged out" } });
 }
 

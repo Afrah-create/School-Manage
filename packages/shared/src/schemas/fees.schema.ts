@@ -14,13 +14,15 @@ export const feeInvoiceSchema = z.object({
   totalAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).or(z.number().positive()),
 });
 
-export const feePaymentSchema = z.object({
-  studentId: z.string().uuid(),
-  invoiceId: z.string().uuid(),
-  amount: z.string().regex(/^\d+(\.\d{1,2})?$/).or(z.number().positive()),
-  method: z.enum(PAYMENT_METHODS),
-  transactionRef: z.string().max(100).optional().nullable(),
-});
+export const feePaymentSchema = z
+  .object({
+    studentId: z.string().uuid(),
+    invoiceId: z.string().uuid(),
+    amount: z.string().regex(/^\d+(\.\d{1,2})?$/).or(z.number().positive()),
+    method: z.enum(PAYMENT_METHODS),
+    transactionRef: z.string().max(100).optional().nullable(),
+  })
+  .strict();
 
 export type FeeStructureInput = z.infer<typeof feeStructureSchema>;
 export type FeeInvoiceInput = z.infer<typeof feeInvoiceSchema>;

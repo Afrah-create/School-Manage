@@ -1,30 +1,40 @@
 import { z } from "zod";
 import { ROLES } from "../constants/roles";
 
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
+export const loginSchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  })
+  .strict();
 
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: z.string().min(8, "Password must be at least 8 characters"),
-});
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  })
+  .strict();
 
-export const requestOtpSchema = z.object({
-  email: z.string().email(),
-});
+export const requestOtpSchema = z
+  .object({
+    email: z.string().email(),
+  })
+  .strict();
 
-export const verifyOtpSchema = z.object({
-  email: z.string().email(),
-  code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
-});
+export const verifyOtpSchema = z
+  .object({
+    email: z.string().email(),
+    code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
+  })
+  .strict();
 
-export const resetPasswordWithOtpSchema = z.object({
-  email: z.string().email(),
-  code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
-  newPassword: z.string().min(8, "Password must be at least 8 characters"),
-});
+export const resetPasswordWithOtpSchema = z
+  .object({
+    email: z.string().email(),
+    code: z.string().regex(/^\d{6}$/, "Code must be 6 digits"),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  })
+  .strict();
 
 export const createUserSchema = z.object({
   fullName: z.string().min(1),
