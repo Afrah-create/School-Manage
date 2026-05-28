@@ -12,6 +12,7 @@ import {
   drawSummaryStrip,
   formatPercent,
   PDF_MARGIN,
+  type ReportBranding,
 } from "./pdf/reportCardLayout";
 
 function createReportDoc(): InstanceType<typeof PDFDocument> {
@@ -44,6 +45,8 @@ export function streamCbcReportCard(data: {
   totalDays: number;
   teacherComment: string;
   headteacherComment: string;
+  motto?: string | null;
+  branding?: ReportBranding;
 }): Readable {
   const doc = createReportDoc();
   const pass = new PassThrough();
@@ -56,6 +59,8 @@ export function streamCbcReportCard(data: {
     schoolName: data.schoolName,
     subtitle: "O-Level CBC Report Card",
     termLine: `${data.term} · Academic year ${data.year}`,
+    motto: data.motto,
+    branding: data.branding,
   });
 
   y = drawStudentIdentityBlock(doc, y, {
@@ -89,7 +94,7 @@ export function streamCbcReportCard(data: {
       s.rating,
       getCbcDescriptor(s.rating) || "—",
     ]);
-    y = drawDataTable(doc, y, cols, rows, { rowHeight: 16, fontSize: 7.5 });
+    y = drawDataTable(doc, y, cols, rows, { rowHeight: 16, fontSize: 7.5, branding: data.branding });
   } else {
     y = drawSectionTitle(doc, y, "Term competency assessment (CBC)");
     doc.fillColor("#64748B").font("Helvetica").fontSize(9);
@@ -99,11 +104,16 @@ export function streamCbcReportCard(data: {
 
   if (data.formalExam && data.formalExam.subjects.length > 0) {
     y = drawSectionTitle(doc, y, `Formal examination — ${data.formalExam.examName}`);
-    y = drawSummaryStrip(doc, y, [
+    y = drawSummaryStrip(
+      doc,
+      y,
+      [
       { label: "Exam", value: data.formalExam.examName },
       { label: "Maximum score", value: String(data.formalExam.maxScore) },
       { label: "Papers", value: String(data.formalExam.subjects.length) },
-    ]);
+      ],
+      data.branding,
+    );
 
     const examCols = [
       { header: "Subject", width: 150 },
@@ -119,19 +129,25 @@ export function streamCbcReportCard(data: {
       s.grade,
       String(s.maxScore),
     ]);
-    y = drawDataTable(doc, y, examCols, examRows);
+    y = drawDataTable(doc, y, examCols, examRows, { branding: data.branding });
   }
 
   y = drawSectionTitle(doc, y, "Comments");
-  y = drawCommentBlocks(doc, y, [
-    { title: "Class teacher", text: data.teacherComment },
-    { title: "Headteacher", text: data.headteacherComment },
-  ]);
+  y = drawCommentBlocks(
+    doc,
+    y,
+    [
+      { title: "Class teacher", text: data.teacherComment },
+      { title: "Headteacher", text: data.headteacherComment },
+    ],
+    data.branding,
+  );
 
   drawReportFooter(
     doc,
     y,
     `Official school report · ${data.studentName} (${data.studentNumber}) · Generated ${new Date().toLocaleDateString("en-UG", { dateStyle: "medium" })}`,
+    data.branding,
   );
 
   doc.end();
@@ -153,6 +169,8 @@ export function streamAlevelReportCard(data: {
   division: string | null;
   teacherComment: string;
   headteacherRemark: string;
+  motto?: string | null;
+  branding?: ReportBranding;
 }): Readable {
   const doc = createReportDoc();
   const pass = new PassThrough();
@@ -164,6 +182,8 @@ export function streamAlevelReportCard(data: {
     schoolName: data.schoolName,
     subtitle: "A-Level UNEB Report Card",
     termLine: `${data.term} · Academic year ${data.year}`,
+    motto: data.motto,
+    branding: data.branding,
   });
 
   y = drawStudentIdentityBlock(doc, y, {
@@ -203,7 +223,7 @@ export function streamAlevelReportCard(data: {
       s.grade,
       String(s.points),
     ]);
-    y = drawDataTable(doc, y, cols, rows);
+    y = drawDataTable(doc, y, cols, rows, { branding: data.branding });
   } else {
     y = drawSectionTitle(doc, y, "Subject performance");
     doc.fillColor("#64748B").font("Helvetica").fontSize(9);
@@ -211,22 +231,33 @@ export function streamAlevelReportCard(data: {
     y += 22;
   }
 
-  y = drawSummaryStrip(doc, y, [
-    { label: "Total points (best 3)", value: data.totalPoints != null ? String(data.totalPoints) : "—" },
-    { label: "Division", value: data.division ?? "—" },
-    { label: "Subjects", value: String(data.subjects.length) },
-  ]);
+  y = drawSummaryStrip(
+    doc,
+    y,
+    [
+      { label: "Total points (best 3)", value: data.totalPoints != null ? String(data.totalPoints) : "—" },
+      { label: "Division", value: data.division ?? "—" },
+      { label: "Subjects", value: String(data.subjects.length) },
+    ],
+    data.branding,
+  );
 
   y = drawSectionTitle(doc, y, "Comments");
-  y = drawCommentBlocks(doc, y, [
-    { title: "Class teacher", text: data.teacherComment },
-    { title: "Headteacher", text: data.headteacherRemark },
-  ]);
+  y = drawCommentBlocks(
+    doc,
+    y,
+    [
+      { title: "Class teacher", text: data.teacherComment },
+      { title: "Headteacher", text: data.headteacherRemark },
+    ],
+    data.branding,
+  );
 
   drawReportFooter(
     doc,
     y,
     `Official school report · ${data.studentName} (${data.studentNumber}) · Generated ${new Date().toLocaleDateString("en-UG", { dateStyle: "medium" })}`,
+    data.branding,
   );
 
   doc.end();

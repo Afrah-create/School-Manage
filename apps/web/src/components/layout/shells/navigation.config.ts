@@ -33,6 +33,7 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
       },
       { href: "/admin/fees/overview", label: "Fees", icon: "creditCard", activePrefix: "/admin/fees" },
       { href: "/admin/users", label: "Users", icon: "graduationCap", activePrefix: "/admin/users" },
+      { href: "/admin/settings", label: "Settings", icon: "school", activePrefix: "/admin/settings" },
       {
         href: "/admin/audit-logs",
         label: "Audit logs",

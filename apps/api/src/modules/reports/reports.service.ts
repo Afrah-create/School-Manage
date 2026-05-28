@@ -26,6 +26,38 @@ import {
 } from "./reportExamLinkage";
 import { applyReportSourceMeta, reportSourceFromPayload } from "./reportSourceMeta";
 
+type PdfBrandingSettings = {
+  motto: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  report_footer_text: string | null;
+};
+
+async function loadPdfBrandingSettings() {
+  let s: PdfBrandingSettings | undefined;
+  try {
+    const { rows } = await query<PdfBrandingSettings>(
+      `SELECT motto, logo_url, primary_color, secondary_color, report_footer_text
+       FROM school_settings
+       WHERE singleton = TRUE
+       LIMIT 1`,
+    );
+    s = rows[0];
+  } catch {
+    s = undefined;
+  }
+  return {
+    motto: s?.motto ?? null,
+    branding: {
+      logoUrl: s?.logo_url ?? null,
+      primaryColor: s?.primary_color ?? null,
+      secondaryColor: s?.secondary_color ?? null,
+      footerText: s?.report_footer_text ?? null,
+    },
+  };
+}
+
 export async function listReportExamOptions(classId: string, termId: string) {
   return listExamsForReportOptions(classId, termId);
 }
@@ -560,7 +592,8 @@ export async function approveReport(reportId: string, approvedBy: string) {
   throw new HttpError(404, "We could not find that report. It may have been removed.");
 }
 
-function payloadToCbcPdf(payload: CbcReportPayload): Readable {
+async function payloadToCbcPdf(payload: CbcReportPayload): Promise<Readable> {
+  const settings = await loadPdfBrandingSettings();
   return streamCbcReportCard({
     schoolName: payload.schoolName,
     studentName: payload.studentName,
@@ -581,10 +614,13 @@ function payloadToCbcPdf(payload: CbcReportPayload): Readable {
     totalDays: payload.totalDays,
     teacherComment: payload.teacherComment,
     headteacherComment: payload.headteacherComment,
+    motto: settings.motto,
+    branding: settings.branding,
   });
 }
 
-function payloadToAlevelPdf(payload: AlevelReportPayload): Readable {
+async function payloadToAlevelPdf(payload: AlevelReportPayload): Promise<Readable> {
+  const settings = await loadPdfBrandingSettings();
   return streamAlevelReportCard({
     schoolName: payload.schoolName,
     studentName: payload.studentName,
@@ -606,6 +642,8 @@ function payloadToAlevelPdf(payload: AlevelReportPayload): Readable {
     division: payload.division,
     teacherComment: payload.teacherComment,
     headteacherRemark: payload.headteacherRemark,
+    motto: settings.motto,
+    branding: settings.branding,
   });
 }
 
@@ -622,7 +660,7 @@ export async function getReportPdfStream(reportId: string): Promise<Readable> {
         "This report card has not been generated yet. Run Generate report cards first.",
       );
     }
-    return payloadToCbcPdf(row.payload as CbcReportPayload);
+    return await payloadToCbcPdf(row.payload as CbcReportPayload);
   }
 
   const al = await query<{ payload: AlevelReportPayload | null }>(
@@ -637,7 +675,7 @@ export async function getReportPdfStream(reportId: string): Promise<Readable> {
         "This report card has not been generated yet. Run Generate report cards first.",
       );
     }
-    return payloadToAlevelPdf(row.payload as AlevelReportPayload);
+    return await payloadToAlevelPdf(row.payload as AlevelReportPayload);
   }
 
   throw new HttpError(404, "We could not find that report. Check the report ID and try again.");

@@ -16,6 +16,19 @@ export const BORDER_COLOR = "#CBD5E1";
 export const MUTED_TEXT = "#64748B";
 export const HEADER_TEXT = "#FFFFFF";
 
+export type ReportBranding = {
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  footerText?: string | null;
+};
+
+function normalizeColor(color: string | null | undefined, fallback: string): string {
+  if (!color) return fallback;
+  const t = color.trim();
+  return /^#([0-9A-Fa-f]{6})$/.test(t) ? t.toUpperCase() : fallback;
+}
+
 const uploadRoot = process.env.UPLOAD_DIR ?? "./uploads";
 
 export function resolveUploadFilePath(relativeUrl: string | null | undefined): string | null {
@@ -26,7 +39,9 @@ export function resolveUploadFilePath(relativeUrl: string | null | undefined): s
   return fs.existsSync(abs) ? abs : null;
 }
 
-export function resolveSchoolLogoPath(): string | null {
+export function resolveSchoolLogoPath(logoUrl?: string | null): string | null {
+  const uploaded = resolveUploadFilePath(logoUrl);
+  if (uploaded) return uploaded;
   const candidates = [
     process.env.SCHOOL_LOGO_PATH,
     path.resolve(process.cwd(), "public/images/Logo.jpeg"),
@@ -48,25 +63,32 @@ export function ensurePageSpace(doc: PdfDoc, y: number, needed: number): number 
 }
 
 export function drawReportFrame(doc: PdfDoc) {
+  drawReportFrameWithBranding(doc);
+}
+
+export function drawReportFrameWithBranding(doc: PdfDoc, branding?: ReportBranding) {
+  const primary = normalizeColor(branding?.primaryColor, BRAND_GREEN);
   doc
     .lineWidth(1.2)
-    .strokeColor(BRAND_GREEN)
+    .strokeColor(primary)
     .roundedRect(PDF_MARGIN - 8, PDF_MARGIN - 8, PDF_CONTENT_WIDTH + 16, PDF_PAGE_HEIGHT - (PDF_MARGIN - 8) * 2, 6)
     .stroke();
 }
 
 export function drawReportHeader(
   doc: PdfDoc,
-  opts: { schoolName: string; subtitle: string; termLine: string },
+  opts: { schoolName: string; subtitle: string; termLine: string; motto?: string | null; branding?: ReportBranding },
 ): number {
   const headerTop = PDF_MARGIN;
-  const headerHeight = 78;
+  const headerHeight = opts.motto?.trim() ? 90 : 78;
+  const primary = normalizeColor(opts.branding?.primaryColor, BRAND_GREEN);
+  const secondary = normalizeColor(opts.branding?.secondaryColor, BRAND_GREEN_DARK);
 
   doc.save();
-  doc.roundedRect(PDF_MARGIN, headerTop, PDF_CONTENT_WIDTH, headerHeight, 4).fill(BRAND_GREEN);
+  doc.roundedRect(PDF_MARGIN, headerTop, PDF_CONTENT_WIDTH, headerHeight, 4).fill(primary);
   doc.restore();
 
-  const logoPath = resolveSchoolLogoPath();
+  const logoPath = resolveSchoolLogoPath(opts.branding?.logoUrl);
   let titleX = PDF_MARGIN + 14;
   if (logoPath) {
     try {
@@ -89,8 +111,16 @@ export function drawReportHeader(
     align: logoPath ? "left" : "center",
   });
 
-  doc.fontSize(9).fillColor("#D1FAE5");
-  doc.text(opts.termLine, PDF_MARGIN, headerTop + 58, {
+  if (opts.motto?.trim()) {
+    doc.font("Helvetica-Oblique").fontSize(8).fillColor("#D1FAE5");
+    doc.text(opts.motto.trim(), titleX, headerTop + 52, {
+      width: PDF_CONTENT_WIDTH - (titleX - PDF_MARGIN) - 12,
+      align: logoPath ? "left" : "center",
+    });
+  }
+
+  doc.font("Helvetica").fontSize(9).fillColor("#D1FAE5");
+  doc.text(opts.termLine, PDF_MARGIN, headerTop + (opts.motto?.trim() ? 70 : 58), {
     width: PDF_CONTENT_WIDTH,
     align: "center",
   });
@@ -182,14 +212,20 @@ function drawPhotoPlaceholder(
 }
 
 export function drawSectionTitle(doc: PdfDoc, y: number, title: string): number {
+  return drawSectionTitleWithBranding(doc, y, title);
+}
+
+export function drawSectionTitleWithBranding(doc: PdfDoc, y: number, title: string, branding?: ReportBranding): number {
+  const primary = normalizeColor(branding?.primaryColor, BRAND_GREEN);
+  const secondary = normalizeColor(branding?.secondaryColor, BRAND_GREEN_DARK);
   y = ensurePageSpace(doc, y, 28);
-  doc.fillColor(BRAND_GREEN_DARK).font("Helvetica-Bold").fontSize(10);
+  doc.fillColor(secondary).font("Helvetica-Bold").fontSize(10);
   doc.text(title.toUpperCase(), PDF_MARGIN, y, { width: PDF_CONTENT_WIDTH });
   doc
     .moveTo(PDF_MARGIN, y + 14)
     .lineTo(PDF_MARGIN + PDF_CONTENT_WIDTH, y + 14)
     .lineWidth(1)
-    .strokeColor(BRAND_GREEN)
+    .strokeColor(primary)
     .stroke();
   return y + 20;
 }
@@ -205,8 +241,12 @@ export function drawDataTable(
   startY: number,
   columns: TableColumn[],
   rows: string[][],
-  options?: { rowHeight?: number; fontSize?: number },
+  options?: { rowHeight?: number; fontSize?: number; branding?: ReportBranding },
 ): number {
+  const primary = normalizeColor(options?.branding?.primaryColor, BRAND_GREEN);
+  const secondary = normalizeColor(options?.branding?.secondaryColor, BRAND_GREEN_DARK);
+  const tint = `${primary}22`;
+
   const rowHeight = options?.rowHeight ?? 17;
   const fontSize = options?.fontSize ?? 8;
   const headerHeight = 20;
@@ -218,10 +258,10 @@ export function drawDataTable(
 
   const drawHeader = () => {
     doc.save();
-    doc.rect(offsetX, y, tableW, headerHeight).fill(BRAND_TINT);
+    doc.rect(offsetX, y, tableW, headerHeight).fill(tint);
     doc.restore();
     let x = offsetX;
-    doc.fillColor(BRAND_GREEN_DARK).font("Helvetica-Bold").fontSize(fontSize);
+    doc.fillColor(secondary).font("Helvetica-Bold").fontSize(fontSize);
     for (const col of columns) {
       doc.text(col.header, x + 5, y + 6, { width: col.width - 10, align: col.align ?? "left" });
       x += col.width;
@@ -268,11 +308,15 @@ export function drawSummaryStrip(
   doc: PdfDoc,
   y: number,
   items: Array<{ label: string; value: string }>,
+  branding?: ReportBranding,
 ): number {
   y = ensurePageSpace(doc, y, 36);
+  const primary = normalizeColor(branding?.primaryColor, BRAND_GREEN);
+  const secondary = normalizeColor(branding?.secondaryColor, BRAND_GREEN_DARK);
+  const tint = `${primary}22`;
   const stripH = 32;
   doc.save();
-  doc.roundedRect(PDF_MARGIN, y, PDF_CONTENT_WIDTH, stripH, 3).fill(BRAND_TINT);
+  doc.roundedRect(PDF_MARGIN, y, PDF_CONTENT_WIDTH, stripH, 3).fill(tint);
   doc.restore();
 
   const colW = PDF_CONTENT_WIDTH / items.length;
@@ -282,7 +326,7 @@ export function drawSummaryStrip(
       width: colW,
       align: "center",
     });
-    doc.fillColor(BRAND_GREEN_DARK).font("Helvetica-Bold").fontSize(10).text(item.value, x, y + 17, {
+    doc.fillColor(secondary).font("Helvetica-Bold").fontSize(10).text(item.value, x, y + 17, {
       width: colW,
       align: "center",
     });
@@ -295,6 +339,7 @@ export function drawCommentBlocks(
   doc: PdfDoc,
   y: number,
   blocks: Array<{ title: string; text: string }>,
+  branding?: ReportBranding,
 ): number {
   y = ensurePageSpace(doc, y, 90);
   const gap = 12;
@@ -303,7 +348,8 @@ export function drawCommentBlocks(
 
   blocks.forEach((block, i) => {
     const x = PDF_MARGIN + i * (blockW + gap);
-    doc.fillColor(BRAND_GREEN_DARK).font("Helvetica-Bold").fontSize(8);
+    const secondary = normalizeColor(branding?.secondaryColor, BRAND_GREEN_DARK);
+    doc.fillColor(secondary).font("Helvetica-Bold").fontSize(8);
     doc.text(block.title, x, y, { width: blockW });
 
     doc.save();
@@ -321,7 +367,8 @@ export function drawCommentBlocks(
   return y + blockH + 28;
 }
 
-export function drawReportFooter(doc: PdfDoc, y: number, line: string) {
+export function drawReportFooter(doc: PdfDoc, y: number, line: string, branding?: ReportBranding) {
+  const footerLine = branding?.footerText?.trim() ? `${branding.footerText.trim()} · ${line}` : line;
   const footerY = Math.max(y, PDF_PAGE_HEIGHT - PDF_MARGIN - 24);
   doc
     .moveTo(PDF_MARGIN, footerY - 8)
@@ -330,7 +377,7 @@ export function drawReportFooter(doc: PdfDoc, y: number, line: string) {
     .strokeColor(BORDER_COLOR)
     .stroke();
   doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(7);
-  doc.text(line, PDF_MARGIN, footerY, { width: PDF_CONTENT_WIDTH, align: "center" });
+  doc.text(footerLine, PDF_MARGIN, footerY, { width: PDF_CONTENT_WIDTH, align: "center" });
 }
 
 export function formatPercent(part: number, total: number): string {

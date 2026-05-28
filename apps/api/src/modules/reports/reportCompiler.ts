@@ -6,7 +6,26 @@ import { resolveConfiguredGrade } from "../../utils/gradingScales";
 import type { AlevelReportPayload, CbcReportPayload } from "./reportTypes";
 import { REPORT_PAYLOAD_VERSION } from "./reportTypes";
 
-const schoolName = process.env.SCHOOL_NAME ?? "Uganda Secondary School";
+const FALLBACK_SCHOOL_NAME = process.env.SCHOOL_NAME ?? "Uganda Secondary School";
+let cachedSchoolName = FALLBACK_SCHOOL_NAME;
+let cachedAtMs = 0;
+
+async function resolveSchoolName(): Promise<string> {
+  const now = Date.now();
+  if (now - cachedAtMs < 60_000) return cachedSchoolName;
+  try {
+    const { rows } = await query<{ school_name: string }>(
+      `SELECT school_name FROM school_settings WHERE singleton = TRUE LIMIT 1`,
+    );
+    cachedSchoolName = rows[0]?.school_name?.trim() || FALLBACK_SCHOOL_NAME;
+    cachedAtMs = now;
+    return cachedSchoolName;
+  } catch {
+    cachedSchoolName = FALLBACK_SCHOOL_NAME;
+    cachedAtMs = now;
+    return cachedSchoolName;
+  }
+}
 
 async function schoolDaysInRange(start: string, end: string): Promise<number> {
   const s = new Date(start);
@@ -61,6 +80,7 @@ export async function compileCbcReportPayload(
   academicYearId: string,
 ): Promise<CbcReportPayload> {
   const st = await loadStudentContext(studentId, termId);
+  const schoolName = await resolveSchoolName();
 
   const { rows: scores } = await query<{
     subject_name: string;
@@ -145,6 +165,7 @@ export async function compileAlevelReportPayload(
   academicYearId: string,
 ): Promise<AlevelReportPayload> {
   const st = await loadStudentContext(studentId, termId);
+  const schoolName = await resolveSchoolName();
 
   const { rows: scoreRows } = await query<{
     subject_id: string;
