@@ -26,11 +26,14 @@ cp .env.example .env
 ### Database
 
 ```bash
-npm run backup:db    # snapshot before major schema changes (see docs/multitenant-rollback.md)
-npm run migrate
-npm run seed
-npm run seed:platform
+npm run backup:db    # optional: snapshot before major schema changes
+npm run setup        # migrate + seed (default tenant, sample users, platform super-admin)
+# Or step by step:
+# npm run migrate
+# npm run seed       # includes platform super-admin (see PLATFORM_* in .env)
 ```
+
+**Platform super-admin** (provision schools): sign in at `http://platform.localhost:3000` with `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` from `.env` (defaults: `platform@school.local` / same as `ADMIN_PASSWORD`).
 
 ### Development (multi-tenant)
 
@@ -67,8 +70,9 @@ Phase tracker: [docs/multitenant-phases.md](docs/multitenant-phases.md)
 | `npm run dev:web` | Web only |
 | `npm run build` | Build all workspaces that define `build` |
 | `npm run migrate` | Run SQL migrations (`apps/api`) |
-| `npm run seed` | Default tenant + school users (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) |
-| `npm run seed:platform` | Platform super-admin (`PLATFORM_ADMIN_EMAIL`) |
+| `npm run setup` | `migrate` + `seed` (full local bootstrap) |
+| `npm run seed` | Default tenant, school users, **and** platform super-admin |
+| `npm run seed:platform` | Platform super-admin only |
 | `npm run backup:db` | `pg_dump` to `backups/` |
 | `npm run restore:db` | Restore a SQL backup |
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -107,7 +107,15 @@ function dashboardForRole(role: Role): string {
   }
 }
 
-export default function LoginPage() {
+function LoginPageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <p className="font-body text-sm text-muted-foreground">Loading…</p>
+    </div>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const loginToStore = useAuthStore((s) => s.login);
@@ -650,5 +658,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

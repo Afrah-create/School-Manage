@@ -140,3 +140,4 @@ Related: [Rollback guide](multitenant-rollback.md) · [README](../README.md)
 | 2026-05-29 | Initial doc; Phases 0–4 |
 | 2026-05-29 | Phase 5: uploads, roles, authStore, request tenant helpers |
 | 2026-05-29 | Phase 5 complete: PDF cache, feature flags, platform audit, platform edit UI |
+| 2026-05-29 | Unified seed: platform super-admin + `npm run setup`; login banner after seed |

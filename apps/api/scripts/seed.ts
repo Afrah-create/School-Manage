@@ -3,7 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import type { Role } from "@uganda-cbc-sms/shared";
-import { pool } from "../src/config/db";
+import { pool, platformPool } from "../src/config/db";
+import { printPlatformAdminBanner, seedPlatformAdmin } from "./lib/seedPlatformAdmin.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -174,10 +175,10 @@ async function ensureAcademicBaseline(
     (
       await pool.query<{ id: string }>(
         `SELECT id FROM classes
-         WHERE name = 'S2' AND stream = 'North' AND level = 'O_LEVEL' AND academic_year_id = $1
+         WHERE tenant_id = $1 AND name = 'S2' AND stream = 'North' AND level = 'O_LEVEL' AND academic_year_id = $2
          ORDER BY created_at DESC
          LIMIT 1`,
-        [yearId],
+        [tenantId, yearId],
       )
     ).rows[0]?.id ?? null;
   if (!oLevelClassId) {
@@ -197,10 +198,10 @@ async function ensureAcademicBaseline(
     (
       await pool.query<{ id: string }>(
         `SELECT id FROM classes
-         WHERE name = 'S5' AND stream = 'South' AND level = 'A_LEVEL' AND academic_year_id = $1
+         WHERE tenant_id = $1 AND name = 'S5' AND stream = 'South' AND level = 'A_LEVEL' AND academic_year_id = $2
          ORDER BY created_at DESC
          LIMIT 1`,
-        [yearId],
+        [tenantId, yearId],
       )
     ).rows[0]?.id ?? null;
   if (!aLevelClassId) {
@@ -217,12 +218,17 @@ async function ensureAcademicBaseline(
   }
 
   let comboId =
-    (await pool.query<{ id: string }>(`SELECT id FROM subject_combinations WHERE code = 'PCM' ORDER BY id LIMIT 1`))
-      .rows[0]?.id ?? null;
+    (
+      await pool.query<{ id: string }>(
+        `SELECT id FROM subject_combinations WHERE tenant_id = $1 AND code = 'PCM' ORDER BY id LIMIT 1`,
+        [tenantId],
+      )
+    ).rows[0]?.id ?? null;
   if (!comboId) {
     const combo = await pool.query<{ id: string }>(
-      `INSERT INTO subject_combinations (tenant_id, code, name, subjects)
-       VALUES ($1, 'PCM', 'Physics, Chemistry, Mathematics', '["Physics","Chemistry","Mathematics"]'::jsonb)
+      `INSERT INTO subject_combinations (tenant_id, code, name, level, subjects)
+       VALUES ($1, 'PCM', 'Physics, Chemistry, Mathematics', 'A_LEVEL', '["Physics","Chemistry","Mathematics"]'::jsonb)
+       ON CONFLICT (tenant_id, code) DO UPDATE SET name = EXCLUDED.name
        RETURNING id`,
       [tenantId],
     );
@@ -246,10 +252,11 @@ async function ensureAcademicBaseline(
     const subjectId = subject.rows[0]?.id ?? null;
     if (subjectId) {
       await pool.query(
-        `INSERT INTO class_subjects (class_id, subject_id, teacher_id)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (class_id, subject_id) DO UPDATE SET teacher_id = EXCLUDED.teacher_id`,
-        [oLevelClassId, subjectId, subjectTeacherId],
+        `INSERT INTO class_subjects (tenant_id, class_id, subject_id, teacher_id, academic_year_id, term_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (class_id, subject_id, academic_year_id)
+         DO UPDATE SET teacher_id = EXCLUDED.teacher_id, term_id = EXCLUDED.term_id`,
+        [tenantId, oLevelClassId, subjectId, subjectTeacherId, yearId, termId],
       );
     }
   }
@@ -341,6 +348,14 @@ async function main(): Promise<void> {
   await seedSampleStudents(tenantId, refs);
 
   await pool.end();
+
+  try {
+    const platformAdmin = await seedPlatformAdmin();
+    printPlatformAdminBanner(platformAdmin);
+    console.log(`Platform super-admin ready: ${platformAdmin.email}`);
+  } finally {
+    await platformPool.end();
+  }
 }
 
 main().catch((e) => {

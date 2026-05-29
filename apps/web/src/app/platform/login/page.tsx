@@ -41,7 +41,13 @@ export default function PlatformLoginPage() {
         <h1 className="text-xl font-semibold text-white">Platform administration</h1>
         <p className="text-sm text-slate-400">
           Sign in to provision and manage schools. Use{" "}
-          <code className="text-slate-300">platform.localhost</code> in development.
+          <code className="text-slate-300">platform.localhost:3000</code> in development.
+        </p>
+        <p className="text-xs text-slate-500">
+          After <code className="text-slate-400">npm run seed</code>, use{" "}
+          <code className="text-slate-400">platform@school.local</code> and the password from{" "}
+          <code className="text-slate-400">PLATFORM_ADMIN_PASSWORD</code> (or{" "}
+          <code className="text-slate-400">ADMIN_PASSWORD</code>) in <code className="text-slate-400">.env</code>.
         </p>
         {error ? (
           <p className="rounded-md bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>
