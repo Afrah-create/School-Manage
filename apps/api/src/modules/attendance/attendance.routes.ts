@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
+import { requireFeature } from "../../middleware/requireFeature.js";
 import { requireRoles } from "../../middleware/rbac";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as c from "./attendance.controller";
@@ -7,6 +8,7 @@ import * as c from "./attendance.controller";
 export const attendanceRouter = Router();
 
 attendanceRouter.use(requireAuth);
+attendanceRouter.use(requireFeature("attendance"));
 attendanceRouter.post(
   "/",
   requireRoles("class_teacher", "subject_teacher", "admin", "headteacher"),

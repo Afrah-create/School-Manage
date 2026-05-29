@@ -1,6 +1,7 @@
 export * from "./utils/academicLevel";
 export * from "./utils/reportRanking";
 export * from "./constants/roles";
+export * from "./constants/tenantFeatureFlags";
 export * from "./constants/grading";
 export * from "./constants/assessmentGradingScales";
 export * from "./constants/fees";

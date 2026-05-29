@@ -22,6 +22,7 @@ export const createTenantSchema = z.object({
 export const updateTenantSchema = z.object({
   displayName: z.string().min(2).max(140).optional(),
   status: z.enum(["active", "suspended", "provisioning"]).optional(),
+  featureFlags: z.record(z.boolean()).optional(),
 });
 
 export type PlatformLoginInput = z.infer<typeof platformLoginSchema>;

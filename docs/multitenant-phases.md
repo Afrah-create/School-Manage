@@ -15,8 +15,8 @@ Related: [Rollback guide](multitenant-rollback.md) · [README](../README.md)
 | 2 | Platform super-admin | **Done** | `050` |
 | 3 | Subdomain + school auth | **Done** | — |
 | 4 | PostgreSQL RLS | **Done** | `052` |
-| 5 | Hardening & polish | **In progress** | `051` (optional, prod roles) |
-| 6 | Production ops | **Not started** | — |
+| 5 | Hardening & polish | **Done** | `051`, `053` |
+| 6 | Production ops | **Backlog** | — |
 
 ---
 
@@ -31,138 +31,74 @@ Related: [Rollback guide](multitenant-rollback.md) · [README](../README.md)
 - [x] Git tag `v1-single-tenant`
 - [x] `backups/` in `.gitignore`
 
-**Verify:** `backups/*.sql` non-empty after backup.
-
 ---
 
 ## Phase 1 — Schema foundation
 
 **Goal:** `tenant_id` on all school data; `tenant_settings` replaces `school_settings`.
 
-**Deliverables**
-
-- [x] `tenants`, `tenant_domains`, `tenant_settings`
-- [x] `tenant_id` column on tenant-scoped tables (`047`)
-- [x] Default tenant backfill (`048`)
-- [x] Composite uniques, NOT NULL, drop `school_settings` (`049`)
-- [x] Seed creates default tenant + domain
-- [x] Settings/reports read `tenant_settings`
-
-**Key files**
-
-- [apps/api/src/database/migrations/046_tenants_platform.sql](../apps/api/src/database/migrations/046_tenants_platform.sql)
-- [apps/api/src/config/tenant.ts](../apps/api/src/config/tenant.ts)
-
-**Verify:** `SELECT slug FROM tenants;` → `default`. No `school_settings` table.
+**Deliverables:** All complete — see migration `046`–`049`.
 
 ---
 
 ## Phase 2 — Platform super-admin
 
-**Goal:** Separate operators who create schools; school `admin` manages one tenant only.
+**Goal:** Separate operators who create schools.
 
-**Deliverables**
-
-- [x] `platform_admins` table
-- [x] `/api/platform/auth/login`, `/api/platform/tenants` CRUD
-- [x] Provision flow: tenant + domain + settings + first `admin` user
-- [x] Platform JWT (`aud: platform`)
-- [x] Web UI: `platform.localhost:3000` → `/platform/login`, `/platform/tenants`
-- [x] `npm run seed:platform`
-
-**Key files**
-
-- [apps/api/src/modules/platform/](../apps/api/src/modules/platform/)
-- [apps/web/src/app/platform/](../apps/web/src/app/platform/)
-
-**Verify:** Create tenant `demo` on platform; open `http://demo.localhost:3000/login`.
+**Deliverables:** All complete — `/api/platform/*`, web UI at `platform.localhost`.
 
 ---
 
 ## Phase 3 — Subdomain + school auth
 
-**Goal:** Each school uses `{slug}.localhost` (or `{slug}.yourdomain.com`); JWT bound to tenant.
+**Goal:** `{slug}.localhost` + JWT `tid`.
 
 **Deliverables**
 
-- [x] `resolveTenant` middleware (Host + `X-Tenant-Slug`)
-- [x] `bindTenantContext` → `query()` sets `app.tenant_id` per request
-- [x] JWT claim `tid`; `requireAuth` checks `tid` vs `req.tenant`
-- [x] Login: `WHERE tenant_id = $1 AND email = $2`
-- [x] CORS for `*.localhost` and `APP_ROOT_DOMAIN`
-- [x] Web sends `X-Tenant-Slug`; middleware routes platform vs school
-- [x] `authStore` persists `tenantSlug` / `tenantId` from login response
-- [ ] **Remaining:** Remove `getDefaultTenantId()` fallbacks on authenticated routes (use `req.tenant.id` only)
-
-**Key files**
-
-- [apps/api/src/middleware/resolveTenant.ts](../apps/api/src/middleware/resolveTenant.ts)
-- [apps/api/src/middleware/tenantContext.ts](../apps/api/src/middleware/tenantContext.ts)
-- [apps/api/src/config/db.ts](../apps/api/src/config/db.ts) (`withTenant`, `tenantContext`)
-
-**Verify:** Token from `default.localhost` rejected on `other.localhost` (401 `TENANT_MISMATCH`).
+- [x] `resolveTenant`, `bindTenantContext`, JWT `tid`, login scoped by tenant
+- [x] `authStore` tenant fields
+- [x] `activeTenantId()` / `activeTenantIdFromContext()` — no silent default on API handlers
 
 ---
 
 ## Phase 4 — PostgreSQL RLS
 
-**Goal:** DB enforces isolation even if app omits `WHERE tenant_id`.
+**Goal:** DB-enforced isolation.
 
-**Deliverables**
-
-- [x] `ENABLE` + `FORCE ROW LEVEL SECURITY` on tenant tables
-- [x] Policy: `tenant_id = current_setting('app.tenant_id', true)::uuid`
-- [x] `BEFORE INSERT` trigger: default `tenant_id` from session
-- [x] `platformPool` for provisioning (superuser / BYPASSRLS in prod)
-- [x] `migrate.ts` supports `DATABASE_URL_MIGRATE`
-- [x] `npm run test:security` (JWT + tenant isolation; needs real `DATABASE_URL`)
-
-**Key files**
-
-- [apps/api/src/database/migrations/052_enable_rls.sql](../apps/api/src/database/migrations/052_enable_rls.sql)
-
-**Verify:** With `set_config` set to tenant A, `SELECT` from `users` returns only tenant A rows.
+**Deliverables:** All complete — migration `052`, `npm run test:security`.
 
 ---
 
-## Phase 5 — Hardening & polish (in progress)
+## Phase 5 — Hardening & polish
 
 **Goal:** Production-ready isolation, storage, and UX.
 
 **Deliverables**
 
-- [x] `051_db_roles.sql` — `school_app`, `platform_app`, `migration_admin` (prod; change passwords after apply)
-- [x] Tenant-scoped uploads: `uploads/{tenantId}/settings|students|users`
-- [ ] Tenant-scoped report cache: `cache/reports/{tenantId}/` (helper added; wire report PDF cache writes)
-- [ ] Pass `req.tenant.id` into reports/settings (drop silent default-tenant fallback in API handlers)
-- [ ] Platform UI: edit tenant status/name, copy sign-in URL (partially done on list)
-- [ ] `tenant_settings.feature_flags` usage (optional modules per school)
-- [x] README + `.env.example` multi-tenant section
-- [x] This phase document
+- [x] `051_db_roles.sql` — optional prod roles (change passwords after apply)
+- [x] Tenant-scoped uploads: `uploads/{tenantId}/…`
+- [x] Tenant-scoped report PDF cache: `cache/reports/{tenantId}/{reportId}.pdf` via [`reportPdfCache.ts`](../apps/api/src/utils/reportPdfCache.ts)
+- [x] Settings/reports use `activeTenantIdFromContext()` (not `getDefaultTenantId` on requests)
+- [x] HTTP cache keys include `tenant_id`
+- [x] Platform UI: edit tenant, module toggles, copy sign-in URL, audit log panel
+- [x] `tenant_settings.feature_flags` + `requireFeature()` on fees, exams, alevel, timetable, attendance, analytics
+- [x] `platform_audit_log` + logging on tenant CRUD (`053`)
 
-**Key files to touch**
+**Verify**
 
-- [apps/api/src/utils/tenantUploads.ts](../apps/api/src/utils/tenantUploads.ts)
-- Upload modules: `settings.upload.ts`, `students.upload.ts`, `users.upload.ts`
-- [apps/web/src/store/authStore.ts](../apps/web/src/store/authStore.ts)
-
-**Verify:** Two tenants’ logos stored under different `uploads/{uuid}/` paths; no cross-tenant file URL access.
+- Regenerate reports clears tenant PDF cache; second PDF request hits disk cache.
+- Disable `fees` for a tenant on platform → school API returns `403 FEATURE_DISABLED`.
 
 ---
 
-## Phase 6 — Production ops (not started)
+## Phase 6 — Production ops (backlog)
 
-**Goal:** Operate many schools at scale.
-
-**Backlog**
-
-- [ ] Dedicated `PLATFORM_DATABASE_URL` with `BYPASSRLS` role (not superuser)
-- [ ] Wildcard DNS `*.yourdomain.com` → app
-- [ ] Per-tenant backup/export (`pg_dump` with tenant filter or logical export)
-- [ ] Platform audit log (who created/suspended tenants)
-- [ ] Rate limits per `tenant_id`
-- [ ] Optional: custom domains table (`tenant_domains.custom_host`)
-- [ ] Security review / pen test (cross-tenant IDOR, JWT, RLS bypass)
+- [ ] Wire `DATABASE_URL` / `PLATFORM_DATABASE_URL` to dedicated PG roles from `051`
+- [ ] Wildcard DNS `*.yourdomain.com`
+- [ ] Per-tenant backup/export script
+- [ ] Rate limits keyed by `tenant_id`
+- [ ] Custom domain column on `tenant_domains`
+- [ ] Security review (cross-tenant IDOR, RLS bypass)
 
 ---
 
@@ -170,12 +106,11 @@ Related: [Rollback guide](multitenant-rollback.md) · [README](../README.md)
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | School API pool (subject to RLS in prod) |
-| `PLATFORM_DATABASE_URL` | Platform provisioning (BYPASSRLS); defaults to `DATABASE_URL` in dev |
-| `DATABASE_URL_MIGRATE` | Migration runner; defaults to `DATABASE_URL` |
-| `APP_ROOT_DOMAIN` | `localhost` or production apex domain |
-| `DEFAULT_TENANT_SLUG` | Fallback slug when Host is bare `localhost` |
-| `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` | `npm run seed:platform` |
+| `DATABASE_URL` | School API (RLS) |
+| `PLATFORM_DATABASE_URL` | Platform provisioning (BYPASSRLS in prod) |
+| `DATABASE_URL_MIGRATE` | Migrations |
+| `APP_ROOT_DOMAIN` | Subdomain parsing |
+| `DEFAULT_TENANT_SLUG` | Bare `localhost` fallback only |
 
 ---
 
@@ -183,20 +118,18 @@ Related: [Rollback guide](multitenant-rollback.md) · [README](../README.md)
 
 | URL | Role |
 |-----|------|
-| `http://default.localhost:3000` | Default school app |
-| `http://{slug}.localhost:3000` | School by subdomain |
-| `http://platform.localhost:3000` | Platform super-admin |
-| `http://localhost:5000/api` | API |
+| `http://default.localhost:3000` | Default school |
+| `http://{slug}.localhost:3000` | School by slug |
+| `http://platform.localhost:3000` | Platform admin |
 
 ---
 
 ## Implementation notes
 
-1. **Do not** add `super_admin` to school `users` — use `platform_admins` only.
-2. **Order:** Never enable RLS before `bindTenantContext` + login set `tid` (Phases 3–4 order matters).
-3. **New tables** must include `tenant_id`, RLS policy, and insert trigger (copy pattern from `052`).
-4. **New API routes** under `/api/*` (not `/api/platform`) must run after `resolveTenant` + `bindTenantContext`.
-5. Update this doc when adding migration `053+`.
+1. Platform admins live in `platform_admins` only — never in school `users`.
+2. New tenant tables: `tenant_id` + RLS policy + insert trigger (copy `052`).
+3. New modules: add key to `TENANT_FEATURE_FLAG_KEYS` and `requireFeature()` on router.
+4. Update this doc when adding migration `054+`.
 
 ---
 
@@ -204,5 +137,6 @@ Related: [Rollback guide](multitenant-rollback.md) · [README](../README.md)
 
 | Date | Change |
 |------|--------|
-| 2026-05-29 | Initial doc; Phases 0–4 marked done; Phase 5 scoped |
-| 2026-05-29 | Phase 5: tenant uploads, `051` roles migration, authStore tenant, `requestTenant` helper |
+| 2026-05-29 | Initial doc; Phases 0–4 |
+| 2026-05-29 | Phase 5: uploads, roles, authStore, request tenant helpers |
+| 2026-05-29 | Phase 5 complete: PDF cache, feature flags, platform audit, platform edit UI |

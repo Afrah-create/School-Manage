@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
+import { requireFeature } from "../../middleware/requireFeature.js";
 import { requireRoles } from "../../middleware/rbac";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as c from "./timetable.controller";
@@ -10,6 +11,7 @@ const leads = requireRoles("admin", "headteacher");
 const teachers = requireRoles("admin", "headteacher", "class_teacher", "subject_teacher");
 
 timetableRouter.use(requireAuth);
+timetableRouter.use(requireFeature("timetable"));
 
 timetableRouter.get("/my-week", teachers, asyncHandler(c.getMyWeek));
 timetableRouter.get("/today", teachers, asyncHandler(c.getToday));

@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { platformPool } from "../../config/db.js";
 import { loadEnv } from "../../config/env.js";
 import { HttpError } from "../../utils/httpError.js";
+import { logPlatformAction } from "./platformAudit.service.js";
 
 export type TenantListItem = {
   id: string;
@@ -11,6 +12,7 @@ export type TenantListItem = {
   status: string;
   subdomain: string;
   schoolName: string | null;
+  featureFlags: Record<string, boolean>;
   createdAt: string;
 };
 
@@ -34,10 +36,11 @@ export async function listTenants(): Promise<TenantListItem[]> {
       status: string;
       subdomain: string;
       school_name: string | null;
+      feature_flags: Record<string, boolean> | null;
       created_at: Date;
     }>(
       `SELECT t.id, t.slug, t.display_name, t.status, d.subdomain,
-              ts.school_name, t.created_at
+              ts.school_name, ts.feature_flags, t.created_at
        FROM tenants t
        JOIN tenant_domains d ON d.tenant_id = t.id AND d.is_primary = TRUE
        LEFT JOIN tenant_settings ts ON ts.tenant_id = t.id
@@ -50,6 +53,7 @@ export async function listTenants(): Promise<TenantListItem[]> {
       status: r.status,
       subdomain: r.subdomain,
       schoolName: r.school_name,
+      featureFlags: (r.feature_flags ?? {}) as Record<string, boolean>,
       createdAt: r.created_at.toISOString(),
     }));
   } finally {
@@ -57,7 +61,10 @@ export async function listTenants(): Promise<TenantListItem[]> {
   }
 }
 
-export async function createTenant(input: CreateTenantInput): Promise<TenantListItem> {
+export async function createTenant(
+  input: CreateTenantInput,
+  actorId: string,
+): Promise<TenantListItem> {
   const env = loadEnv();
   const slug = input.slug.toLowerCase();
   const email = input.adminEmail.toLowerCase().trim();
@@ -104,6 +111,12 @@ export async function createTenant(input: CreateTenantInput): Promise<TenantList
     );
 
     await client.query("COMMIT");
+    await logPlatformAction({
+      actorId,
+      action: "TENANT_CREATED",
+      tenantId,
+      metadata: { slug, displayName: input.displayName.trim(), adminEmail: email },
+    });
     return {
       id: tenantId,
       slug,
@@ -111,6 +124,7 @@ export async function createTenant(input: CreateTenantInput): Promise<TenantList
       status: "active",
       subdomain: slug,
       schoolName: input.displayName.trim(),
+      featureFlags: {},
       createdAt: new Date().toISOString(),
     };
   } catch (e) {
@@ -124,6 +138,7 @@ export async function createTenant(input: CreateTenantInput): Promise<TenantList
 export async function updateTenant(
   tenantId: string,
   input: UpdateTenantInput,
+  actorId: string,
 ): Promise<TenantListItem> {
   const client = await platformPool.connect();
   try {
@@ -143,6 +158,15 @@ export async function updateTenant(
         [tenantId, input.status],
       );
     }
+    if (input.featureFlags !== undefined) {
+      await client.query(
+        `UPDATE tenant_settings
+         SET feature_flags = COALESCE(feature_flags, '{}'::jsonb) || $2::jsonb,
+             updated_at = NOW()
+         WHERE tenant_id = $1`,
+        [tenantId, JSON.stringify(input.featureFlags)],
+      );
+    }
     const { rows } = await client.query<{
       id: string;
       slug: string;
@@ -150,10 +174,11 @@ export async function updateTenant(
       status: string;
       subdomain: string;
       school_name: string | null;
+      feature_flags: Record<string, boolean> | null;
       created_at: Date;
     }>(
       `SELECT t.id, t.slug, t.display_name, t.status, d.subdomain,
-              ts.school_name, t.created_at
+              ts.school_name, ts.feature_flags, t.created_at
        FROM tenants t
        JOIN tenant_domains d ON d.tenant_id = t.id AND d.is_primary = TRUE
        LEFT JOIN tenant_settings ts ON ts.tenant_id = t.id
@@ -162,6 +187,16 @@ export async function updateTenant(
     );
     if (!rows[0]) throw new HttpError(404, "Tenant not found.");
     const r = rows[0];
+    await logPlatformAction({
+      actorId,
+      action: "TENANT_UPDATED",
+      tenantId,
+      metadata: {
+        displayName: input.displayName,
+        status: input.status,
+        featureFlags: input.featureFlags,
+      },
+    });
     return {
       id: r.id,
       slug: r.slug,
@@ -169,8 +204,40 @@ export async function updateTenant(
       status: r.status,
       subdomain: r.subdomain,
       schoolName: r.school_name,
+      featureFlags: (r.feature_flags ?? {}) as Record<string, boolean>,
       createdAt: r.created_at.toISOString(),
     };
+  } finally {
+    client.release();
+  }
+}
+
+export async function listPlatformAuditLog(limit = 50) {
+  const client = await platformPool.connect();
+  try {
+  const { rows } = await client.query<{
+    id: string;
+    action: string;
+    tenant_id: string | null;
+    metadata: Record<string, unknown>;
+    created_at: Date;
+    actor_email: string | null;
+  }>(
+    `SELECT l.id, l.action, l.tenant_id, l.metadata, l.created_at, a.email AS actor_email
+     FROM platform_audit_log l
+     LEFT JOIN platform_admins a ON a.id = l.actor_id
+     ORDER BY l.created_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    tenantId: r.tenant_id,
+    metadata: r.metadata,
+    createdAt: r.created_at.toISOString(),
+    actorEmail: r.actor_email,
+  }));
   } finally {
     client.release();
   }
@@ -179,6 +246,7 @@ export async function updateTenant(
 export async function resetTenantAdminPassword(
   tenantId: string,
   newPassword: string,
+  actorId: string,
 ): Promise<void> {
   const env = loadEnv();
   const hash = await bcrypt.hash(newPassword, env.BCRYPT_ROUNDS);
@@ -193,6 +261,11 @@ export async function resetTenantAdminPassword(
     if (!rowCount) {
       throw new HttpError(404, "No active school admin found for this tenant.");
     }
+    await logPlatformAction({
+      actorId,
+      action: "TENANT_ADMIN_PASSWORD_RESET",
+      tenantId,
+    });
   } finally {
     client.release();
   }

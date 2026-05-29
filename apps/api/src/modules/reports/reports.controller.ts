@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
+import { activeTenantId } from "../../utils/activeTenant.js";
 import { HttpError } from "../../utils/httpError";
 import * as svc from "./reports.service";
 
@@ -106,7 +107,7 @@ export async function approve(req: Request, res: Response): Promise<void> {
 }
 
 export async function getPdf(req: Request, res: Response): Promise<void> {
-  const stream = await svc.getReportPdfStream(req.params["id"]!);
+  const stream = await svc.getReportPdfStream(req.params["id"]!, activeTenantId(req));
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", "inline; filename=report.pdf");
   stream.pipe(res);

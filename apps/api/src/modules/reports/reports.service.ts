@@ -1,7 +1,8 @@
 import type { Readable } from "stream";
 import { query } from "../../config/db";
-import { getDefaultTenantId } from "../../config/tenant.js";
+import { activeTenantIdFromContext } from "../../utils/activeTenant.js";
 import { HttpError } from "../../utils/httpError";
+import { invalidateReportPdfCache, withReportPdfCache } from "../../utils/reportPdfCache.js";
 import { streamAlevelReportCard, streamCbcReportCard } from "../../utils/pdf";
 import { recalculateExamMarkGrades } from "../exams/exams.service";
 import {
@@ -40,10 +41,10 @@ type PdfBrandingSettings = {
   report_layout: Record<string, unknown> | null;
 };
 
-async function loadPdfBrandingSettings(tenantId?: string) {
+async function loadPdfBrandingSettings(tenantId: string) {
   let s: PdfBrandingSettings | undefined;
   try {
-    const tid = tenantId ?? (await getDefaultTenantId());
+    const tid = tenantId;
     const { rows } = await query<PdfBrandingSettings>(
       `SELECT motto, logo_url, primary_color, secondary_color, report_footer_text, report_layout
        FROM tenant_settings
@@ -543,6 +544,8 @@ export async function regenerateReportsForClass(
   termId: string,
   examId?: string,
 ) {
+  const tid = activeTenantIdFromContext();
+  await invalidateReportPdfCache(tid);
   return generateReportsForClass(classId, termId, examId);
 }
 
@@ -637,8 +640,8 @@ export async function approveReport(reportId: string, approvedBy: string) {
   throw new HttpError(404, "We could not find that report. It may have been removed.");
 }
 
-async function payloadToCbcPdf(payload: CbcReportPayload): Promise<Readable> {
-  const settings = await loadPdfBrandingSettings();
+async function payloadToCbcPdf(payload: CbcReportPayload, tenantId: string): Promise<Readable> {
+  const settings = await loadPdfBrandingSettings(tenantId);
   return streamCbcReportCard({
     schoolName: payload.schoolName,
     studentName: payload.studentName,
@@ -671,8 +674,8 @@ async function payloadToCbcPdf(payload: CbcReportPayload): Promise<Readable> {
   });
 }
 
-async function payloadToAlevelPdf(payload: AlevelReportPayload): Promise<Readable> {
-  const settings = await loadPdfBrandingSettings();
+async function payloadToAlevelPdf(payload: AlevelReportPayload, tenantId: string): Promise<Readable> {
+  const settings = await loadPdfBrandingSettings(tenantId);
   return streamAlevelReportCard({
     schoolName: payload.schoolName,
     studentName: payload.studentName,
@@ -706,38 +709,41 @@ async function payloadToAlevelPdf(payload: AlevelReportPayload): Promise<Readabl
   });
 }
 
-export async function getReportPdfStream(reportId: string): Promise<Readable> {
-  const cbc = await query<{ payload: CbcReportPayload | null; is_approved: boolean }>(
-    `SELECT payload, is_approved FROM cbc_report_cards WHERE id = $1`,
-    [reportId],
-  );
-  if (cbc.rows.length > 0) {
-    const row = cbc.rows[0]!;
-    if (!row.payload) {
-      throw new HttpError(
-        400,
-        "This report card has not been generated yet. Run Generate report cards first.",
-      );
+export async function getReportPdfStream(reportId: string, tenantId?: string): Promise<Readable> {
+  const tid = tenantId ?? activeTenantIdFromContext();
+  return withReportPdfCache(tid, reportId, async () => {
+    const cbc = await query<{ payload: CbcReportPayload | null; is_approved: boolean }>(
+      `SELECT payload, is_approved FROM cbc_report_cards WHERE id = $1`,
+      [reportId],
+    );
+    if (cbc.rows.length > 0) {
+      const row = cbc.rows[0]!;
+      if (!row.payload) {
+        throw new HttpError(
+          400,
+          "This report card has not been generated yet. Run Generate report cards first.",
+        );
+      }
+      return payloadToCbcPdf(row.payload as CbcReportPayload, tid);
     }
-    return await payloadToCbcPdf(row.payload as CbcReportPayload);
-  }
 
-  const al = await query<{ payload: AlevelReportPayload | null }>(
-    `SELECT payload FROM alevel_results WHERE id = $1`,
-    [reportId],
-  );
-  if (al.rows.length > 0) {
-    const row = al.rows[0]!;
-    if (!row.payload) {
-      throw new HttpError(
-        400,
-        "This report card has not been generated yet. Run Generate report cards first.",
-      );
+    const al = await query<{ payload: AlevelReportPayload | null }>(
+      `SELECT payload FROM alevel_results WHERE id = $1`,
+      [reportId],
+    );
+    if (al.rows.length > 0) {
+      const row = al.rows[0]!;
+      if (!row.payload) {
+        throw new HttpError(
+          400,
+          "This report card has not been generated yet. Run Generate report cards first.",
+        );
+      }
+      return payloadToAlevelPdf(row.payload as AlevelReportPayload, tid);
     }
-    return await payloadToAlevelPdf(row.payload as AlevelReportPayload);
-  }
 
-  throw new HttpError(404, "We could not find that report. Check the report ID and try again.");
+    throw new HttpError(404, "We could not find that report. Check the report ID and try again.");
+  });
 }
 
 export async function listClassReports(classId: string, termId: string) {

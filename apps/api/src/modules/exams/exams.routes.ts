@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { requireAuth } from "../../middleware/auth";
+import { requireFeature } from "../../middleware/requireFeature.js";
 import { requireExamRoles } from "./exams.access";
 import * as c from "./exams.controller";
 
 export const examsRouter = Router();
 
 examsRouter.use(requireAuth);
+examsRouter.use(requireFeature("exams"));
 
 const admin = requireExamRoles("admin");
 const leads = requireExamRoles("admin", "headteacher");

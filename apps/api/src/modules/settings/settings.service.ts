@@ -1,7 +1,8 @@
 import type { SchoolSettings, UpdateSchoolSettingsInput } from "@uganda-cbc-sms/shared";
 import { query } from "../../config/db";
-import { getDefaultTenantId } from "../../config/tenant.js";
-import { HttpError } from "../../utils/httpError.js";
+import type { TenantFeatureFlags } from "../../config/featureFlags.js";
+import { loadTenantFeatureFlags } from "../../config/featureFlags.js";
+import { activeTenantIdFromContext } from "../../utils/activeTenant.js";
 import { writeAuditLog } from "../audit/audit.service";
 
 type SchoolSettingsRow = {
@@ -72,12 +73,8 @@ function mapRow(row: SchoolSettingsRow): SchoolSettings {
   };
 }
 
-async function resolveTenantId(tenantId?: string, options?: { allowDefault?: boolean }): Promise<string> {
-  if (tenantId) return tenantId;
-  if (options?.allowDefault !== false) {
-    return getDefaultTenantId();
-  }
-  throw new HttpError(400, "School context is required.");
+function resolveTenantId(tenantId?: string): string {
+  return tenantId ?? activeTenantIdFromContext();
 }
 
 async function ensureSettingsRow(tenantId: string): Promise<void> {
@@ -113,8 +110,12 @@ async function ensureSettingsRow(tenantId: string): Promise<void> {
   );
 }
 
-export async function getSchoolSettings(tenantId?: string): Promise<SchoolSettings> {
-  const tid = await resolveTenantId(tenantId);
+export type SchoolSettingsWithFlags = SchoolSettings & {
+  featureFlags: TenantFeatureFlags;
+};
+
+export async function getSchoolSettings(tenantId?: string): Promise<SchoolSettingsWithFlags> {
+  const tid = resolveTenantId(tenantId);
   await ensureSettingsRow(tid);
   const { rows } = await query<SchoolSettingsRow>(
     `SELECT
@@ -126,15 +127,16 @@ export async function getSchoolSettings(tenantId?: string): Promise<SchoolSettin
      LIMIT 1`,
     [tid],
   );
-  return mapRow(rows[0]!);
+  const featureFlags = await loadTenantFeatureFlags(tid);
+  return { ...mapRow(rows[0]!), featureFlags };
 }
 
 export async function updateSchoolSettings(
   input: Partial<UpdateSchoolSettingsInput>,
   actorId: string,
   tenantId?: string,
-): Promise<SchoolSettings> {
-  const tid = await resolveTenantId(tenantId);
+): Promise<SchoolSettingsWithFlags> {
+  const tid = resolveTenantId(tenantId);
   await ensureSettingsRow(tid);
   const current = await getSchoolSettings(tid);
   const merged: Omit<SchoolSettings, "updatedAt"> = {
@@ -197,7 +199,8 @@ export async function updateSchoolSettings(
       JSON.stringify(merged.reportLayout ?? DEFAULT_LAYOUT),
     ],
   );
-  const updated = mapRow(rows[0]!);
+  const featureFlags = await loadTenantFeatureFlags(tid);
+  const updated = { ...mapRow(rows[0]!), featureFlags };
   await writeAuditLog({
     category: "system",
     severity: "info",
@@ -219,8 +222,8 @@ export async function setSchoolLogo(
   logoUrl: string,
   actorId: string,
   tenantId?: string,
-): Promise<SchoolSettings> {
-  const tid = await resolveTenantId(tenantId);
+): Promise<SchoolSettingsWithFlags> {
+  const tid = resolveTenantId(tenantId);
   await ensureSettingsRow(tid);
   const { rows } = await query<SchoolSettingsRow>(
     `UPDATE tenant_settings
@@ -232,7 +235,8 @@ export async function setSchoolLogo(
        primary_color, secondary_color, report_footer_text, report_layout, updated_at`,
     [tid, logoUrl],
   );
-  const updated = mapRow(rows[0]!);
+  const featureFlags = await loadTenantFeatureFlags(tid);
+  const updated = { ...mapRow(rows[0]!), featureFlags };
   await writeAuditLog({
     category: "system",
     severity: "info",

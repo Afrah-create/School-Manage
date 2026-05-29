@@ -19,8 +19,9 @@ const TIER_B_ROLES = new Set<Role>(["admin", "headteacher"]);
 
 function cacheKey(req: Request): string {
   const role = req.user?.role ?? "anon";
+  const tenant = req.tenant?.id ?? req.user?.tenantId ?? "no-tenant";
   const q = JSON.stringify(req.query ?? {});
-  return `${req.method}:${req.path}:${q}:${role}`;
+  return `${req.method}:${req.path}:${q}:${role}:${tenant}`;
 }
 
 function pickCache(path: string, role?: Role): NodeCache | null {

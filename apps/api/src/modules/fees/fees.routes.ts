@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
+import { requireFeature } from "../../middleware/requireFeature.js";
 import { requireRoles } from "../../middleware/rbac";
 import { feePaymentLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -14,6 +15,7 @@ const balanceReaders = requireRoles("bursar", "admin", "headteacher");
 export const feesRouter = Router();
 
 feesRouter.use(requireAuth);
+feesRouter.use(requireFeature("fees"));
 
 feesRouter.post("/structure", admin, asyncHandler(c.postStructure));
 feesRouter.post("/structure/copy", admin, asyncHandler(c.postStructureCopy));
