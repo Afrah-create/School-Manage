@@ -57,8 +57,12 @@ export async function withTransaction<T>(
   fn: (client: pg.PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await pool.connect();
+  const tid = tenantContext.getStore();
   try {
     await client.query("BEGIN");
+    if (tid) {
+      await setTenantLocal(client, tid);
+    }
     const result = await fn(client);
     await client.query("COMMIT");
     return result;
