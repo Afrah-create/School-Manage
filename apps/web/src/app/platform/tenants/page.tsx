@@ -1,49 +1,62 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Activity, Building2, PauseCircle, Plus, ShieldCheck } from "lucide-react";
 import { TENANT_FEATURE_FLAG_KEYS } from "@uganda-cbc-sms/shared";
 import { PLATFORM_TOKEN_KEY, platformApi, setPlatformToken } from "@/lib/platformApi";
 import { schoolLoginUrl } from "@/lib/tenantHost";
+import { toast } from "@/lib/toast";
+import { AuditLogPanel } from "@/components/platform/AuditLogPanel";
+import {
+  CreateTenantForm,
+  CREATE_TENANT_FORM_ID,
+  type CreateTenantFormState,
+} from "@/components/platform/CreateTenantForm";
+import {
+  EditTenantForm,
+  EDIT_TENANT_FORM_ID,
+  type EditTenantFormState,
+} from "@/components/platform/EditTenantPanel";
+import { PlatformModal } from "@/components/platform/PlatformModal";
+import { PlatformShell } from "@/components/platform/PlatformShell";
+import { PlatformStatCard } from "@/components/platform/PlatformStatCard";
+import { TenantsTable } from "@/components/platform/TenantsTable";
+import { platformApiError } from "@/components/platform/platformUtils";
+import {
+  platformBtnPrimary,
+  platformBtnSecondary,
+} from "@/components/platform/platformFieldStyles";
+import type { PlatformAuditEntry, PlatformTenant } from "@/components/platform/types";
 
-type Tenant = {
-  id: string;
-  slug: string;
-  displayName: string;
-  status: string;
-  subdomain: string;
-  schoolName: string | null;
-  featureFlags: Record<string, boolean>;
-  createdAt: string;
-};
-
-type AuditEntry = {
-  id: string;
-  action: string;
-  tenantId: string | null;
-  actorEmail: string | null;
-  createdAt: string;
+const EMPTY_CREATE: CreateTenantFormState = {
+  slug: "",
+  displayName: "",
+  adminEmail: "",
+  adminPassword: "",
+  adminFullName: "",
 };
 
 export default function PlatformTenantsPage() {
   const router = useRouter();
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [audit, setAudit] = useState<AuditEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Tenant | null>(null);
-  const [editForm, setEditForm] = useState({
+  const [tenants, setTenants] = useState<PlatformTenant[]>([]);
+  const [audit, setAudit] = useState<PlatformAuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<PlatformTenant | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [editForm, setEditForm] = useState<EditTenantFormState>({
     displayName: "",
-    status: "active" as "active" | "suspended" | "provisioning",
-    featureFlags: {} as Record<string, boolean>,
+    status: "active",
+    featureFlags: {},
   });
-  const [form, setForm] = useState({
-    slug: "",
-    displayName: "",
-    adminEmail: "",
-    adminPassword: "",
-    adminFullName: "",
-  });
+  const [form, setForm] = useState<CreateTenantFormState>(EMPTY_CREATE);
+
+  const stats = useMemo(() => {
+    const active = tenants.filter((t) => t.status === "active").length;
+    const suspended = tenants.filter((t) => t.status === "suspended").length;
+    return { total: tenants.length, active, suspended };
+  }, [tenants]);
 
   const load = useCallback(async () => {
     try {
@@ -53,11 +66,12 @@ export default function PlatformTenantsPage() {
       ]);
       setTenants(tRes.data?.data ?? []);
       setAudit(aRes.data?.data ?? []);
-      setError(null);
     } catch {
-      setError("Could not load tenants. Sign in again.");
+      toast.error("Your session may have expired. Please sign in again.", "Could not load schools");
       setPlatformToken(null);
       router.replace("/platform/login");
+    } finally {
+      setLoading(false);
     }
   }, [router]);
 
@@ -65,9 +79,28 @@ export default function PlatformTenantsPage() {
     void load();
   }, [load]);
 
+  function openCreate() {
+    setEditing(null);
+    setForm(EMPTY_CREATE);
+    setCreateOpen(true);
+  }
+
+  function closeCreate() {
+    if (submitting) return;
+    setCreateOpen(false);
+    setForm(EMPTY_CREATE);
+  }
+
+  function closeEdit() {
+    if (submitting) return;
+    setEditing(null);
+  }
+
   async function createTenant(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setSubmitting(true);
+    const displayName = form.displayName;
+    const slug = form.slug;
     try {
       await platformApi.post("/tenants", {
         slug: form.slug,
@@ -76,21 +109,19 @@ export default function PlatformTenantsPage() {
         adminPassword: form.adminPassword,
         adminFullName: form.adminFullName || undefined,
       });
-      setShowForm(false);
-      setForm({
-        slug: "",
-        displayName: "",
-        adminEmail: "",
-        adminPassword: "",
-        adminFullName: "",
-      });
+      setCreateOpen(false);
+      setForm(EMPTY_CREATE);
+      toast.success(`${displayName} is ready at ${slug}.localhost:3000`, "School created");
       await load();
     } catch (err: unknown) {
-      setError(apiError(err) ?? "Create failed");
+      toast.error(platformApiError(err) ?? "Please check the form and try again.", "Could not create school");
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  function startEdit(t: Tenant) {
+  function startEdit(t: PlatformTenant) {
+    setCreateOpen(false);
     setEditing(t);
     const flags: Record<string, boolean> = {};
     for (const key of TENANT_FEATURE_FLAG_KEYS) {
@@ -98,7 +129,7 @@ export default function PlatformTenantsPage() {
     }
     setEditForm({
       displayName: t.displayName,
-      status: t.status as "active" | "suspended" | "provisioning",
+      status: t.status as EditTenantFormState["status"],
       featureFlags: flags,
     });
   }
@@ -106,258 +137,155 @@ export default function PlatformTenantsPage() {
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
-    setError(null);
+    setSubmitting(true);
     try {
       await platformApi.patch(`/tenants/${editing.id}`, {
         displayName: editForm.displayName,
         status: editForm.status,
         featureFlags: editForm.featureFlags,
       });
+      const name = editForm.displayName;
       setEditing(null);
+      toast.success(`Changes to ${name} have been saved.`, "School updated");
       await load();
     } catch (err: unknown) {
-      setError(apiError(err) ?? "Update failed");
+      toast.error(platformApiError(err) ?? "Please check the form and try again.", "Could not update school");
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  function copyLoginUrl(slug: string) {
-    const url = schoolLoginUrl(slug);
-    void navigator.clipboard.writeText(url);
-  }
-
-  function signOut() {
-    setPlatformToken(null);
-    document.cookie = `${PLATFORM_TOKEN_KEY}=; path=/; max-age=0`;
-    router.push("/platform/login");
+  async function copyLoginUrl(slug: string) {
+    try {
+      await navigator.clipboard.writeText(schoolLoginUrl(slug));
+      toast.success("Staff sign-in URL copied to your clipboard.", "Copied");
+    } catch {
+      toast.error("Allow clipboard access or copy the URL manually.", "Copy failed");
+    }
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-        <h1 className="text-lg font-semibold">School tenants</h1>
-        <button type="button" onClick={signOut} className="text-sm text-slate-400 hover:text-white">
-          Sign out
-        </button>
-      </header>
-      <main className="mx-auto max-w-5xl space-y-8 px-6 py-8">
-        {error ? (
-          <p className="rounded-md bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>
-        ) : null}
+    <PlatformShell
+      title="School tenants"
+      subtitle="Provision schools, manage modules, and open staff sign-in."
+    >
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <PlatformStatCard
+          label="Total schools"
+          value={loading ? "—" : stats.total}
+          icon={Building2}
+          accent="violet"
+        />
+        <PlatformStatCard
+          label="Active"
+          value={loading ? "—" : stats.active}
+          icon={ShieldCheck}
+          accent="emerald"
+        />
+        <PlatformStatCard
+          label="Suspended"
+          value={loading ? "—" : stats.suspended}
+          icon={PauseCircle}
+          accent="amber"
+        />
+        <PlatformStatCard
+          label="Audit events"
+          value={loading ? "—" : audit.length}
+          hint="Recent log entries"
+          icon={Activity}
+          accent="sky"
+        />
+      </div>
 
-        <section>
-          <div className="mb-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setShowForm((v) => !v);
-                setEditing(null);
-              }}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
-            >
-              {showForm ? "Cancel" : "Add school"}
+      <section className="mb-10">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-lg font-semibold text-white">All schools</h2>
+            <p className="text-sm text-slate-400">
+              Each school has its own subdomain and isolated data.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-violet-900/25 transition hover:from-violet-500 hover:to-indigo-500"
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            Add school
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-16 animate-pulse rounded-2xl border border-slate-800 bg-slate-900/50"
+              />
+            ))}
+          </div>
+        ) : (
+          <TenantsTable tenants={tenants} onEdit={startEdit} onCopyUrl={copyLoginUrl} />
+        )}
+      </section>
+
+      {!loading ? <AuditLogPanel entries={audit} /> : null}
+
+      <PlatformModal
+        open={createOpen}
+        title="Add school"
+        description="Creates a new tenant, subdomain, and first administrator account."
+        onClose={closeCreate}
+        footer={
+          <>
+            <button type="button" onClick={closeCreate} disabled={submitting} className={platformBtnSecondary}>
+              Cancel
             </button>
-          </div>
-          {showForm ? (
-            <form
-              onSubmit={createTenant}
-              className="mb-6 grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-6 sm:grid-cols-2"
+            <button
+              type="submit"
+              form={CREATE_TENANT_FORM_ID}
+              disabled={submitting}
+              className={platformBtnPrimary}
             >
-              <label className="text-sm">
-                Slug (subdomain)
-                <input
-                  required
-                  pattern="[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                  value={form.slug}
-                  onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })}
-                />
-              </label>
-              <label className="text-sm">
-                School name
-                <input
-                  required
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                  value={form.displayName}
-                  onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                />
-              </label>
-              <label className="text-sm">
-                Admin email
-                <input
-                  type="email"
-                  required
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                  value={form.adminEmail}
-                  onChange={(e) => setForm({ ...form, adminEmail: e.target.value })}
-                />
-              </label>
-              <label className="text-sm">
-                Admin password
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                  value={form.adminPassword}
-                  onChange={(e) => setForm({ ...form, adminPassword: e.target.value })}
-                />
-              </label>
-              <button
-                type="submit"
-                className="sm:col-span-2 rounded-md bg-emerald-600 py-2 text-sm font-medium hover:bg-emerald-500"
-              >
-                Create school
-              </button>
-            </form>
-          ) : null}
+              {submitting ? "Creating…" : "Create school"}
+            </button>
+          </>
+        }
+      >
+        <CreateTenantForm form={form} onChange={setForm} onSubmit={createTenant} />
+      </PlatformModal>
 
-          {editing ? (
-            <form
-              onSubmit={saveEdit}
-              className="mb-6 space-y-4 rounded-xl border border-blue-900/50 bg-slate-900 p-6"
+      <PlatformModal
+        open={editing !== null}
+        title="Edit school"
+        description={editing ? `Manage settings for ${editing.displayName}` : undefined}
+        onClose={closeEdit}
+        size="wide"
+        footer={
+          <>
+            <button type="button" onClick={closeEdit} disabled={submitting} className={platformBtnSecondary}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form={EDIT_TENANT_FORM_ID}
+              disabled={submitting}
+              className={platformBtnPrimary}
             >
-              <h2 className="font-medium">Edit {editing.slug}</h2>
-              <label className="block text-sm">
-                Display name
-                <input
-                  required
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                  value={editForm.displayName}
-                  onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
-                />
-              </label>
-              <label className="block text-sm">
-                Status
-                <select
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2"
-                  value={editForm.status}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      status: e.target.value as typeof editForm.status,
-                    })
-                  }
-                >
-                  <option value="active">Active</option>
-                  <option value="suspended">Suspended</option>
-                  <option value="provisioning">Provisioning</option>
-                </select>
-              </label>
-              <fieldset className="text-sm">
-                <legend className="mb-2 font-medium">Modules</legend>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {TENANT_FEATURE_FLAG_KEYS.map((key) => (
-                    <label key={key} className="flex items-center gap-2 capitalize">
-                      <input
-                        type="checkbox"
-                        checked={editForm.featureFlags[key] !== false}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            featureFlags: {
-                              ...editForm.featureFlags,
-                              [key]: e.target.checked,
-                            },
-                          })
-                        }
-                      />
-                      {key}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm hover:bg-blue-500"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(null)}
-                  className="rounded-md border border-slate-700 px-4 py-2 text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : null}
-
-          <div className="overflow-hidden rounded-xl border border-slate-800">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-900 text-slate-400">
-                <tr>
-                  <th className="px-4 py-3">School</th>
-                  <th className="px-4 py-3">Slug</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tenants.map((t) => (
-                  <tr key={t.id} className="border-t border-slate-800">
-                    <td className="px-4 py-3">{t.displayName}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{t.slug}</td>
-                    <td className="px-4 py-3 capitalize">{t.status}</td>
-                    <td className="px-4 py-3 space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(t)}
-                        className="text-blue-400 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => copyLoginUrl(t.slug)}
-                        className="text-slate-400 hover:underline"
-                      >
-                        Copy URL
-                      </button>
-                      <a
-                        href={schoolLoginUrl(t.slug)}
-                        className="text-blue-400 hover:underline"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-sm font-medium text-slate-400">Recent platform activity</h2>
-          <ul className="space-y-2 rounded-xl border border-slate-800 bg-slate-900 p-4 text-sm">
-            {audit.length === 0 ? (
-              <li className="text-slate-500">No audit entries yet.</li>
-            ) : (
-              audit.map((a) => (
-                <li key={a.id} className="flex flex-wrap justify-between gap-2 border-b border-slate-800 py-2 last:border-0">
-                  <span>
-                    <span className="font-mono text-xs text-blue-300">{a.action}</span>
-                    {a.actorEmail ? ` · ${a.actorEmail}` : ""}
-                  </span>
-                  <span className="text-slate-500">{new Date(a.createdAt).toLocaleString()}</span>
-                </li>
-              ))
-            )}
-          </ul>
-        </section>
-      </main>
-    </div>
+              {submitting ? "Saving…" : "Save changes"}
+            </button>
+          </>
+        }
+      >
+        {editing ? (
+          <EditTenantForm
+            tenant={editing}
+            form={editForm}
+            onChange={setEditForm}
+            onSubmit={saveEdit}
+          />
+        ) : null}
+      </PlatformModal>
+    </PlatformShell>
   );
-}
-
-function apiError(err: unknown): string | null {
-  if (err && typeof err === "object" && "response" in err) {
-    const data = (err as { response?: { data?: { error?: string } } }).response?.data;
-    return typeof data?.error === "string" ? data.error : null;
-  }
-  return null;
 }
