@@ -1,4 +1,5 @@
 import axios, { isAxiosError, type AxiosError, type AxiosResponse } from "axios";
+import { billingPageForRole } from "@/lib/billingPaths";
 import { getSmsTokenFromCookie } from "@/lib/cookies";
 import { useAuthStore } from "@/store/authStore";
 import { getApiTenantSlug } from "@/lib/tenantHost";
@@ -73,6 +74,18 @@ api.interceptors.response.use(
       err.message =
         fromBody ??
         "Your account is locked after too many failed sign-in attempts. Contact your administrator.";
+    }
+
+    if (err.response?.status === 402 && typeof window !== "undefined") {
+      const body = err.response?.data as { code?: string } | undefined;
+      if (body?.code === "SUBSCRIPTION_REQUIRED") {
+        const role = useAuthStore.getState().user?.role;
+        const billingPath = role ? billingPageForRole(role) : null;
+        if (billingPath && !window.location.pathname.startsWith(billingPath)) {
+          window.location.href = billingPath;
+          return Promise.reject(err);
+        }
+      }
     }
 
     if (err.response?.status === 401 && typeof window !== "undefined" && !isLoginRequest) {
@@ -209,7 +222,17 @@ function axiosFailureToMessage(err: AxiosError<unknown>): string {
     return "You need to sign in to continue, or your session has expired.";
   }
   if (status === 403) {
+    const code = (err.response?.data as { code?: string } | undefined)?.code;
+    if (code === "SUBSCRIPTION_BLOCKED") {
+      return "Your school's subscription is unpaid. Contact your school administrator to restore access.";
+    }
     return "You don't have permission to do that. Ask an administrator if you need access.";
+  }
+  if (status === 402) {
+    return (
+      messageFromApiBody(err.response?.data) ??
+      "School subscription payment is required. Go to Billing to pay and restore access."
+    );
   }
   if (status === 404) {
     return "We couldn't find what you're looking for. It may have been removed or the link is wrong.";

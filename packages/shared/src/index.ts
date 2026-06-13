@@ -16,3 +16,4 @@ export * from "./schemas/audit.schema";
 export * from "./schemas/settings.schema";
 export * from "./schemas/platform.schema";
 export * from "./schemas/onboarding.schema";
+export * from "./schemas/billing.schema";

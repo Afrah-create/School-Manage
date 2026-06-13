@@ -29,6 +29,13 @@ const envSchema = z.object({
   SESSION_INACTIVITY_MINUTES: z.coerce.number().min(1).max(480).default(15),
   APP_ROOT_DOMAIN: z.string().default("localhost"),
   DEFAULT_TENANT_SLUG: z.string().default("default"),
+  BILLING_MOCK_PAYMENTS: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  FLUTTERWAVE_SECRET_KEY: z.string().optional(),
+  FLUTTERWAVE_WEBHOOK_SECRET: z.string().optional(),
+  WEB_APP_URL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -65,6 +72,10 @@ export function loadEnv(): Env {
     SESSION_INACTIVITY_MINUTES: process.env.SESSION_INACTIVITY_MINUTES,
     APP_ROOT_DOMAIN: process.env.APP_ROOT_DOMAIN,
     DEFAULT_TENANT_SLUG: process.env.DEFAULT_TENANT_SLUG,
+    BILLING_MOCK_PAYMENTS: process.env.BILLING_MOCK_PAYMENTS,
+    FLUTTERWAVE_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY,
+    FLUTTERWAVE_WEBHOOK_SECRET: process.env.FLUTTERWAVE_WEBHOOK_SECRET,
+    WEB_APP_URL: process.env.WEB_APP_URL,
   });
 
   if (!parsed.success) {

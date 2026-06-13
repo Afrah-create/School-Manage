@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { apiPost, getApiErrorMessage } from "@/lib/api";
 import { sessionInactivityMinutes } from "@/lib/sessionConfig";
 import { getTenantSlugFromHostname } from "@/lib/tenantHost";
+import type { TenantBillingStatus } from "@uganda-cbc-sms/shared";
 import { postLoginPath } from "@/lib/postLoginPath";
 import { redirectToSchoolTenant } from "@/lib/tenantRedirect";
 import type { AuthUser, SessionInfo } from "@/store/authStore";
@@ -187,12 +188,13 @@ function LoginPageContent() {
         user: AuthUser;
         session?: SessionInfo;
         tenant?: { id: string; slug: string };
+        billing?: TenantBillingStatus;
       }>("/auth/login", {
         email: loginState.email,
         password: loginState.password,
       });
       loginToStore(data.user, data.token, data.session, data.tenant);
-      const dash = postLoginPath(data.user);
+      const dash = postLoginPath(data.user, data.billing);
       const tenantSlug = data.tenant?.slug?.toLowerCase();
       const hostSlug =
         typeof window !== "undefined"

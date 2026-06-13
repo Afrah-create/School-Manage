@@ -8,7 +8,8 @@ import type {
   ResetPasswordWithOtpInput,
   VerifyOtpInput,
 } from "@uganda-cbc-sms/shared";
-import * as authService from "./auth.service";
+import * as authService from "./auth.service.js";
+import { getTenantBillingStatus } from "../billing/billing.service.js";
 
 const sharedRuntime =
   ((sharedSchemas as Record<string, unknown>).default as Record<string, unknown> | undefined) ??
@@ -56,9 +57,10 @@ export async function login(req: Request, res: Response): Promise<void> {
     req.tenant.id,
     routingSlug,
   );
+  const billing = await getTenantBillingStatus(req.tenant.id);
   res.json({
     success: true,
-    data: { ...result, tenant: { slug: req.tenant.slug, id: req.tenant.id } },
+    data: { ...result, billing, tenant: { slug: req.tenant.slug, id: req.tenant.id } },
   });
 }
 

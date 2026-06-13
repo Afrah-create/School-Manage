@@ -1,6 +1,7 @@
+import { Router, type Express } from "express";
 import cors from "cors";
 import compression from "compression";
-import express, { type Express } from "express";
+import express from "express";
 import path from "path";
 import { loadEnv, getAllowedOrigins } from "./config/env.js";
 import { anomalyDetectorMiddleware } from "./middleware/anomalyDetector.js";
@@ -33,6 +34,8 @@ import { usersRouter } from "./modules/users/users.routes.js";
 import { securityRouter } from "./modules/security/security.routes.js";
 import { onboardingRouter } from "./modules/onboarding/onboarding.routes.js";
 import { platformRouter } from "./modules/platform/platform.routes.js";
+import { billingRouter, requireActiveSubscription } from "./modules/billing/billing.routes.js";
+import { requireAuth } from "./middleware/jwtGuard.js";
 import { requestDbMiddleware } from "./middleware/requestDb.js";
 import { resolveTenant } from "./middleware/resolveTenant.js";
 
@@ -84,20 +87,26 @@ export function createApp(): Express {
   app.use("/api", requestDbMiddleware);
 
   app.use("/api/auth", authRouter);
-  app.use("/api/users", usersRouter);
-  app.use("/api/academic", academicRouter);
-  app.use("/api/students", studentsRouter);
-  app.use("/api/attendance", attendanceRouter);
-  app.use("/api/assessments", assessmentsRouter);
-  app.use("/api/exams", examsRouter);
-  app.use("/api/fees", feesRouter);
-  app.use("/api/reports", reportsRouter);
-  app.use("/api/settings", settingsRouter);
-  app.use("/api/onboarding", onboardingRouter);
-  app.use("/api/timetable", timetableRouter);
-  app.use("/api/analytics", analyticsRouter);
-  app.use("/api/audit-logs", auditRouter);
-  app.use("/api/security", securityRouter);
+  app.use("/api/billing", billingRouter);
+
+  const protectedSchoolApi = Router();
+  protectedSchoolApi.use(requireAuth);
+  protectedSchoolApi.use(requireActiveSubscription);
+  protectedSchoolApi.use("/users", usersRouter);
+  protectedSchoolApi.use("/academic", academicRouter);
+  protectedSchoolApi.use("/students", studentsRouter);
+  protectedSchoolApi.use("/attendance", attendanceRouter);
+  protectedSchoolApi.use("/assessments", assessmentsRouter);
+  protectedSchoolApi.use("/exams", examsRouter);
+  protectedSchoolApi.use("/fees", feesRouter);
+  protectedSchoolApi.use("/reports", reportsRouter);
+  protectedSchoolApi.use("/settings", settingsRouter);
+  protectedSchoolApi.use("/onboarding", onboardingRouter);
+  protectedSchoolApi.use("/timetable", timetableRouter);
+  protectedSchoolApi.use("/analytics", analyticsRouter);
+  protectedSchoolApi.use("/audit-logs", auditRouter);
+  protectedSchoolApi.use("/security", securityRouter);
+  app.use("/api", protectedSchoolApi);
 
   app.use((_req, res) => {
     res.status(404).json({ success: false, error: "Not found", code: "NOT_FOUND" });

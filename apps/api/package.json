@@ -16,6 +16,7 @@
     "seed:platform": "tsx scripts/seed-platform.ts",
     "seed:grading-scales": "tsx scripts/seed-grading-scales.ts",
     "recalculate:alevel-grades": "tsx scripts/recalculate-alevel-grades.ts",
+    "billing:overdue": "tsx scripts/billing-overdue.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js",
     "test:security": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js tests/security/jwt.test.ts tests/security/tenantIsolation.test.ts",

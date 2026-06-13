@@ -17,7 +17,8 @@
     "restore:db": "npm run restore:db --workspace=apps/api",
     "test:security": "npm run test:security --workspace=apps/api",
     "seed:platform": "npm run seed:platform --workspace=apps/api",
-    "recalculate:alevel-grades": "npm run recalculate:alevel-grades --workspace=apps/api"
+    "recalculate:alevel-grades": "npm run recalculate:alevel-grades --workspace=apps/api",
+    "billing:overdue": "npm run billing:overdue --workspace=apps/api"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
