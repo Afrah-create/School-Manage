@@ -103,6 +103,7 @@ function AdminTimetablePageContent() {
   const [dayDraft, setDayDraft] = useState(DAY_ROWS.map((d) => ({ dayOfWeek: d.dayOfWeek, isSchoolDay: d.dayOfWeek <= 5 })));
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [validationReport, setValidationReport] = useState<TimetableValidateResult | null>(null);
   const tenantSlug = useAuthStore((s) => s.tenantSlug ?? s.user?.tenantSlug ?? "default");
 
   const yearsQ = useQuery({
@@ -179,6 +180,10 @@ function AdminTimetablePageContent() {
   const teacherGridQ = useTimetableTeacherGrid(templateId, teacherId);
   const publicationLogQ = useTimetablePublicationLog(templateId);
   const mutations = useTimetableMutations(scope);
+
+  useEffect(() => {
+    setValidationReport(null);
+  }, [templateId]);
 
   useEffect(() => {
     if (periodsQ.data) setPeriodDraft(periodsToDraft(periodsQ.data));
@@ -263,10 +268,10 @@ function AdminTimetablePageContent() {
     setErr(null);
     setOk(null);
     try {
-      if (!validationReport) await runValidate();
-      const report = validationReport ?? (await mutations.validate.mutateAsync(templateId));
+      const report =
+        validationReport ?? (await mutations.validate.mutateAsync(templateId));
+      setValidationReport(report);
       if (!report.canPublish) {
-        setValidationReport(report);
         setErr("Fix validation errors before publishing.");
         return;
       }
