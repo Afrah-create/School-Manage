@@ -172,6 +172,7 @@ export async function login(
       sessionId,
       user.tenant_id,
       tenantSlug ?? "default",
+      { forcePasswordChange: Boolean(user.force_password_change) },
     );
     const tokenHash = hashSecret(token);
     const expiresAt = computeExpiryDate(token);
@@ -254,14 +255,16 @@ export async function changePassword(
   userId: string,
   input: ChangePasswordInput,
   keepSessionId?: string,
-): Promise<void> {
+  tenantSlug?: string,
+): Promise<{ token: string }> {
   try {
-    const { rows } = await query<{ password_hash: string }>(
-      `SELECT password_hash FROM users WHERE id = $1`,
+    const { rows } = await query<{ password_hash: string; role: string; tenant_id: string }>(
+      `SELECT password_hash, role, tenant_id FROM users WHERE id = $1`,
       [userId],
     );
     if (rows.length === 0) throw new HttpError(404, "User not found");
-    const ok = await bcrypt.compare(input.currentPassword, rows[0]!.password_hash);
+    const user = rows[0]!;
+    const ok = await bcrypt.compare(input.currentPassword, user.password_hash);
     if (!ok) throw new HttpError(400, "That doesn't match your current password. Try again.");
     const rounds = Number(process.env.BCRYPT_ROUNDS ?? 10);
     const hash = await bcrypt.hash(input.newPassword, rounds);
@@ -273,10 +276,7 @@ export async function changePassword(
            force_password_change = false,
            updated_at = NOW()
        WHERE id = $2`,
-      [
-        hash,
-        userId,
-      ],
+      [hash, userId],
     );
     if (keepSessionId) {
       await query(
@@ -288,6 +288,24 @@ export async function changePassword(
         userId,
       ]);
     }
+
+    const sessionId = keepSessionId ?? crypto.randomUUID();
+    const token = signToken(
+      userId,
+      user.role as Parameters<typeof signToken>[1],
+      sessionId,
+      user.tenant_id,
+      tenantSlug ?? "default",
+    );
+    const tokenHash = hashSecret(token);
+    if (keepSessionId) {
+      await query(`UPDATE auth_sessions SET token_hash = $2, last_activity_at = NOW() WHERE id = $1`, [
+        keepSessionId,
+        tokenHash,
+      ]);
+    }
+
+    return { token };
   } catch (e) {
     if (e instanceof HttpError) throw e;
     throw new Error(e instanceof Error ? e.message : "Could not change password");

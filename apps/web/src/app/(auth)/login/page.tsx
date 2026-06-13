@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Role } from "@uganda-cbc-sms/shared";
 import {
   Eye,
   EyeOff,
@@ -18,6 +17,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { apiPost, getApiErrorMessage } from "@/lib/api";
 import { sessionInactivityMinutes } from "@/lib/sessionConfig";
 import { getTenantSlugFromHostname } from "@/lib/tenantHost";
+import { postLoginPath } from "@/lib/postLoginPath";
 import { redirectToSchoolTenant } from "@/lib/tenantRedirect";
 import type { AuthUser, SessionInfo } from "@/store/authStore";
 import { useAuthStore } from "@/store/authStore";
@@ -90,23 +90,6 @@ function strengthDetails(password: string): {
 
 function cx(...values: Array<string | false | undefined>) {
   return values.filter(Boolean).join(" ");
-}
-
-function dashboardForRole(role: Role): string {
-  switch (role) {
-    case "admin":
-      return "/admin/dashboard";
-    case "headteacher":
-      return "/headteacher/dashboard";
-    case "class_teacher":
-      return "/class-teacher/dashboard";
-    case "subject_teacher":
-      return "/subject-teacher/dashboard";
-    case "bursar":
-      return "/bursar/dashboard";
-    default:
-      return "/login";
-  }
 }
 
 function LoginPageFallback() {
@@ -209,10 +192,7 @@ function LoginPageContent() {
         password: loginState.password,
       });
       loginToStore(data.user, data.token, data.session, data.tenant);
-      const dash =
-        data.user.role === "admin" && data.user.forcePasswordChange
-          ? "/admin/onboarding"
-          : dashboardForRole(data.user.role);
+      const dash = postLoginPath(data.user);
       const tenantSlug = data.tenant?.slug?.toLowerCase();
       const hostSlug =
         typeof window !== "undefined"

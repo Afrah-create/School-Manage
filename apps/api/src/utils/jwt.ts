@@ -11,6 +11,8 @@ export interface JwtPayload {
   tid: string;
   /** Tenant subdomain slug (for host routing). */
   tsl: string;
+  /** Force password change before app access (login-time only). */
+  fpc?: number;
   exp: number;
   iat: number;
 }
@@ -29,18 +31,25 @@ export function signToken(
   sessionId: string,
   tenantId: string,
   tenantSlug: string,
+  options?: { forcePasswordChange?: boolean },
 ): string {
   const env = loadEnv();
   const jti = crypto.randomUUID();
-  return jwt.sign(
-    { role, sid: sessionId, jti, tid: tenantId, tsl: tenantSlug },
-    env.JWT_PRIVATE_KEY,
-    {
-      subject: userId,
-      algorithm: "RS256",
-      expiresIn: env.JWT_EXPIRY as jwt.SignOptions["expiresIn"],
-    },
-  );
+  const claims: Record<string, unknown> = {
+    role,
+    sid: sessionId,
+    jti,
+    tid: tenantId,
+    tsl: tenantSlug,
+  };
+  if (options?.forcePasswordChange) {
+    claims.fpc = 1;
+  }
+  return jwt.sign(claims, env.JWT_PRIVATE_KEY, {
+    subject: userId,
+    algorithm: "RS256",
+    expiresIn: env.JWT_EXPIRY as jwt.SignOptions["expiresIn"],
+  });
 }
 
 export function verifyToken(token: string): JwtPayload {
@@ -69,6 +78,7 @@ export function verifyToken(token: string): JwtPayload {
     jti: decoded.jti,
     tid: decoded.tid,
     tsl: decoded.tsl,
+    fpc: typeof decoded.fpc === "number" ? decoded.fpc : undefined,
     exp: decoded.exp,
     iat: decoded.iat,
   };

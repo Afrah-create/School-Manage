@@ -53,6 +53,7 @@ export function SchoolOnboardingWizard() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const updateUser = useAuthStore((s) => s.updateUser);
+  const setToken = useAuthStore((s) => s.setToken);
   const defaults = useMemo(() => currentYearDefaults(), []);
 
   const statusQ = useQuery({
@@ -107,12 +108,13 @@ export function SchoolOnboardingWizard() {
       if (passwordForm.next !== passwordForm.confirm) {
         return Promise.reject(new Error("New passwords do not match."));
       }
-      return apiPatch("/auth/change-password", {
+      return apiPatch<{ token: string }>("/auth/change-password", {
         currentPassword: passwordForm.current,
         newPassword: passwordForm.next,
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setToken(data.token);
       updateUser({ forcePasswordChange: false });
       toast.success("Password updated.", "Security");
       invalidate();

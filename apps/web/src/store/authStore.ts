@@ -95,7 +95,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return roles.includes(u.role);
   },
 
-  setToken: (token) => set({ token }),
+  setToken: (token) => {
+    if (token) {
+      const maxAge = jwtCookieMaxAge(token);
+      setSmsTokenCookie(token, maxAge);
+    } else {
+      deleteSmsTokenCookie();
+    }
+    set({ token });
+  },
 
   updateUser: (patch) =>
     set((state) => ({

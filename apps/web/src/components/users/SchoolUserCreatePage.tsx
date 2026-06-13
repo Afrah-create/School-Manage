@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { createUserSchema } from "@uganda-cbc-sms/shared";
 import type { z } from "zod";
 import type { UsersModuleConfig } from "@/components/users/usersModuleConfig";
@@ -27,13 +27,16 @@ export function SchoolUserCreatePage({ config }: { config: UsersModuleConfig }) 
   const [error, setError] = useState<string | null>(null);
   const form = useForm<Form>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { role: assignableRoles[0] },
+    defaultValues: { role: assignableRoles[0], forcePasswordChange: true },
   });
 
   const onSubmit = async (v: Form) => {
     setError(null);
     try {
-      await apiPost("/users", v);
+      await apiPost("/users", {
+        ...v,
+        forcePasswordChange: v.forcePasswordChange !== false,
+      });
       router.push(usersBasePath);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create user");
@@ -65,10 +68,20 @@ export function SchoolUserCreatePage({ config }: { config: UsersModuleConfig }) 
               {...form.register("role")}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...form.register("forcePasswordChange")} />
-            Force password change on first login
-          </label>
+          <Controller
+            name="forcePasswordChange"
+            control={form.control}
+            render={({ field }) => (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={field.value !== false}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                />
+                Force password change on first login
+              </label>
+            )}
+          />
           <div>
             <label className="mb-1 block text-sm font-medium">{notesLabel}</label>
             <textarea

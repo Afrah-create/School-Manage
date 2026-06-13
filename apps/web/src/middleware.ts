@@ -7,13 +7,12 @@ import { decodeJwtPayload } from "@/lib/jwtPayload";
 import { isValidPlatformToken } from "@/lib/platformSession";
 
 import {
-
+  isForcePasswordChangePath,
+  isPasswordSetupPath,
   isPlatformHost,
-
   isPublicSchoolAuthPath,
-
+  passwordSetupPath,
   tenantSlugFromHost,
-
 } from "@/lib/tenantHost";
 
 
@@ -110,13 +109,15 @@ function schoolSessionFromToken(token: string | null): {
 
   isPlatformAud: boolean;
 
+  forcePasswordChange: boolean;
+
 } {
 
-  if (!token) return { role: null, tokenSlug: null, isPlatformAud: false };
+  if (!token) return { role: null, tokenSlug: null, isPlatformAud: false, forcePasswordChange: false };
 
   const payload = decodeJwtPayload(token);
 
-  if (!payload) return { role: null, tokenSlug: null, isPlatformAud: false };
+  if (!payload) return { role: null, tokenSlug: null, isPlatformAud: false, forcePasswordChange: false };
 
   const role = typeof payload.role === "string" ? payload.role : null;
 
@@ -124,8 +125,33 @@ function schoolSessionFromToken(token: string | null): {
 
     typeof payload.tsl === "string" ? payload.tsl.trim().toLowerCase() : null;
 
-  return { role, tokenSlug, isPlatformAud: payload.aud === "platform" };
+  return {
+    role,
+    tokenSlug,
+    isPlatformAud: payload.aud === "platform",
+    forcePasswordChange: payload.fpc === 1,
+  };
 
+}
+
+
+
+function redirectPasswordSetup(
+  request: NextRequest,
+  role: string,
+  forcePasswordChange: boolean,
+  pathname: string,
+  tokenSlug: string | null,
+): NextResponse | null {
+  const setupPath = passwordSetupPath(role, forcePasswordChange);
+  if (!setupPath || isPasswordSetupPath(pathname, role)) return null;
+
+  if (tokenSlug) {
+    const tenantRedirect = tenantHostRedirect(request, tokenSlug, setupPath);
+    if (tenantRedirect) return tenantRedirect;
+  }
+
+  return redirectOnSameHost(request, setupPath);
 }
 
 
@@ -382,7 +408,7 @@ export function middleware(request: NextRequest) {
 
     const token = readSmsToken(request);
 
-    const { role, tokenSlug, isPlatformAud } = schoolSessionFromToken(token);
+    const { role, tokenSlug, isPlatformAud, forcePasswordChange } = schoolSessionFromToken(token);
 
 
 
@@ -403,7 +429,16 @@ export function middleware(request: NextRequest) {
       request.nextUrl.searchParams.has("reason");
 
     if (token && role && ROLE_PREFIX[role] && !skipDashboardRedirect) {
+      const setupRedirect = redirectPasswordSetup(
+        request,
+        role,
+        forcePasswordChange,
+        pathname,
+        tokenSlug,
+      );
+      if (setupRedirect) return setupRedirect;
 
+      if (!forcePasswordChange && !isForcePasswordChangePath(pathname)) {
       const dash = dashboardPath(role);
 
       if (tokenSlug) {
@@ -423,7 +458,7 @@ export function middleware(request: NextRequest) {
       }
 
       return redirectOnSameHost(request, dash);
-
+      }
     }
 
 
@@ -450,7 +485,7 @@ export function middleware(request: NextRequest) {
 
 
 
-  const { role, tokenSlug, isPlatformAud } = schoolSessionFromToken(token);
+  const { role, tokenSlug, isPlatformAud, forcePasswordChange } = schoolSessionFromToken(token);
 
 
 
@@ -485,6 +520,17 @@ export function middleware(request: NextRequest) {
     return res;
 
   }
+
+
+
+  const setupRedirect = redirectPasswordSetup(
+    request,
+    role,
+    forcePasswordChange,
+    pathname,
+    tokenSlug,
+  );
+  if (setupRedirect) return setupRedirect;
 
 
 

@@ -61,6 +61,21 @@ export function schoolOriginForSlug(
   return `${request.protocol}//${slug.toLowerCase()}.localhost${portSuffix}`;
 }
 
+export function isForcePasswordChangePath(pathname: string): boolean {
+  return pathname === "/auth/change-password" || pathname.startsWith("/auth/change-password/");
+}
+
+export function passwordSetupPath(role: string, forcePasswordChange: boolean): string | null {
+  if (!forcePasswordChange) return null;
+  return role === "admin" ? "/admin/onboarding" : "/auth/change-password";
+}
+
+export function isPasswordSetupPath(pathname: string, role: string): boolean {
+  if (isForcePasswordChangePath(pathname)) return true;
+  if (role === "admin" && pathname.startsWith("/admin/onboarding")) return true;
+  return false;
+}
+
 export function isPublicSchoolAuthPath(pathname: string): boolean {
   return pathname === "/login" || pathname.startsWith("/login/") || pathname.startsWith("/auth/");
 }

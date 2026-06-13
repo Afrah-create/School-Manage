@@ -96,7 +96,7 @@ export async function createUser(
         hash,
         input.role,
         input.notes ?? null,
-        Boolean(input.forcePasswordChange),
+        Boolean(input.forcePasswordChange ?? true),
       ],
     );
     const created = toUserPublic(rows[0]!);
@@ -221,7 +221,7 @@ export async function resetUserPassword(
            force_password_change = $2,
            updated_at = NOW()
        WHERE id = $3 AND deleted_at IS NULL`,
-      [hash, Boolean(input.forcePasswordChange), id],
+      [hash, Boolean(input.forcePasswordChange ?? true), id],
     );
     if (r.rowCount === 0) throw new HttpError(404, "User not found");
     await query(`UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, [id]);
