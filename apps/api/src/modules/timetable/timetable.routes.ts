@@ -32,5 +32,6 @@ timetableRouter.get("/templates/:id/slot-occupancy", leads, asyncHandler(c.getSl
 timetableRouter.get("/templates/:id/grid", leads, asyncHandler(c.getGrid));
 timetableRouter.put("/templates/:id/grid/class/:classId", leads, asyncHandler(c.saveClassGrid));
 timetableRouter.post("/templates/:id/validate", leads, asyncHandler(c.validateTemplate));
+timetableRouter.post("/templates/:id/auto-generate", leads, asyncHandler(c.autoGenerateTemplate));
 timetableRouter.post("/templates/:id/publish", leads, asyncHandler(c.publishTemplate));
 timetableRouter.get("/templates/:id/publication-log", leads, asyncHandler(c.getPublicationLog));

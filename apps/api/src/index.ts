@@ -3,6 +3,7 @@ import path from "path";
 import { assertSchoolDbRoleEnforcesRls } from "./config/dbRlsCheck.js";
 import { loadEnv } from "./config/env.js";
 import { createApp } from "./createApp.js";
+import { startBillingScheduler } from "./modules/billing/billingScheduler.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
@@ -14,5 +15,8 @@ const port = env.PORT;
 void assertSchoolDbRoleEnforcesRls().then(() => {
   app.listen(port, () => {
     console.log(`API listening on http://localhost:${port}`);
+    if (env.NODE_ENV !== "test") {
+      startBillingScheduler();
+    }
   });
 });

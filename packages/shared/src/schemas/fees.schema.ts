@@ -50,6 +50,24 @@ export const feeStructureCopySchema = z.object({
 export type FeeStructurePatchInput = z.infer<typeof feeStructurePatchSchema>;
 export type FeeStructureCopyInput = z.infer<typeof feeStructureCopySchema>;
 
+export const feeStructureBulkCopySchema = z.object({
+  sourceClassId: z.string().uuid(),
+  sourceTermId: z.string().uuid(),
+  targetTermId: z.string().uuid().optional(),
+  targetClassIds: z.array(z.string().uuid()).min(1).max(200).optional(),
+  targetLevel: z.enum(["O_LEVEL", "A_LEVEL"]).optional(),
+});
+
+export type FeeStructureBulkCopyInput = z.infer<typeof feeStructureBulkCopySchema>;
+
+export const feeScheduleBulkPublishSchema = z.object({
+  termId: z.string().uuid(),
+  classIds: z.array(z.string().uuid()).min(1).max(200).optional(),
+  allDrafts: z.boolean().optional().default(false),
+});
+
+export type FeeScheduleBulkPublishInput = z.infer<typeof feeScheduleBulkPublishSchema>;
+
 export const feeScheduleClassTermSchema = z.object({
   classId: z.string().uuid(),
   termId: z.string().uuid(),

@@ -1,4 +1,4 @@
-import { query } from "../../config/db";
+import { getRequestDbClient, query } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
 import { syncHomeroomOnClass } from "../../utils/classTeacherAssignments";
 import { teacherEligibilitySql } from "../../utils/teacherTeachingAccess";
@@ -932,14 +932,21 @@ export async function setTeacherSpecializations(teacherId: string, subjectIds: s
       throw new HttpError(400, "One or more subjects were not found");
     }
   }
-  await query(`DELETE FROM teacher_subject_specializations WHERE teacher_id = $1`, [teacherId]);
+
+  const client = getRequestDbClient();
+  const exec = client
+    ? (sql: string, params: unknown[]) => client.query(sql, params)
+    : (sql: string, params: unknown[]) => query(sql, params);
+
+  await exec(`DELETE FROM teacher_subject_specializations WHERE teacher_id = $1::uuid`, [teacherId]);
   if (uniqueIds.length > 0) {
-    const placeholders = uniqueIds.map((_, i) => `($1, $${i + 2})`).join(", ");
-    await query(
-      `INSERT INTO teacher_subject_specializations (teacher_id, subject_id) VALUES ${placeholders}`,
-      [teacherId, ...uniqueIds],
+    await exec(
+      `INSERT INTO teacher_subject_specializations (teacher_id, subject_id)
+       SELECT $1::uuid, unnest($2::uuid[])`,
+      [teacherId, uniqueIds],
     );
   }
+
   return getTeacherSpecializations(teacherId);
 }
 
@@ -957,7 +964,7 @@ export async function getEligibleTeachers(filters: {
       [filters.classId],
     );
     if (!classRows[0]) throw new HttpError(404, "Class not found");
-    classLevel = classRows[0].level;
+    classLevel = normalizeLevel(classRows[0].level);
     const { rows: subjectRows } = await query(
       `SELECT id, level FROM subjects WHERE id = ANY($1::uuid[])`,
       [uniqueSubjectIds],
@@ -966,7 +973,7 @@ export async function getEligibleTeachers(filters: {
       throw new HttpError(400, "One or more subjects were not found");
     }
     for (const s of subjectRows as { id: string; level: string }[]) {
-      if (s.level !== classLevel) {
+      if (normalizeLevel(s.level) !== classLevel) {
         throw new HttpError(
           400,
           "All selected subjects must match the class level (O-Level or A-Level)",
@@ -1061,7 +1068,7 @@ export async function assertTeacherCanTeachClassSubjects(
   const byClass = new Map<string, { subjectIds: string[]; yearId: string }>();
   for (const r of rows) {
     const x = r as { class_id: string; subject_id: string; academic_year_id: string; subject_level: string; class_level: string };
-    if (x.subject_level !== x.class_level) {
+    if (normalizeLevel(x.subject_level) !== normalizeLevel(x.class_level)) {
       throw new HttpError(400, "Cannot assign: subject level does not match class level for one or more rows");
     }
     const bucket = byClass.get(x.class_id) ?? { subjectIds: [], yearId: x.academic_year_id };

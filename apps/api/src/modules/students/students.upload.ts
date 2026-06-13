@@ -32,6 +32,19 @@ export const studentPhotoUpload = multer({
   },
 });
 
+export const studentCsvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (![".csv", ".txt"].includes(ext)) {
+      cb(new Error("Only CSV files are allowed"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
 export function getUploadRoot(): string {
   return uploadRootDir();
 }

@@ -3,13 +3,15 @@ import type {
   CurriculumCatalogSeedInput,
   CurriculumClassTracksInput,
   CurriculumSetupInput,
+  StructureSetupInput,
 } from "@uganda-cbc-sms/shared";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import { HttpError } from "../../utils/httpError";
 import { TEACHING_ASSIGNMENT_ROLES } from "../../utils/teacherTeachingAccess";
 import { getUserById } from "../users/users.service";
-import * as gradingMaintenance from "./gradingScaleMaintenance";
 import * as curriculumMaintenance from "./curriculumMaintenance";
+import * as gradingMaintenance from "./gradingScaleMaintenance";
+import * as structureMaintenance from "./structureMaintenance";
 import * as svc from "./academic.service";
 
 const schemas = (sharedSchemas as Record<string, unknown>).default
@@ -45,6 +47,7 @@ const {
   curriculumSetupSchema,
   curriculumCatalogSeedSchema,
   curriculumClassTracksSchema,
+  structureSetupSchema,
 } = schemas as {
   academicYearSchema: { parse: (v: unknown) => unknown };
   classSchema: { parse: (v: unknown) => unknown };
@@ -74,6 +77,7 @@ const {
   curriculumSetupSchema: { parse: (v: unknown) => unknown };
   curriculumCatalogSeedSchema: { parse: (v: unknown) => unknown };
   curriculumClassTracksSchema: { parse: (v: unknown) => unknown };
+  structureSetupSchema: { parse: (v: unknown) => unknown };
 };
 
 export async function postYear(req: Request, res: Response): Promise<void> {
@@ -513,5 +517,22 @@ export async function postCurriculumClassTracks(req: Request, res: Response): Pr
     success: true,
     data,
     message: "Class curriculum tracks updated.",
+  });
+}
+
+export async function getStructureStatus(req: Request, res: Response): Promise<void> {
+  const academicYearId =
+    typeof req.query.academicYearId === "string" ? req.query.academicYearId : undefined;
+  const data = await structureMaintenance.getStructureStatus(academicYearId);
+  res.json({ success: true, data });
+}
+
+export async function postStructureSetup(req: Request, res: Response): Promise<void> {
+  const body = structureSetupSchema.parse(req.body) as StructureSetupInput;
+  const data = await structureMaintenance.provisionStructure(body);
+  res.json({
+    success: true,
+    data,
+    message: "School structure provisioned.",
   });
 }

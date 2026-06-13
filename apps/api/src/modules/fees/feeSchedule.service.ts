@@ -1,4 +1,4 @@
-import type { FeeScheduleClassTermInput } from "@uganda-cbc-sms/shared";
+import type { FeeScheduleBulkPublishInput, FeeScheduleClassTermInput } from "@uganda-cbc-sms/shared";
 import type { PoolClient } from "pg";
 import { query, withTransaction } from "../../config/db";
 import { HttpError } from "../../utils/httpError";
@@ -47,7 +47,7 @@ export async function hasInvoicesForClassTerm(classId: string, termId: string): 
   const { rows } = await query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM fee_invoices fi
      JOIN students s ON s.id = fi.student_id
-     WHERE s.class_id = $1 AND fi.term_id = $2`,
+     WHERE s.class_id = $1 AND fi.term_id = $2 AND fi.total_amount > 0`,
     [classId, termId],
   );
   return Number(rows[0]?.n ?? 0) > 0;
@@ -70,7 +70,7 @@ export async function getReleaseRow(
              WHERE s.class_id = r.class_id AND s.status = 'active') AS active_student_count,
             (SELECT COUNT(DISTINCT fi.student_id)::text FROM fee_invoices fi
              JOIN students s ON s.id = fi.student_id
-             WHERE s.class_id = r.class_id AND fi.term_id = r.term_id) AS invoiced_student_count
+             WHERE s.class_id = r.class_id AND fi.term_id = r.term_id AND fi.total_amount > 0) AS invoiced_student_count
      FROM fee_schedule_releases r
      JOIN classes c ON c.id = r.class_id
      JOIN terms t ON t.id = r.term_id
@@ -217,7 +217,7 @@ export async function listScheduleReleases(filters?: { classId?: string; termId?
              WHERE s.class_id = r.class_id AND s.status = 'active') AS active_student_count,
             (SELECT COUNT(DISTINCT fi.student_id)::text FROM fee_invoices fi
              JOIN students s ON s.id = fi.student_id
-             WHERE s.class_id = r.class_id AND fi.term_id = r.term_id) AS invoiced_student_count
+             WHERE s.class_id = r.class_id AND fi.term_id = r.term_id AND fi.total_amount > 0) AS invoiced_student_count
      FROM fee_schedule_releases r
      JOIN classes c ON c.id = r.class_id
      JOIN terms t ON t.id = r.term_id
@@ -328,7 +328,7 @@ export async function previewBulkInvoices(input: FeeScheduleClassTermInput) {
     `SELECT s.id, s.full_name, s.student_number,
             EXISTS (
               SELECT 1 FROM fee_invoices fi
-              WHERE fi.student_id = s.id AND fi.term_id = $2
+              WHERE fi.student_id = s.id AND fi.term_id = $2 AND fi.total_amount > 0
             ) AS has_invoice
      FROM students s
      WHERE s.class_id = $1 AND s.status = 'active'
@@ -366,4 +366,33 @@ export async function previewBulkInvoices(input: FeeScheduleClassTermInput) {
     alreadyInvoiced,
     students: mapped,
   };
+}
+
+export async function bulkPublishSchedules(input: FeeScheduleBulkPublishInput, userId: string) {
+  let classIds = input.classIds ?? [];
+  if (input.allDrafts || !classIds.length) {
+    const { rows } = await query<{ class_id: string }>(
+      `SELECT class_id FROM fee_schedule_releases
+       WHERE term_id = $1::uuid AND status = 'draft'`,
+      [input.termId],
+    );
+    classIds = rows.map((r) => r.class_id);
+  }
+
+  const published: string[] = [];
+  const errors: Array<{ classId: string; message: string }> = [];
+
+  for (const classId of classIds) {
+    try {
+      await publishSchedule({ classId, termId: input.termId }, userId);
+      published.push(classId);
+    } catch (e) {
+      errors.push({
+        classId,
+        message: e instanceof HttpError ? e.message : "Publish failed",
+      });
+    }
+  }
+
+  return { publishedCount: published.length, published, errors };
 }

@@ -89,11 +89,13 @@ export async function createStudent(input: CreateStudentInput) {
           [input.classId, termId],
         );
         const total = sum.rows[0]?.tot ?? "0";
-        await client.query(
-          `INSERT INTO fee_invoices (student_id, term_id, total_amount, amount_paid)
-           VALUES ($1, $2, $3::numeric, 0)`,
-          [student.id, termId, total],
-        );
+        if (Number(total) > 0) {
+          await client.query(
+            `INSERT INTO fee_invoices (student_id, term_id, total_amount, amount_paid)
+             VALUES ($1, $2, $3::numeric, 0)`,
+            [student.id, termId, total],
+          );
+        }
       }
       return mapStudent(student as never);
     });

@@ -13,6 +13,8 @@ platformRouter.get("/tenants", ctrl.listTenants);
 platformRouter.get("/audit-log", ctrl.listAuditLog);
 platformRouter.post("/tenants", ctrl.createTenant);
 platformRouter.patch("/tenants/:id", ctrl.patchTenant);
+platformRouter.post("/tenants/:id/suspend", ctrl.suspendTenant);
+platformRouter.post("/tenants/:id/activate", ctrl.activateTenant);
 platformRouter.post("/tenants/:id/reset-admin-password", ctrl.resetAdminPassword);
 platformRouter.get("/billing/overview", billingCtrl.billingOverview);
 platformRouter.get("/billing/settings", billingCtrl.billingSettings);

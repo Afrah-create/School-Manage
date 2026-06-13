@@ -92,7 +92,8 @@ export async function listSubjectReadiness(
             ELSE 'Draft'
           END AS status
          FROM class_subjects cs
-         JOIN subjects s ON s.id = cs.subject_id
+         JOIN classes c ON c.id = cs.class_id
+         JOIN subjects s ON s.id = cs.subject_id AND s.level = c.level
          LEFT JOIN students st ON st.class_id = cs.class_id AND st.status = 'active'
          LEFT JOIN assessments_cbc ac
            ON ac.student_id = st.id
@@ -136,7 +137,8 @@ export async function listSubjectReadiness(
           ELSE 'Draft'
         END AS status
        FROM class_subjects cs
-       JOIN subjects s ON s.id = cs.subject_id
+       JOIN classes c ON c.id = cs.class_id
+       JOIN subjects s ON s.id = cs.subject_id AND s.level = c.level
        LEFT JOIN students st ON st.class_id = cs.class_id AND st.status = 'active'
        LEFT JOIN assessments_alevel aa
          ON aa.student_id = st.id
@@ -205,7 +207,8 @@ export async function listSubjectSubmissionTracking(
           ) AS students_submitted,
           MAX(ac.submitted_at) AS last_submitted_at
          FROM class_subjects cs
-         JOIN subjects s ON s.id = cs.subject_id
+         JOIN classes c ON c.id = cs.class_id
+         JOIN subjects s ON s.id = cs.subject_id AND s.level = c.level
          LEFT JOIN users u ON u.id = cs.teacher_id
          LEFT JOIN students st ON st.class_id = cs.class_id AND st.status = 'active'
          LEFT JOIN assessments_cbc ac
@@ -263,7 +266,8 @@ export async function listSubjectSubmissionTracking(
         COUNT(DISTINCT aa.student_id) FILTER (WHERE aa.is_submitted)::int AS students_submitted,
         MAX(aa.submitted_at) AS last_submitted_at
        FROM class_subjects cs
-       JOIN subjects s ON s.id = cs.subject_id
+       JOIN classes c ON c.id = cs.class_id
+       JOIN subjects s ON s.id = cs.subject_id AND s.level = c.level
        LEFT JOIN users u ON u.id = cs.teacher_id
        LEFT JOIN students st ON st.class_id = cs.class_id AND st.status = 'active'
        LEFT JOIN assessments_alevel aa

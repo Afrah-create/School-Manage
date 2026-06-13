@@ -17,6 +17,8 @@ import {
   feeInvoiceSchema,
   feePaymentSchema,
   feeScheduleClassTermSchema,
+  feeScheduleBulkPublishSchema,
+  feeStructureBulkCopySchema,
   feeStructureCopySchema,
   feeStructurePatchSchema,
   feeStructureSchema,
@@ -205,9 +207,30 @@ export function useFeeActions() {
     onSuccess: () => void invalidateStructures(),
   });
 
+  const bulkCopyStructure = useMutation({
+    mutationFn: (body: z.infer<typeof feeStructureBulkCopySchema>) =>
+      apiPost<{
+        totalCreated: number;
+        totalSkipped: number;
+        targets: Array<{ classId: string; created: number; skipped: number }>;
+        targetTermId: string;
+      }>("/fees/structure/copy/bulk", body),
+    onSuccess: () => void invalidateStructures(),
+  });
+
   const publishSchedule = useMutation({
     mutationFn: (body: z.infer<typeof feeScheduleClassTermSchema>) =>
       apiPost<FeeScheduleRelease>("/fees/schedules/publish", body),
+    onSuccess: () => void invalidateStructures(),
+  });
+
+  const bulkPublishSchedules = useMutation({
+    mutationFn: (body: z.infer<typeof feeScheduleBulkPublishSchema>) =>
+      apiPost<{
+        publishedCount: number;
+        published: string[];
+        errors: Array<{ classId: string; message: string }>;
+      }>("/fees/schedules/publish/bulk", body),
     onSuccess: () => void invalidateStructures(),
   });
 
@@ -230,7 +253,9 @@ export function useFeeActions() {
     updateStructure,
     deleteStructure,
     copyStructure,
+    bulkCopyStructure,
     publishSchedule,
+    bulkPublishSchedules,
     unpublishSchedule,
     previewBulkInvoices,
     invalidateFinance,

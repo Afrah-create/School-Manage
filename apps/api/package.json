@@ -16,6 +16,8 @@
     "seed:platform": "tsx scripts/seed-platform.ts",
     "seed:grading-scales": "tsx scripts/seed-grading-scales.ts",
     "seed:curriculum": "tsx scripts/seed-curriculum.ts",
+    "seed:structure": "tsx scripts/seed-structure.ts",
+    "seed:structure": "tsx scripts/seed-structure.ts",
     "recalculate:alevel-grades": "tsx scripts/recalculate-alevel-grades.ts",
     "billing:overdue": "tsx scripts/billing-overdue.ts",
     "typecheck": "tsc --noEmit",

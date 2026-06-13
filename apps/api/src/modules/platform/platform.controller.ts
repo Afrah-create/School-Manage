@@ -55,3 +55,27 @@ export async function resetAdminPassword(req: Request, res: Response): Promise<v
   await svc.resetTenantAdminPassword(id, password, req.platformAdmin.id);
   res.json({ success: true, data: null, message: "School admin password reset." });
 }
+
+export async function suspendTenant(req: Request, res: Response): Promise<void> {
+  if (!req.platformAdmin) throw new HttpError(401, "Platform sign-in required.");
+  const id = req.params["id"];
+  if (!id) throw new HttpError(400, "Tenant id is required.");
+  const data = await svc.suspendTenant(id, req.platformAdmin.id);
+  res.json({
+    success: true,
+    data,
+    message: `${data.displayName} has been suspended. All sign-in is blocked until you reactivate the school.`,
+  });
+}
+
+export async function activateTenant(req: Request, res: Response): Promise<void> {
+  if (!req.platformAdmin) throw new HttpError(401, "Platform sign-in required.");
+  const id = req.params["id"];
+  if (!id) throw new HttpError(400, "Tenant id is required.");
+  const data = await svc.activateTenant(id, req.platformAdmin.id);
+  res.json({
+    success: true,
+    data,
+    message: `${data.displayName} is active again. Staff can sign in normally.`,
+  });
+}

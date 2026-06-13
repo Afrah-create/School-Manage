@@ -25,12 +25,14 @@ feesRouter.use(invalidateCacheOnMutationMiddleware);
 
 feesRouter.post("/structure", admin, asyncHandler(c.postStructure));
 feesRouter.post("/structure/copy", admin, asyncHandler(c.postStructureCopy));
+feesRouter.post("/structure/copy/bulk", admin, asyncHandler(c.postStructureCopyBulk));
 feesRouter.patch("/structure/:structureId", admin, asyncHandler(c.patchStructure));
 feesRouter.delete("/structure/:structureId", admin, asyncHandler(c.deleteStructure));
 feesRouter.get("/structure", financeReportsReaders, asyncHandler(c.getStructure));
 feesRouter.get("/schedules", financeReportsReaders, asyncHandler(c.getSchedules));
 feesRouter.get("/schedules/summary", financeReportsReaders, asyncHandler(c.getScheduleSummary));
 feesRouter.post("/schedules/publish", admin, asyncHandler(c.postSchedulePublish));
+feesRouter.post("/schedules/publish/bulk", admin, asyncHandler(c.postSchedulePublishBulk));
 feesRouter.post("/schedules/unpublish", admin, asyncHandler(c.postScheduleUnpublish));
 feesRouter.post("/invoices", bursarTeam, asyncHandler(c.postInvoice));
 feesRouter.post("/invoices/bulk/preview", bursarTeam, asyncHandler(c.postBulkInvoicePreview));

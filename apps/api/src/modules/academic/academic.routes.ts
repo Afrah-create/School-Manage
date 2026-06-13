@@ -78,3 +78,5 @@ academicRouter.get("/curriculum/status", academicLeads, asyncHandler(c.getCurric
 academicRouter.post("/curriculum/setup", academicLeads, asyncHandler(c.postCurriculumSetup));
 academicRouter.post("/curriculum/seed-catalog", academicLeads, asyncHandler(c.postCurriculumCatalogSeed));
 academicRouter.post("/curriculum/class-tracks", academicLeads, asyncHandler(c.postCurriculumClassTracks));
+academicRouter.get("/structure/status", academicLeads, asyncHandler(c.getStructureStatus));
+academicRouter.post("/structure/setup", academicLeads, asyncHandler(c.postStructureSetup));

@@ -286,6 +286,15 @@ export function SchoolOnboardingWizard() {
     });
   }, [settingsQ.data]);
 
+  const onboardingComplete =
+    Boolean(statusQ.data && !statusQ.data.required && statusQ.data.completedAt);
+
+  useEffect(() => {
+    if (onboardingComplete) {
+      router.replace("/admin/dashboard");
+    }
+  }, [onboardingComplete, router]);
+
   if (statusQ.isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -294,8 +303,7 @@ export function SchoolOnboardingWizard() {
     );
   }
 
-  if (statusQ.data && !statusQ.data.required && statusQ.data.completedAt) {
-    router.replace("/admin/dashboard");
+  if (onboardingComplete) {
     return null;
   }
 
@@ -597,10 +605,14 @@ export function SchoolOnboardingWizard() {
                   </div>
                   <p className="mt-4 text-sm text-slate-400">
                     After onboarding, open{" "}
-                    <Link href="/admin/academic/curriculum" className="font-medium text-indigo-300 hover:underline">
-                      Academic → Curriculum setup
+                    <Link href="/admin/academic/structure" className="font-medium text-indigo-300 hover:underline">
+                      Structure setup
                     </Link>{" "}
-                    to auto-install subjects, CBC strands, and class–subject slots in one step.
+                    for terms and default classes, then{" "}
+                    <Link href="/admin/academic/curriculum" className="font-medium text-indigo-300 hover:underline">
+                      Curriculum setup
+                    </Link>{" "}
+                    for subjects and class–subject slots.
                   </p>
                   <div className="mt-auto flex justify-between pt-8">
                     <Button variant="ghost" onClick={goBack}>

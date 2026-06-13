@@ -76,6 +76,15 @@ api.interceptors.response.use(
         "Your account is locked after too many failed sign-in attempts. Contact your administrator.";
     }
 
+    if (err.response?.status === 403 && isLoginRequest) {
+      const body = err.response?.data as { code?: string } | undefined;
+      if (body?.code === "TENANT_SUSPENDED") {
+        err.message =
+          messageFromApiBody(err.response.data) ??
+          "This school account has been suspended. Contact platform support for assistance.";
+      }
+    }
+
     if (err.response?.status === 402 && typeof window !== "undefined") {
       const body = err.response?.data as { code?: string } | undefined;
       if (body?.code === "SUBSCRIPTION_REQUIRED") {
@@ -225,6 +234,9 @@ function axiosFailureToMessage(err: AxiosError<unknown>): string {
     const code = (err.response?.data as { code?: string } | undefined)?.code;
     if (code === "SUBSCRIPTION_BLOCKED") {
       return "Your school's subscription is unpaid. Contact your school administrator to restore access.";
+    }
+    if (code === "TENANT_SUSPENDED") {
+      return "This school account has been suspended. Contact platform support for assistance.";
     }
     return "You don't have permission to do that. Ask an administrator if you need access.";
   }

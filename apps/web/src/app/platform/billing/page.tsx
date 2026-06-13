@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Clock, Plus, RefreshCw, Settings2 } from "lucide-react";
 import { PlatformModal } from "@/components/platform/PlatformModal";
+import { PlatformTenantActionConfirmDialog } from "@/components/platform/PlatformTenantActionConfirmDialog";
 import { PlatformShell } from "@/components/platform/PlatformShell";
 import { PlatformStatCard } from "@/components/platform/PlatformStatCard";
 import { platformApiError } from "@/components/platform/platformUtils";
@@ -22,6 +23,8 @@ type BillingOverviewRow = {
   slug: string;
   displayName: string;
   tenantStatus: string;
+  accessStatus: "current" | "grace" | "past_due" | "none";
+  isLocked: boolean;
   billingPeriod: {
     id: string;
     label: string;
@@ -57,6 +60,32 @@ const EMPTY_CREATE: CreatePeriodForm = {
   notes: "",
 };
 
+function accessBadge(accessStatus: BillingOverviewRow["accessStatus"], isLocked: boolean): string {
+  if (isLocked) return "bg-red-500/15 text-red-300 ring-red-500/30";
+  switch (accessStatus) {
+    case "grace":
+      return "bg-amber-500/15 text-amber-200 ring-amber-500/30";
+    case "current":
+      return "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30";
+    default:
+      return "bg-slate-700/40 text-slate-400 ring-slate-600/30";
+  }
+}
+
+function accessLabel(accessStatus: BillingOverviewRow["accessStatus"], isLocked: boolean): string {
+  if (isLocked) return "Locked (unpaid)";
+  switch (accessStatus) {
+    case "grace":
+      return "Grace period";
+    case "current":
+      return "Current";
+    case "past_due":
+      return "Past due";
+    default:
+      return "No invoice";
+  }
+}
+
 function statusBadge(status: string | null): string {
   switch (status) {
     case "overdue":
@@ -86,14 +115,20 @@ export default function PlatformBillingPage() {
     currency: "UGX",
     graceDays: 7,
   });
+  const [statusConfirm, setStatusConfirm] = useState<{
+    kind: "suspend" | "activate";
+    row: BillingOverviewRow;
+  } | null>(null);
 
   const stats = useMemo(() => {
     const unpaid = overview.filter(
       (r) => r.billingPeriod && ["pending", "overdue"].includes(r.billingPeriod.status),
     ).length;
     const overdue = overview.filter((r) => r.billingPeriod?.status === "overdue").length;
-    const clear = overview.filter((r) => !r.billingPeriod).length;
-    return { schools: overview.length, unpaid, overdue, clear };
+    const locked = overview.filter((r) => r.isLocked).length;
+    const suspended = overview.filter((r) => r.tenantStatus === "suspended").length;
+    const clear = overview.filter((r) => !r.billingPeriod && r.tenantStatus === "active").length;
+    return { schools: overview.length, unpaid, overdue, locked, suspended, clear };
   }, [overview]);
 
   const load = useCallback(async () => {
@@ -187,6 +222,38 @@ export default function PlatformBillingPage() {
     }
   };
 
+  function requestSuspend(row: BillingOverviewRow) {
+    setStatusConfirm({ kind: "suspend", row });
+  }
+
+  function requestActivate(row: BillingOverviewRow) {
+    setStatusConfirm({ kind: "activate", row });
+  }
+
+  async function confirmStatusChange() {
+    if (!statusConfirm) return;
+    const { kind, row } = statusConfirm;
+    try {
+      setSubmitting(true);
+      if (kind === "suspend") {
+        await platformApi.post(`/tenants/${row.tenantId}/suspend`);
+        toast.success(`${row.displayName} has been suspended.`, "School suspended");
+      } else {
+        await platformApi.post(`/tenants/${row.tenantId}/activate`);
+        toast.success(`${row.displayName} is active again.`, "School reactivated");
+      }
+      setStatusConfirm(null);
+      await load();
+    } catch (e) {
+      toast.error(
+        platformApiError(e) ?? "Something went wrong.",
+        kind === "suspend" ? "Suspend" : "Reactivate",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <PlatformShell
       title="Platform billing"
@@ -232,10 +299,12 @@ export default function PlatformBillingPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <PlatformStatCard label="Schools" value={String(stats.schools)} icon={AlertTriangle} />
           <PlatformStatCard label="Unpaid" value={String(stats.unpaid)} icon={AlertTriangle} />
           <PlatformStatCard label="Overdue" value={String(stats.overdue)} icon={Clock} />
+          <PlatformStatCard label="Billing locked" value={String(stats.locked)} icon={AlertTriangle} />
+          <PlatformStatCard label="Suspended" value={String(stats.suspended)} icon={Clock} />
           <PlatformStatCard label="Up to date" value={String(stats.clear)} icon={RefreshCw} />
         </div>
 
@@ -252,11 +321,13 @@ export default function PlatformBillingPage() {
             <p className="mt-6 text-sm text-slate-400">No schools found.</p>
           ) : (
             <div className="mt-6 overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
+              <table className="w-full min-w-[900px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-400">
                     <th className="pb-3 pr-4 font-medium">School</th>
                     <th className="pb-3 pr-4 font-medium">Tenant</th>
+                    <th className="pb-3 pr-4 font-medium">Access</th>
+                    <th className="pb-3 pr-4 font-medium">Account</th>
                     <th className="pb-3 pr-4 font-medium">Current invoice</th>
                     <th className="pb-3 pr-4 font-medium">Due</th>
                     <th className="pb-3 pr-4 font-medium">Amount</th>
@@ -270,6 +341,24 @@ export default function PlatformBillingPage() {
                       <tr key={row.tenantId} className="border-b border-slate-800/60 last:border-0">
                         <td className="py-3 pr-4 text-white">{row.displayName}</td>
                         <td className="py-3 pr-4 font-mono text-xs text-slate-400">{row.slug}</td>
+                        <td className="py-3 pr-4">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${accessBadge(row.accessStatus, row.isLocked)}`}
+                          >
+                            {accessLabel(row.accessStatus, row.isLocked)}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${
+                              row.tenantStatus === "suspended"
+                                ? "bg-amber-500/15 text-amber-200 ring-amber-500/30"
+                                : "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30"
+                            }`}
+                          >
+                            {row.tenantStatus === "suspended" ? "Suspended" : "Active"}
+                          </span>
+                        </td>
                         <td className="py-3 pr-4">
                           {period ? (
                             <span
@@ -288,26 +377,47 @@ export default function PlatformBillingPage() {
                           {period ? `UGX ${period.amountUgx.toLocaleString()}` : "—"}
                         </td>
                         <td className="py-3">
-                          {period ? (
-                            <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            {period ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="text-xs text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                                  disabled={submitting || period.status === "paid"}
+                                  onClick={() => void patchPeriod(period.id, "paid")}
+                                >
+                                  Mark paid
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-50"
+                                  disabled={submitting || period.status === "waived"}
+                                  onClick={() => void patchPeriod(period.id, "waived")}
+                                >
+                                  Waive
+                                </button>
+                              </>
+                            ) : null}
+                            {row.tenantStatus === "active" ? (
+                              <button
+                                type="button"
+                                className="text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50"
+                                disabled={submitting}
+                                onClick={() => requestSuspend(row)}
+                              >
+                                Suspend
+                              </button>
+                            ) : row.tenantStatus === "suspended" ? (
                               <button
                                 type="button"
                                 className="text-xs text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
-                                disabled={submitting || period.status === "paid"}
-                                onClick={() => void patchPeriod(period.id, "paid")}
+                                disabled={submitting}
+                                onClick={() => requestActivate(row)}
                               >
-                                Mark paid
+                                Unblock
                               </button>
-                              <button
-                                type="button"
-                                className="text-xs text-slate-400 hover:text-slate-200 disabled:opacity-50"
-                                disabled={submitting || period.status === "waived"}
-                                onClick={() => void patchPeriod(period.id, "waived")}
-                              >
-                                Waive
-                              </button>
-                            </div>
-                          ) : null}
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -496,6 +606,20 @@ export default function PlatformBillingPage() {
           </div>
         </div>
       </PlatformModal>
+
+      <PlatformTenantActionConfirmDialog
+        open={statusConfirm !== null}
+        kind={statusConfirm?.kind ?? "suspend"}
+        displayName={statusConfirm?.row.displayName ?? ""}
+        slug={statusConfirm?.row.slug ?? ""}
+        billingLocked={statusConfirm?.row.isLocked}
+        openInvoiceLabel={statusConfirm?.row.billingPeriod?.label ?? null}
+        loading={submitting}
+        onConfirm={() => void confirmStatusChange()}
+        onClose={() => {
+          if (!submitting) setStatusConfirm(null);
+        }}
+      />
     </PlatformShell>
   );
 }

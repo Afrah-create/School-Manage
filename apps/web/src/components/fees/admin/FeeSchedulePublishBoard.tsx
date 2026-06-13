@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select } from "@/components/ui/Select";
 import { Table, type Column } from "@/components/ui/Table";
 import { useClassEnrollmentSummary } from "@/hooks/useStudentsBrowse";
@@ -42,6 +43,7 @@ export function FeeSchedulePublishBoard({
   const [yearId, setYearId] = useState(initialYearId ?? "");
   const [termId, setTermId] = useState(initialTermId ?? "");
   const [selectedClassId, setSelectedClassId] = useState(initialClassId ?? "");
+  const [bulkPublishConfirm, setBulkPublishConfirm] = useState(false);
 
   const yearsQ = useQuery({
     queryKey: ["academic-years"],
@@ -300,8 +302,19 @@ export function FeeSchedulePublishBoard({
           {counts.draft > 0 ? (
             <Alert tone="info">
               <strong>{counts.draft}</strong> class{counts.draft === 1 ? "" : "es"} still in{" "}
-              <strong>Draft</strong>. Click <strong>Publish</strong> on each row so the bursar can bill students.
+              <strong>Draft</strong>. Click <strong>Publish</strong> on each row or publish all drafts at once.
             </Alert>
+          ) : null}
+
+          {counts.draft > 0 ? (
+            <div className="flex justify-end">
+              <Button
+                loading={actions.bulkPublishSchedules.isPending}
+                onClick={() => setBulkPublishConfirm(true)}
+              >
+                Publish all drafts for term
+              </Button>
+            </div>
           ) : null}
 
           <Card title="All classes this term">
@@ -332,6 +345,29 @@ export function FeeSchedulePublishBoard({
           ) : null}
         </>
       )}
+
+      <ConfirmDialog
+        open={bulkPublishConfirm}
+        title="Publish all draft fee schedules?"
+        description={`Publish ${counts.draft} draft class schedule(s) for this term so bursars can bill students.`}
+        confirmLabel="Publish all"
+        loading={actions.bulkPublishSchedules.isPending}
+        onConfirm={() => {
+          setBulkPublishConfirm(false);
+          if (!termId) return;
+          void actions.bulkPublishSchedules
+            .mutateAsync({ termId, allDrafts: true })
+            .then((result) => {
+              toast.success(`Published ${result.publishedCount} class schedule(s).`, "Bulk publish complete");
+              if (result.errors.length) {
+                toast.error(`${result.errors.length} class(es) failed to publish.`, "Partial failure");
+              }
+              refetch();
+            })
+            .catch((e) => toast.error(getApiErrorMessage(e), "Bulk publish failed"));
+        }}
+        onCancel={() => setBulkPublishConfirm(false)}
+      />
     </div>
   );
 }

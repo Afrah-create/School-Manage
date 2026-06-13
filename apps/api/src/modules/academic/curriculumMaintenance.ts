@@ -37,9 +37,8 @@ export async function seedDefaultSubjects(level: CurriculumCatalogSeedInput["lev
       const result = await query(
         `INSERT INTO subjects (name, code, level)
          VALUES ($1, $2, $3)
-         ON CONFLICT (tenant_id, code) DO UPDATE SET
-           name = EXCLUDED.name,
-           level = EXCLUDED.level`,
+         ON CONFLICT (tenant_id, code, level) DO UPDATE SET
+           name = EXCLUDED.name`,
         [subject.name, subject.code, batch.level],
       );
       subjectsCreated += result.rowCount ?? 0;
@@ -110,6 +109,25 @@ export async function seedCurriculumCatalog(input: CurriculumCatalogSeedInput) {
   }
   const strandResult = await seedDefaultCbcStrands();
   return { subjectsCreated, ...strandResult };
+}
+
+async function repairClassSubjectSubjectLevels() {
+  await seedDefaultSubjects("ALL");
+  const result = await query(
+    `UPDATE class_subjects cs
+     SET subject_id = s_ok.id,
+         updated_at = NOW()
+     FROM classes c,
+          subjects s_wrong,
+          subjects s_ok
+     WHERE cs.class_id = c.id
+       AND cs.subject_id = s_wrong.id
+       AND s_ok.tenant_id = s_wrong.tenant_id
+       AND s_ok.code = s_wrong.code
+       AND s_ok.level = c.level
+       AND c.level <> s_wrong.level`,
+  );
+  return result.rowCount ?? 0;
 }
 
 async function provisionOLevelClassSubjects(academicYearId: string, termId: string | null | undefined) {
@@ -196,6 +214,8 @@ export async function provisionCurriculum(input: CurriculumSetupInput): Promise<
       strandsCreated = catalog.strandsCreated;
       subStrandsCreated = catalog.subStrandsCreated;
     }
+
+    await repairClassSubjectSubjectLevels();
 
     const provision =
       input.level === "O_LEVEL"

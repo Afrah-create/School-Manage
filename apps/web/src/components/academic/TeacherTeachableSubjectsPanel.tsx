@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Subject } from "@uganda-cbc-sms/shared";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,13 @@ import { apiGet, apiPut } from "@/lib/api";
 
 const CHECK =
   "h-4 w-4 rounded border-border text-foreground accent-brand disabled:cursor-not-allowed disabled:opacity-50";
+
+type TeacherSpecialization = {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  level: string;
+};
 
 export function TeacherTeachableSubjectsPanel({
   teacherId,
@@ -20,7 +27,7 @@ export function TeacherTeachableSubjectsPanel({
   teacherId: string;
   teacherName?: string;
   highlightLevel?: AcademicLevel;
-  onSaved?: () => void;
+  onSaved?: () => void | Promise<void>;
 }) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -28,25 +35,31 @@ export function TeacherTeachableSubjectsPanel({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const loadSeq = useRef(0);
+  const saveSeq = useRef(0);
 
   useEffect(() => {
     if (!teacherId) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setErr(null);
+    setOk(null);
     void (async () => {
       try {
         const [catalog, specs] = await Promise.all([
           apiGet<Subject[]>("/academic/subjects"),
-          apiGet<{ subjectId: string }[]>(
+          apiGet<TeacherSpecialization[]>(
             `/academic/teachers/${encodeURIComponent(teacherId)}/specializations`,
           ),
         ]);
+        if (seq !== loadSeq.current) return;
         setSubjects(catalog);
         setSelectedIds(specs.map((s) => s.subjectId));
       } catch (e) {
+        if (seq !== loadSeq.current) return;
         setErr(e instanceof Error ? e.message : "Failed to load teachable subjects");
       } finally {
-        setLoading(false);
+        if (seq === loadSeq.current) setLoading(false);
       }
     })();
   }, [teacherId]);
@@ -63,19 +76,25 @@ export function TeacherTeachableSubjectsPanel({
   );
 
   const onSave = async () => {
+    if (!teacherId || saving || loading) return;
+    const seq = ++saveSeq.current;
     setErr(null);
     setOk(null);
     setSaving(true);
     try {
-      await apiPut(`/academic/teachers/${encodeURIComponent(teacherId)}/specializations`, {
-        subjectIds: selectedIds,
-      });
+      const saved = await apiPut<TeacherSpecialization[]>(
+        `/academic/teachers/${encodeURIComponent(teacherId)}/specializations`,
+        { subjectIds: selectedIds },
+      );
+      if (seq !== saveSeq.current) return;
+      setSelectedIds(saved.map((s) => s.subjectId));
       setOk("Teachable subjects saved.");
-      onSaved?.();
+      await onSaved?.();
     } catch (e) {
+      if (seq !== saveSeq.current) return;
       setErr(e instanceof Error ? e.message : "Failed to save teachable subjects");
     } finally {
-      setSaving(false);
+      if (seq === saveSeq.current) setSaving(false);
     }
   };
 
@@ -108,6 +127,7 @@ export function TeacherTeachableSubjectsPanel({
                 type="checkbox"
                 className={CHECK}
                 checked={selectedIds.includes(s.id)}
+                disabled={loading || saving}
                 onChange={(e) =>
                   setSelectedIds((prev) =>
                     e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id),
@@ -155,7 +175,7 @@ export function TeacherTeachableSubjectsPanel({
         </div>
       )}
       <div className="flex justify-end">
-        <Button type="button" loading={saving} disabled={loading} onClick={() => void onSave()}>
+        <Button type="button" loading={saving} disabled={loading || saving} onClick={() => void onSave()}>
           Save teachable subjects
         </Button>
       </div>

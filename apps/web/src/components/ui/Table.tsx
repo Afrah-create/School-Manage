@@ -17,6 +17,8 @@ type Props<T extends Record<string, unknown>> = {
   searchKeys?: (keyof T)[];
   pageSize?: number;
   loading?: boolean;
+  /** Skeleton row count while loading (defaults to 5, not pageSize). */
+  loadingRows?: number;
   emptyState?: ReactNode;
 };
 
@@ -26,6 +28,7 @@ export function Table<T extends Record<string, unknown>>({
   searchKeys,
   pageSize = 10,
   loading,
+  loadingRows = 5,
   emptyState,
 }: Props<T>) {
   const [q, setQ] = useState("");
@@ -43,7 +46,9 @@ export function Table<T extends Record<string, unknown>>({
   const slice = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   if (loading) {
-    return <TableSkeleton rows={pageSize} cols={columns.length} showSearch={Boolean(searchKeys?.length)} />;
+    return (
+      <TableSkeleton rows={loadingRows} cols={columns.length} showSearch={Boolean(searchKeys?.length)} />
+    );
   }
 
   return (

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as sharedSchemas from "@uganda-cbc-sms/shared";
 import path from "path";
 import * as svc from "./students.service";
+import * as importSvc from "./studentsImport.service";
 import { getUploadRoot } from "./students.upload";
 
 const schemaExports = (
@@ -124,4 +125,26 @@ export async function destroy(req: Request, res: Response): Promise<void> {
 
 export function publicUploadsPath(): string {
   return path.join(getUploadRoot(), "students");
+}
+
+export async function getImportTemplate(_req: Request, res: Response): Promise<void> {
+  const csv = importSvc.studentImportTemplateCsv();
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="student-import-template.csv"');
+  res.send(csv);
+}
+
+export async function postImport(req: Request, res: Response): Promise<void> {
+  const file = req.file;
+  if (!file?.buffer) {
+    res.status(400).json({ success: false, error: "CSV file is required." });
+    return;
+  }
+  const csvText = file.buffer.toString("utf-8");
+  const data = await importSvc.importStudentsFromCsv(csvText);
+  res.json({
+    success: true,
+    data,
+    message: `Imported ${data.created} student(s); ${data.skipped} skipped.`,
+  });
 }

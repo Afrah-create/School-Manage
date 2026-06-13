@@ -10,6 +10,11 @@ import { queryKeys, STRUCTURAL_STALE_MS } from "@/lib/queryKeys";
 import { getApiTenantSlug } from "@/lib/tenantHost";
 
 const SETUP_LINKS = [
+  {
+    href: "/admin/academic/structure",
+    title: "Structure setup",
+    desc: "Auto-install years, 3 terms, and default classes",
+  },
   { href: "/admin/academic/years", title: "Academic years", desc: "Create and view school years" },
   { href: "/admin/academic/terms", title: "Terms", desc: "Terms within a year" },
   { href: "/admin/academic/classes", title: "Classes", desc: "Streams and O-Level / A-Level class groups" },

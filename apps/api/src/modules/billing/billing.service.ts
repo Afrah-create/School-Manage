@@ -440,6 +440,7 @@ export async function listTenantBillingPeriods(tenantId: string) {
 }
 
 export async function listPlatformBillingOverview() {
+  const settings = await getBillingSettings();
   const { rows } = await platformQuery<{
     tenant_id: string;
     slug: string;
@@ -463,21 +464,43 @@ export async function listPlatformBillingOverview() {
      ) p ON TRUE
      ORDER BY t.display_name`,
   );
-  return rows.map((r) => ({
-    tenantId: r.tenant_id,
-    slug: r.slug,
-    displayName: r.display_name,
-    tenantStatus: r.tenant_status,
-    billingPeriod: r.period_id
-      ? {
-          id: r.period_id,
-          label: r.label!,
-          dueAt: r.due_at ? new Date(r.due_at).toISOString() : null,
-          amountUgx: Number(r.amount_ugx),
-          status: r.period_status!,
-        }
-      : null,
-  }));
+  return rows.map((r) => {
+    let accessStatus: TenantBillingStatus["accessStatus"] = "none";
+    let isLocked = false;
+
+    if (r.period_id && r.due_at) {
+      const dueMs = new Date(r.due_at).getTime();
+      const graceEndMs = dueMs + settings.graceDays * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+
+      if (r.period_status === "overdue" || now > graceEndMs) {
+        accessStatus = "past_due";
+        isLocked = true;
+      } else if (now > dueMs) {
+        accessStatus = "grace";
+      } else {
+        accessStatus = "current";
+      }
+    }
+
+    return {
+      tenantId: r.tenant_id,
+      slug: r.slug,
+      displayName: r.display_name,
+      tenantStatus: r.tenant_status,
+      accessStatus,
+      isLocked,
+      billingPeriod: r.period_id
+        ? {
+            id: r.period_id,
+            label: r.label!,
+            dueAt: r.due_at ? new Date(r.due_at).toISOString() : null,
+            amountUgx: Number(r.amount_ugx),
+            status: r.period_status!,
+          }
+        : null,
+    };
+  });
 }
 
 export async function listPaymentHistory(tenantId: string) {

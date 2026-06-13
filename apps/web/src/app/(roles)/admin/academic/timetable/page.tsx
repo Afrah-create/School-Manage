@@ -22,6 +22,7 @@ import { TimetableValidationPanel } from "@/components/timetable/TimetableValida
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select } from "@/components/ui/Select";
 import { useAcademicLevelScope } from "@/hooks/useAcademicLevelScope";
 import {
@@ -104,6 +105,9 @@ function AdminTimetablePageContent() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [validationReport, setValidationReport] = useState<TimetableValidateResult | null>(null);
+  const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
+  const [generateScopeClassId, setGenerateScopeClassId] = useState<string | undefined>(undefined);
+  const [generateOverwrite, setGenerateOverwrite] = useState(false);
   const tenantSlug = useAuthStore((s) => s.tenantSlug ?? s.user?.tenantSlug ?? "default");
 
   const yearsQ = useQuery({
@@ -300,6 +304,37 @@ function AdminTimetablePageContent() {
     }
   };
 
+  const openGenerateConfirm = (scopeClassId?: string) => {
+    setGenerateScopeClassId(scopeClassId);
+    setGenerateConfirmOpen(true);
+  };
+
+  const runAutoGenerate = async () => {
+    if (!templateId) return;
+    setErr(null);
+    setOk(null);
+    setGenerateConfirmOpen(false);
+    try {
+      const result = await mutations.autoGenerate.mutateAsync({
+        templateId,
+        payload: {
+          classIds: generateScopeClassId ? [generateScopeClassId] : undefined,
+          overwrite: generateOverwrite,
+          periodsPerSubject: 1,
+        },
+      });
+      setValidationReport(result.validation);
+      setOk(
+        `Generated ${result.entriesCreated} timetable slot(s) across ${result.classesProcessed} class(es).`,
+      );
+      if (result.unscheduled.length) {
+        setErr(`${result.unscheduled.length} subject slot(s) could not be scheduled — see validation.`);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Auto-generate failed");
+    }
+  };
+
   return (
     <PageWrapper
       title="Timetable"
@@ -430,8 +465,26 @@ function AdminTimetablePageContent() {
       {tab === "class" ? (
         <div className="mt-4 space-y-4">
           <Card title="Class builder">
-            <div className="mb-4 max-w-md">
-              <Select label="Class" options={classOptions} value={classId} onChange={(e) => setClassId(e.target.value)} />
+            <div className="mb-4 flex flex-wrap items-end gap-3">
+              <div className="max-w-md flex-1">
+                <Select label="Class" options={classOptions} value={classId} onChange={(e) => setClassId(e.target.value)} />
+              </div>
+              <label className="flex items-center gap-2 pb-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={generateOverwrite}
+                  onChange={(e) => setGenerateOverwrite(e.target.checked)}
+                />
+                Overwrite existing
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!editable || !templateId || mutations.autoGenerate.isPending}
+                onClick={() => openGenerateConfirm(classId || undefined)}
+              >
+                {mutations.autoGenerate.isPending ? "Generating…" : classId ? "Generate draft for class" : "Generate draft (all classes)"}
+              </Button>
             </div>
             {classSubjectsQ.isSuccess && (classSubjectsQ.data ?? []).length === 0 ? (
               <Alert tone="info">
@@ -523,9 +576,16 @@ function AdminTimetablePageContent() {
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <Card title="Validation">
             <TimetableValidationPanel report={validationReport} />
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap gap-2">
               <Button type="button" variant="secondary" onClick={() => void runValidate()}>
                 Run validation
+              </Button>
+              <Button
+                type="button"
+                disabled={!editable || !templateId || mutations.autoGenerate.isPending}
+                onClick={() => openGenerateConfirm()}
+              >
+                {mutations.autoGenerate.isPending ? "Generating…" : "Generate draft timetable"}
               </Button>
             </div>
           </Card>
@@ -548,6 +608,16 @@ function AdminTimetablePageContent() {
           </Card>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={generateConfirmOpen}
+        title="Generate draft timetable?"
+        description="Places one teaching period per class–subject per week, spread across school days."
+        confirmLabel="Generate"
+        loading={mutations.autoGenerate.isPending}
+        onConfirm={() => void runAutoGenerate()}
+        onCancel={() => setGenerateConfirmOpen(false)}
+      />
     </PageWrapper>
   );
 }

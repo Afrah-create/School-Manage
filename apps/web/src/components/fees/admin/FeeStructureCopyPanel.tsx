@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { AcademicYear, SchoolClass, Term } from "@uganda-cbc-sms/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Select } from "@/components/ui/Select";
 import { useFeeActions } from "@/hooks/useFees";
 import { apiGet } from "@/lib/api";
@@ -93,6 +94,8 @@ export function FeeStructureCopyPanel({ onCopied }: { onCopied?: () => void }) {
   const [tgtYear, setTgtYear] = useState("");
   const [tgtClass, setTgtClass] = useState("");
   const [tgtTerm, setTgtTerm] = useState("");
+  const [bulkLevel, setBulkLevel] = useState<"" | "O_LEVEL" | "A_LEVEL">("");
+  const [bulkConfirm, setBulkConfirm] = useState(false);
 
   const onSubmit = async () => {
     if (!srcClass || !srcTerm || !tgtClass || !tgtTerm) {
@@ -115,6 +118,32 @@ export function FeeStructureCopyPanel({ onCopied }: { onCopied?: () => void }) {
       onCopied?.();
     } catch (e) {
       toast.error(getApiErrorMessage(e), "Could not copy");
+    }
+  };
+
+  const onBulkCopy = async () => {
+    if (!srcClass || !srcTerm) {
+      toast.error("Select source class and term.", "Incomplete form");
+      return;
+    }
+    if (!bulkLevel) {
+      toast.error("Select a target level for bulk copy.", "Incomplete form");
+      return;
+    }
+    try {
+      const result = await actions.bulkCopyStructure.mutateAsync({
+        sourceClassId: srcClass,
+        sourceTermId: srcTerm,
+        targetTermId: tgtTerm || srcTerm,
+        targetLevel: bulkLevel,
+      });
+      toast.success(
+        `Copied ${result.totalCreated} categor${result.totalCreated === 1 ? "y" : "ies"} to ${result.targets.length} class(es).`,
+        "Bulk copy complete",
+      );
+      onCopied?.();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e), "Bulk copy failed");
     }
   };
 
@@ -146,6 +175,45 @@ export function FeeStructureCopyPanel({ onCopied }: { onCopied?: () => void }) {
       <Button loading={actions.copyStructure.isPending} onClick={() => void onSubmit()}>
         Copy fee structure
       </Button>
+
+      <div className="mt-6 rounded-md border border-border p-4">
+        <p className="mb-3 text-sm font-medium text-foreground">Copy to all classes (same term)</p>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Copy the source class fees to every class at the selected level. Uses the source term unless a target term
+          is set above.
+        </p>
+        <Select
+          label="Target level"
+          value={bulkLevel}
+          onChange={(e) => setBulkLevel(e.target.value as "" | "O_LEVEL" | "A_LEVEL")}
+          options={[
+            { value: "", label: "Select level" },
+            { value: "O_LEVEL", label: "All O-Level classes" },
+            { value: "A_LEVEL", label: "All A-Level classes" },
+          ]}
+        />
+        <Button
+          className="mt-3"
+          variant="secondary"
+          loading={actions.bulkCopyStructure.isPending}
+          onClick={() => setBulkConfirm(true)}
+        >
+          Copy to all classes at level
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={bulkConfirm}
+        title="Copy fees to all classes?"
+        description="This copies every fee category from the source class to all classes at the selected level for the same term."
+        confirmLabel="Copy all"
+        loading={actions.bulkCopyStructure.isPending}
+        onConfirm={() => {
+          setBulkConfirm(false);
+          void onBulkCopy();
+        }}
+        onCancel={() => setBulkConfirm(false)}
+      />
     </div>
   );
 }

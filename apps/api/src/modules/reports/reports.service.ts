@@ -200,8 +200,10 @@ export async function getReportReadiness(classId: string, termId: string, examId
     { teacherId: string | null; teacherName: string; teacherEmail: string | null; subjects: string[] }
   >();
   for (const row of pending) {
-    const key = row.teacherId ?? `unassigned-${row.subjectCode}`;
-    const label = row.teacherName?.trim() || "Unassigned teacher";
+    const key = row.teacherId ?? "__unassigned__";
+    const label = row.teacherId
+      ? row.teacherName?.trim() || "Teacher"
+      : "Unassigned subjects";
     const existing = teachersPending.get(key);
     if (existing) {
       existing.subjects.push(row.subjectCode);

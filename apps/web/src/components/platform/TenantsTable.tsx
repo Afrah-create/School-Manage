@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, ExternalLink, Pencil, School } from "lucide-react";
+import { Copy, ExternalLink, PauseCircle, Pencil, PlayCircle, School } from "lucide-react";
 import { schoolLoginUrl } from "@/lib/tenantHost";
 import type { PlatformTenant } from "./types";
 import { TenantStatusBadge } from "./TenantStatusBadge";
@@ -9,10 +9,16 @@ export function TenantsTable({
   tenants,
   onEdit,
   onCopyUrl,
+  onSuspend,
+  onActivate,
+  actionBusyId,
 }: {
   tenants: PlatformTenant[];
   onEdit: (t: PlatformTenant) => void;
   onCopyUrl: (slug: string) => void;
+  onSuspend: (t: PlatformTenant) => void;
+  onActivate: (t: PlatformTenant) => void;
+  actionBusyId?: string | null;
 }) {
   if (tenants.length === 0) {
     return (
@@ -59,10 +65,28 @@ export function TenantsTable({
                 </td>
                 <td className="px-5 py-4">
                   <div className="flex items-center justify-end gap-1">
+                    {t.status === "active" ? (
+                      <ActionButton
+                        label="Suspend"
+                        onClick={() => onSuspend(t)}
+                        icon={PauseCircle}
+                        disabled={actionBusyId === t.id}
+                        className="hover:text-amber-300"
+                      />
+                    ) : t.status === "suspended" ? (
+                      <ActionButton
+                        label="Unblock"
+                        onClick={() => onActivate(t)}
+                        icon={PlayCircle}
+                        disabled={actionBusyId === t.id}
+                        className="hover:text-emerald-300"
+                      />
+                    ) : null}
                     <ActionButton
                       label="Edit"
                       onClick={() => onEdit(t)}
                       icon={Pencil}
+                      disabled={actionBusyId === t.id}
                     />
                     <ActionButton
                       label="Copy sign-in URL"
@@ -93,17 +117,22 @@ function ActionButton({
   label,
   onClick,
   icon: Icon,
+  disabled,
+  className,
 }: {
   label: string;
   onClick: () => void;
   icon: typeof Pencil;
+  disabled?: boolean;
+  className?: string;
 }) {
   return (
     <button
       type="button"
       title={label}
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-white"
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ""}`}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden />
       <span className="sr-only sm:not-sr-only sm:inline">{label}</span>

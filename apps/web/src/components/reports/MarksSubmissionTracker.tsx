@@ -121,8 +121,8 @@ export function MarksSubmissionTracker({ data }: { data: ReportReadiness }) {
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm">
           <p className="font-medium text-amber-900 dark:text-amber-200">Follow up with these teachers</p>
           <ul className="mt-2 space-y-1 text-amber-800 dark:text-amber-100/90">
-            {data.teachersPending!.map((t) => (
-              <li key={t.teacherId ?? t.teacherName}>
+            {data.teachersPending!.map((t, index) => (
+              <li key={t.teacherId ?? `unassigned-${index}`}>
                 <strong>{t.teacherName}</strong>
                 {t.teacherEmail ? ` (${t.teacherEmail})` : ""} — pending:{" "}
                 {t.subjects.join(", ")}

@@ -9,6 +9,8 @@ import type {
   TimetableGridView,
   TimetablePeriod,
   TimetablePeriodsBulkInput,
+  TimetableAutoGenerateInput,
+  TimetableAutoGenerateResult,
   TimetableBrowseItem,
   TimetableBrowseQuery,
   TimetablePublicationLogEntry,
@@ -282,5 +284,20 @@ export function useTimetableMutations(scope: TimetableScope) {
     onSuccess: () => void invalidateAll(),
   });
 
-  return { savePeriods, saveDays, saveClassGrid, validate, publish, clone, invalidateAll };
+  const autoGenerate = useMutation({
+    mutationFn: ({
+      templateId,
+      payload,
+    }: {
+      templateId: string;
+      payload: TimetableAutoGenerateInput;
+    }) =>
+      apiPost<TimetableAutoGenerateResult>(
+        `/timetable/templates/${encodeURIComponent(templateId)}/auto-generate`,
+        payload,
+      ),
+    onSuccess: (_, v) => void invalidateAll(v.templateId),
+  });
+
+  return { savePeriods, saveDays, saveClassGrid, validate, publish, clone, autoGenerate, invalidateAll };
 }

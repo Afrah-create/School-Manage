@@ -2,6 +2,7 @@ import type {
   FeeBulkInvoiceInput,
   FeeInvoiceInput,
   FeePaymentInput,
+  FeeStructureBulkCopyInput,
   FeeStructureCopyInput,
   FeeStructureInput,
   FeeStructurePatchInput,
@@ -267,12 +268,21 @@ export async function generateInvoicesFromStructure(input: FeeBulkInvoiceInput, 
 
   await withTransaction(async (client: PoolClient) => {
     for (const st of students) {
-      const exists = await client.query(
-        `SELECT 1 FROM fee_invoices WHERE student_id = $1 AND term_id = $2 LIMIT 1`,
+      const exists = await client.query<{ total_amount: string }>(
+        `SELECT total_amount::text FROM fee_invoices WHERE student_id = $1 AND term_id = $2 LIMIT 1`,
         [st.id, input.termId],
       );
       if (exists.rows.length > 0) {
-        skipped += 1;
+        const existingTotal = Number(exists.rows[0]!.total_amount);
+        if (existingTotal > 0) {
+          skipped += 1;
+          continue;
+        }
+        await client.query(
+          `UPDATE fee_invoices SET total_amount = $3::numeric WHERE student_id = $1 AND term_id = $2`,
+          [st.id, input.termId, totalStr],
+        );
+        created += 1;
         continue;
       }
       await client.query(
@@ -403,4 +413,40 @@ export async function feeTermReport(termId: string) {
       flaggedCount: Number(sums[0]?.flagged_count ?? 0),
     },
   };
+}
+
+export async function bulkCopyFeeStructures(input: FeeStructureBulkCopyInput) {
+  const targetTermId = input.targetTermId ?? input.sourceTermId;
+  let targetClassIds = input.targetClassIds ?? [];
+
+  if (!targetClassIds.length && input.targetLevel) {
+    const { rows } = await query<{ id: string }>(
+      `SELECT id FROM classes WHERE level = $1::varchar`,
+      [input.targetLevel],
+    );
+    targetClassIds = rows.map((r) => r.id);
+  }
+
+  if (!targetClassIds.length) {
+    throw new HttpError(400, "Provide targetClassIds or targetLevel.");
+  }
+
+  let totalCreated = 0;
+  let totalSkipped = 0;
+  const targets: Array<{ classId: string; created: number; skipped: number }> = [];
+
+  for (const classId of targetClassIds) {
+    if (classId === input.sourceClassId && targetTermId === input.sourceTermId) continue;
+    const result = await copyFeeStructures({
+      sourceClassId: input.sourceClassId,
+      sourceTermId: input.sourceTermId,
+      targetClassId: classId,
+      targetTermId,
+    });
+    totalCreated += result.created;
+    totalSkipped += result.skipped;
+    targets.push({ classId, created: result.created, skipped: result.skipped });
+  }
+
+  return { totalCreated, totalSkipped, targets, targetTermId };
 }

@@ -92,6 +92,14 @@ export const timetableValidateResultSchema = z.object({
   canPublish: z.boolean(),
 });
 
+export const timetableAutoGenerateSchema = z.object({
+  classIds: z.array(z.string().uuid()).max(200).optional(),
+  overwrite: z.boolean().optional().default(false),
+  periodsPerSubject: z.number().int().min(1).max(10).optional().default(1),
+});
+
+export type TimetableAutoGenerateInput = z.infer<typeof timetableAutoGenerateSchema>;
+
 export const timetableMyWeekQuerySchema = z.object({
   weekStart: z
     .string()
@@ -123,6 +131,14 @@ export type TimetableEntriesBulkSaveInput = z.infer<typeof timetableEntriesBulkS
 export type TimetableGridQuery = z.infer<typeof timetableGridQuerySchema>;
 export type TimetablePublishInput = z.infer<typeof timetablePublishSchema>;
 export type TimetableValidateResult = z.infer<typeof timetableValidateResultSchema>;
+
+export type TimetableAutoGenerateResult = {
+  classesProcessed: number;
+  entriesCreated: number;
+  unscheduled: Array<{ classSubjectId: string; className: string; subjectName: string; reason: string }>;
+  validation: TimetableValidateResult;
+};
+
 export type TimetableMyWeekQuery = z.infer<typeof timetableMyWeekQuerySchema>;
 export type TimetableBrowseQuery = z.infer<typeof timetableBrowseQuerySchema>;
 

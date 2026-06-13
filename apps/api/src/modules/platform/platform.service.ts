@@ -237,6 +237,122 @@ export async function updateTenant(
   }
 }
 
+export async function suspendTenant(tenantId: string, actorId: string): Promise<TenantListItem> {
+  const client = await platformPool.connect();
+  try {
+    const { rows } = await client.query<{ status: string; slug: string }>(
+      `SELECT status, slug FROM tenants WHERE id = $1`,
+      [tenantId],
+    );
+    if (!rows[0]) throw new HttpError(404, "Tenant not found.");
+    if (rows[0].status === "suspended") {
+      throw new HttpError(409, "School is already suspended.");
+    }
+
+    await client.query(`UPDATE tenants SET status = 'suspended', updated_at = NOW() WHERE id = $1`, [
+      tenantId,
+    ]);
+    invalidateTenantCache(rows[0].slug);
+
+    await logPlatformAction({
+      actorId,
+      action: "TENANT_SUSPENDED",
+      tenantId,
+      metadata: { previousStatus: rows[0].status },
+    });
+
+    const updated = await client.query<{
+      id: string;
+      slug: string;
+      display_name: string;
+      status: string;
+      subdomain: string;
+      school_name: string | null;
+      feature_flags: Record<string, boolean> | null;
+      created_at: Date;
+    }>(
+      `SELECT t.id, t.slug, t.display_name, t.status, d.subdomain,
+              ts.school_name, ts.feature_flags, t.created_at
+       FROM tenants t
+       JOIN tenant_domains d ON d.tenant_id = t.id AND d.is_primary = TRUE
+       LEFT JOIN tenant_settings ts ON ts.tenant_id = t.id
+       WHERE t.id = $1`,
+      [tenantId],
+    );
+    const r = updated.rows[0]!;
+    return {
+      id: r.id,
+      slug: r.slug,
+      displayName: r.display_name,
+      status: r.status,
+      subdomain: r.subdomain,
+      schoolName: r.school_name,
+      featureFlags: (r.feature_flags ?? {}) as Record<string, boolean>,
+      createdAt: r.created_at.toISOString(),
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function activateTenant(tenantId: string, actorId: string): Promise<TenantListItem> {
+  const client = await platformPool.connect();
+  try {
+    const { rows } = await client.query<{ status: string; slug: string }>(
+      `SELECT status, slug FROM tenants WHERE id = $1`,
+      [tenantId],
+    );
+    if (!rows[0]) throw new HttpError(404, "Tenant not found.");
+    if (rows[0].status === "active") {
+      throw new HttpError(409, "School is already active.");
+    }
+
+    await client.query(`UPDATE tenants SET status = 'active', updated_at = NOW() WHERE id = $1`, [
+      tenantId,
+    ]);
+    invalidateTenantCache(rows[0].slug);
+
+    await logPlatformAction({
+      actorId,
+      action: "TENANT_ACTIVATED",
+      tenantId,
+      metadata: { previousStatus: rows[0].status },
+    });
+
+    const updated = await client.query<{
+      id: string;
+      slug: string;
+      display_name: string;
+      status: string;
+      subdomain: string;
+      school_name: string | null;
+      feature_flags: Record<string, boolean> | null;
+      created_at: Date;
+    }>(
+      `SELECT t.id, t.slug, t.display_name, t.status, d.subdomain,
+              ts.school_name, ts.feature_flags, t.created_at
+       FROM tenants t
+       JOIN tenant_domains d ON d.tenant_id = t.id AND d.is_primary = TRUE
+       LEFT JOIN tenant_settings ts ON ts.tenant_id = t.id
+       WHERE t.id = $1`,
+      [tenantId],
+    );
+    const r = updated.rows[0]!;
+    return {
+      id: r.id,
+      slug: r.slug,
+      displayName: r.display_name,
+      status: r.status,
+      subdomain: r.subdomain,
+      schoolName: r.school_name,
+      featureFlags: (r.feature_flags ?? {}) as Record<string, boolean>,
+      createdAt: r.created_at.toISOString(),
+    };
+  } finally {
+    client.release();
+  }
+}
+
 export async function listPlatformAuditLog(limit = 50) {
   const client = await platformPool.connect();
   try {

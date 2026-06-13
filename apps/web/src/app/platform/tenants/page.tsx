@@ -30,6 +30,7 @@ import {
 import type { PlatformAuditEntry, PlatformTenant } from "@/components/platform/types";
 import type { TenantCredentials } from "@uganda-cbc-sms/shared";
 import { SchoolCredentialsModal } from "@/components/platform/SchoolCredentialsModal";
+import { PlatformTenantActionConfirmDialog } from "@/components/platform/PlatformTenantActionConfirmDialog";
 
 const EMPTY_CREATE: CreateTenantFormState = {
   slug: "",
@@ -46,6 +47,7 @@ export default function PlatformTenantsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<PlatformTenant | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditTenantFormState>({
     displayName: "",
     status: "active",
@@ -55,6 +57,10 @@ export default function PlatformTenantsPage() {
   const [provisionedCredentials, setProvisionedCredentials] = useState<TenantCredentials | null>(
     null,
   );
+  const [statusConfirm, setStatusConfirm] = useState<{
+    kind: "suspend" | "activate";
+    tenant: PlatformTenant;
+  } | null>(null);
 
   const stats = useMemo(() => {
     const active = tenants.filter((t) => t.status === "active").length;
@@ -171,6 +177,38 @@ export default function PlatformTenantsPage() {
     }
   }
 
+  function requestSuspend(t: PlatformTenant) {
+    setStatusConfirm({ kind: "suspend", tenant: t });
+  }
+
+  function requestActivate(t: PlatformTenant) {
+    setStatusConfirm({ kind: "activate", tenant: t });
+  }
+
+  async function confirmStatusChange() {
+    if (!statusConfirm) return;
+    const { kind, tenant } = statusConfirm;
+    setActionBusyId(tenant.id);
+    try {
+      if (kind === "suspend") {
+        await platformApi.post(`/tenants/${tenant.id}/suspend`);
+        toast.success(`${tenant.displayName} has been suspended.`, "School suspended");
+      } else {
+        await platformApi.post(`/tenants/${tenant.id}/activate`);
+        toast.success(`${tenant.displayName} is active again.`, "School reactivated");
+      }
+      setStatusConfirm(null);
+      await load();
+    } catch (err: unknown) {
+      toast.error(
+        platformApiError(err) ?? "Something went wrong.",
+        kind === "suspend" ? "Could not suspend" : "Could not reactivate",
+      );
+    } finally {
+      setActionBusyId(null);
+    }
+  }
+
   return (
     <PlatformShell
       title="School tenants"
@@ -232,7 +270,14 @@ export default function PlatformTenantsPage() {
             ))}
           </div>
         ) : (
-          <TenantsTable tenants={tenants} onEdit={startEdit} onCopyUrl={copyLoginUrl} />
+          <TenantsTable
+            tenants={tenants}
+            onEdit={startEdit}
+            onCopyUrl={copyLoginUrl}
+            onSuspend={requestSuspend}
+            onActivate={requestActivate}
+            actionBusyId={actionBusyId}
+          />
         )}
       </section>
 
@@ -298,6 +343,18 @@ export default function PlatformTenantsPage() {
         open={provisionedCredentials !== null}
         credentials={provisionedCredentials}
         onClose={() => setProvisionedCredentials(null)}
+      />
+
+      <PlatformTenantActionConfirmDialog
+        open={statusConfirm !== null}
+        kind={statusConfirm?.kind ?? "suspend"}
+        displayName={statusConfirm?.tenant.displayName ?? ""}
+        slug={statusConfirm?.tenant.slug ?? ""}
+        loading={actionBusyId !== null}
+        onConfirm={() => void confirmStatusChange()}
+        onClose={() => {
+          if (actionBusyId === null) setStatusConfirm(null);
+        }}
       />
     </PlatformShell>
   );

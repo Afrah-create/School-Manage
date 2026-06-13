@@ -7,6 +7,7 @@ import { useState } from "react";
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { EnrolmentModal } from "@/components/students/EnrolmentModal";
 import { StudentEditModal } from "@/components/students/StudentEditModal";
+import { StudentImportPanel } from "@/components/students/StudentImportPanel";
 import { StudentsDirectory } from "@/components/students/StudentsDirectory";
 import { Button } from "@/components/ui/Button";
 
@@ -28,6 +29,10 @@ export default function AdminStudentsPage() {
         <Button type="button" onClick={() => setEnrolOpen(true)}>
           Enrol new student
         </Button>
+      </div>
+
+      <div className="mb-6">
+        <StudentImportPanel onImported={() => void qc.invalidateQueries({ queryKey: ["students"] })} />
       </div>
 
       <StudentsDirectory

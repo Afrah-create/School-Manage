@@ -64,7 +64,9 @@ export default function AdminTeacherAssignmentsPage() {
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
   const [unassigned, setUnassigned] = useState<UnassignedRow[]>([]);
   const [selectedUnassigned, setSelectedUnassigned] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [unassignedLoading, setUnassignedLoading] = useState(false);
   const [sectionBusy, setSectionBusy] = useState(false);
   const [busyRemoveId, setBusyRemoveId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -116,13 +118,18 @@ export default function AdminTeacherAssignmentsPage() {
       setAssignments([]);
       return;
     }
-    const q = new URLSearchParams({ academicYearId: yId, level });
-    const resolvedClassId = classId ?? classFilterId;
-    if (resolvedClassId) q.set("classId", resolvedClassId);
-    const data = await apiGet<{ assignments: TeacherAssignment[]; totalCount: number }>(
-      `/academic/teachers/${encodeURIComponent(tId)}/assignments?${q.toString()}`,
-    );
-    setAssignments(data.assignments);
+    setAssignmentsLoading(true);
+    try {
+      const q = new URLSearchParams({ academicYearId: yId, level });
+      const resolvedClassId = classId ?? classFilterId;
+      if (resolvedClassId) q.set("classId", resolvedClassId);
+      const data = await apiGet<{ assignments: TeacherAssignment[]; totalCount: number }>(
+        `/academic/teachers/${encodeURIComponent(tId)}/assignments?${q.toString()}`,
+      );
+      setAssignments(data.assignments);
+    } finally {
+      setAssignmentsLoading(false);
+    }
   };
 
   const loadWorkloadSummaryWith = async (yId: string, classId?: string) => {
@@ -141,14 +148,19 @@ export default function AdminTeacherAssignmentsPage() {
       setUnassigned([]);
       return;
     }
-    const q = new URLSearchParams({ academicYearId: yId, level });
-    if (classId) q.set("classId", classId);
-    if (tId) q.set("teacherId", tId);
-    const data = await apiGet<{ unassigned: UnassignedRow[]; count: number }>(
-      `/academic/class-subjects/unassigned?${q.toString()}`,
-    );
-    setUnassigned(data.unassigned);
-    setSelectedUnassigned((prev) => prev.filter((id) => data.unassigned.some((r) => r.id === id)));
+    setUnassignedLoading(true);
+    try {
+      const q = new URLSearchParams({ academicYearId: yId, level });
+      if (classId) q.set("classId", classId);
+      if (tId) q.set("teacherId", tId);
+      const data = await apiGet<{ unassigned: UnassignedRow[]; count: number }>(
+        `/academic/class-subjects/unassigned?${q.toString()}`,
+      );
+      setUnassigned(data.unassigned);
+      setSelectedUnassigned((prev) => prev.filter((id) => data.unassigned.some((r) => r.id === id)));
+    } finally {
+      setUnassignedLoading(false);
+    }
   };
 
   const load = async () => {
@@ -164,7 +176,7 @@ export default function AdminTeacherAssignmentsPage() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to load");
     } finally {
-      setLoading(false);
+      setPageLoading(false);
       setWorkloadLoading(false);
     }
   };
@@ -176,7 +188,7 @@ export default function AdminTeacherAssignmentsPage() {
   }, [staffLoading]);
 
   useEffect(() => {
-    if (staffLoading || loading || !academicYearId) return;
+    if (staffLoading || pageLoading || !academicYearId) return;
     void refreshForLevelChange();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level]);
@@ -402,9 +414,8 @@ export default function AdminTeacherAssignmentsPage() {
 
       <Card title="Filters">
         <p className="mb-3 text-sm text-muted-foreground">
-          This is the only page for assigning teachers to class–subject slots. Step 2 (Class subjects) adds subjects
-          to the timetable; assign the teacher here. Teachable-subject qualifications are managed below for the
-          selected teacher.
+          Assign each class–subject slot to the teacher who teaches that subject. Set teachable subjects on each
+          teacher&apos;s profile first, then pick a teacher and assign matching unassigned slots below.
         </p>
         <div className="grid gap-3 md:grid-cols-3">
           <Select
@@ -448,8 +459,8 @@ export default function AdminTeacherAssignmentsPage() {
             teacherId={teacherId}
             teacherName={selectedTeacher.fullName}
             highlightLevel={level}
-            onSaved={() => {
-              void loadUnassignedWith(academicYearId, teacherId, classFilterId || undefined);
+            onSaved={async () => {
+              await refetchAll();
             }}
           />
         </Card>
@@ -460,14 +471,14 @@ export default function AdminTeacherAssignmentsPage() {
           summary={workloadSummary}
           selectedTeacherId={teacherId || undefined}
           onSelectTeacher={onChartSelectTeacher}
-          loading={workloadLoading || loading}
+          loading={workloadLoading || pageLoading}
         />
       </Card>
 
       <Card title="Current assignments">
         {!teacherId ? (
           <p className="text-sm text-muted-foreground">Select a teacher to view assignments.</p>
-        ) : !loading && assignments.length === 0 ? (
+        ) : !assignmentsLoading && !pageLoading && assignments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No subject slots assigned to this teacher for this year
             {classFilterId ? " in the selected class" : ""}.
@@ -476,7 +487,8 @@ export default function AdminTeacherAssignmentsPage() {
           <Table
             columns={assignmentColumns}
             rows={assignments as AssignmentRow[]}
-            loading={loading || sectionBusy || staffLoading}
+            loading={assignmentsLoading || pageLoading}
+            loadingRows={5}
             pageSize={500}
           />
         )}
@@ -510,7 +522,7 @@ export default function AdminTeacherAssignmentsPage() {
             </Button>
           </div>
         ) : null}
-        {!loading && unassigned.length === 0 ? (
+        {!unassignedLoading && !pageLoading && unassigned.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {teacherId
               ? "No unassigned slots this teacher can take for the current filters."
@@ -520,7 +532,8 @@ export default function AdminTeacherAssignmentsPage() {
           <Table
             columns={unassignedColumns}
             rows={unassigned as UnassignedTableRow[]}
-            loading={loading || sectionBusy || staffLoading}
+            loading={unassignedLoading || pageLoading}
+            loadingRows={5}
             pageSize={500}
           />
         )}

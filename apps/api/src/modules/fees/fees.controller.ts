@@ -10,8 +10,10 @@ const {
   feeStructureSchema,
   feeStructurePatchSchema,
   feeStructureCopySchema,
+  feeStructureBulkCopySchema,
   feeBulkInvoiceSchema,
   feeScheduleClassTermSchema,
+  feeScheduleBulkPublishSchema,
 } = sharedSchemas;
 
 export async function postStructure(req: Request, res: Response): Promise<void> {
@@ -141,6 +143,27 @@ export async function postScheduleUnpublish(req: Request, res: Response): Promis
     success: true,
     data,
     message: "Fee schedule returned to draft. You can edit categories again.",
+  });
+}
+
+export async function postStructureCopyBulk(req: Request, res: Response): Promise<void> {
+  const body = feeStructureBulkCopySchema.parse(req.body);
+  const data = await svc.bulkCopyFeeStructures(body);
+  res.json({
+    success: true,
+    data,
+    message: `Copied fee structure to ${data.targets.length} class(es).`,
+  });
+}
+
+export async function postSchedulePublishBulk(req: Request, res: Response): Promise<void> {
+  if (!req.user) throw new HttpError(401, "Please sign in to continue.");
+  const body = feeScheduleBulkPublishSchema.parse(req.body);
+  const data = await scheduleSvc.bulkPublishSchedules(body, req.user.id);
+  res.json({
+    success: true,
+    data,
+    message: `Published ${data.publishedCount} fee schedule(s).`,
   });
 }
 

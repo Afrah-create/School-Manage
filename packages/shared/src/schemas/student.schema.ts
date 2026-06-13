@@ -178,3 +178,29 @@ export type AttendanceLessonRegisterSubmitInput = z.infer<typeof attendanceLesso
 export type AttendanceRangeQuery = z.infer<typeof attendanceRangeQuerySchema>;
 export type AttendanceAdminOverviewQuery = z.infer<typeof attendanceAdminOverviewQuerySchema>;
 export type StudentBrowseQuery = z.infer<typeof studentBrowseQuerySchema>;
+
+export const STUDENT_IMPORT_CSV_HEADERS = [
+  "fullName",
+  "dateOfBirth",
+  "gender",
+  "className",
+  "classStream",
+  "guardianName",
+  "guardianContact",
+  "guardianEmail",
+  "address",
+  "previousSchool",
+] as const;
+
+export type StudentImportRowError = {
+  row: number;
+  field: string;
+  message: string;
+};
+
+export type StudentImportResult = {
+  created: number;
+  skipped: number;
+  errors: StudentImportRowError[];
+  createdStudentIds: string[];
+};
