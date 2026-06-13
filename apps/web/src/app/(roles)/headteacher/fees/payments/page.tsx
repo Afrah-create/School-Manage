@@ -16,7 +16,7 @@ export default function HeadteacherFeesPaymentsPage() {
   const status = queryStatus(paymentsQ);
   const [search, setSearch] = useState("");
 
-  const allRows = paymentsQ.data ?? [];
+  const allRows = useMemo(() => paymentsQ.data ?? [], [paymentsQ.data]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

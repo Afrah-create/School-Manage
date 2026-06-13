@@ -41,7 +41,7 @@ export default function BursarInvoicesListPage() {
 
   const invoicesQ = useFeeInvoices();
   const status = queryStatus(invoicesQ);
-  const allRows = invoicesQ.data ?? [];
+  const allRows = useMemo(() => invoicesQ.data ?? [], [invoicesQ.data]);
 
   const [mainTab, setMainTab] = useState<MainTab>(() => initialMainTab(tabParam));
   const [search, setSearch] = useState("");

@@ -29,7 +29,7 @@ export default function HeadteacherFeesInvoicesPage() {
   const searchParams = useSearchParams();
   const invoicesQ = useFeeInvoices();
   const status = queryStatus(invoicesQ);
-  const allRows = invoicesQ.data ?? [];
+  const allRows = useMemo(() => invoicesQ.data ?? [], [invoicesQ.data]);
 
   const [search, setSearch] = useState("");
   const [termId, setTermId] = useState("");

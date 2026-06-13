@@ -56,10 +56,10 @@ export default function AdminAlevelAssessmentPage() {
     queryFn: () => apiGet<Combination[]>("/academic/combinations?level=A_LEVEL"),
   });
 
-  const years = yearsQ.data ?? [];
-  const terms = termsQ.data ?? [];
-  const classes = classesQ.data ?? [];
-  const combinations = combinationsQ.data ?? [];
+  const years = useMemo(() => yearsQ.data ?? [], [yearsQ.data]);
+  const terms = useMemo(() => termsQ.data ?? [], [termsQ.data]);
+  const classes = useMemo(() => classesQ.data ?? [], [classesQ.data]);
+  const combinations = useMemo(() => combinationsQ.data ?? [], [combinationsQ.data]);
 
   useEffect(() => {
     if (years[0] && !academicYearId) setAcademicYearId(years[0].id);

@@ -42,7 +42,7 @@ export default function ClassTeacherDashboardPage() {
     enabled: loadAttendance,
   });
 
-  const students = studentsQ.data?.items ?? [];
+  const students = useMemo(() => studentsQ.data?.items ?? [], [studentsQ.data?.items]);
   const att = attendanceQ.data ?? [];
   const absentees = att.filter((a) => a.status === "absent");
 

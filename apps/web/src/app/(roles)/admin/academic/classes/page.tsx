@@ -94,7 +94,7 @@ export default function AdminAcademicClassesPage() {
     if (failed?.error) {
       toast.error(getApiErrorMessage(failed.error), "Could not load classes");
     }
-  }, [classesQ.error, yearsQ.error, staffQ.error]);
+  }, [classesQ, yearsQ, staffQ]);
 
   const onSubmit = async (v: Form) => {
     const label = `${v.name} ${v.stream}`.trim();

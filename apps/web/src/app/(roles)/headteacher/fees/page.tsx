@@ -14,7 +14,7 @@ export default function HeadteacherFeesOverviewPage() {
   const paymentsQ = useFeePayments();
   const status = queryStatus(invoicesQ);
 
-  const rows = invoicesQ.data ?? [];
+  const rows = useMemo(() => invoicesQ.data ?? [], [invoicesQ.data]);
   const stats = useMemo(() => computeInvoiceStats(rows), [rows]);
 
   return (

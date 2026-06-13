@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -112,9 +113,9 @@ export function PaymentForm({
       ) : invoices.length === 0 ? (
         <Alert tone="info">
           This student has no unpaid invoices.{" "}
-          <a className="font-medium text-brand underline" href="/bursar/fees/invoices">
+          <Link className="font-medium text-brand underline" href="/bursar/fees/invoices">
             Create or bill invoices
-          </a>{" "}
+          </Link>{" "}
           first.
         </Alert>
       ) : (

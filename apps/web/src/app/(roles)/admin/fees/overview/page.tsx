@@ -14,7 +14,7 @@ import { queryStatus } from "@/lib/queryStatus";
 export default function AdminFeesOverviewPage() {
   const invoicesQ = useFeeInvoices();
   const status = queryStatus(invoicesQ);
-  const rows = invoicesQ.data ?? [];
+  const rows = useMemo(() => invoicesQ.data ?? [], [invoicesQ.data]);
 
   const stats = useMemo(() => {
     let outstanding = 0;

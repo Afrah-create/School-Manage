@@ -59,7 +59,7 @@ export function FinancialTermReport({
   const reportQ = useFeeTermReport(termId || undefined);
   const status = queryStatus(reportQ);
 
-  const invoices = reportQ.data?.invoices ?? [];
+  const invoices = useMemo(() => reportQ.data?.invoices ?? [], [reportQ.data?.invoices]);
   const apiSummary = reportQ.data?.summary;
   const stats = useMemo(() => computeInvoiceStats(invoices), [invoices]);
   const termOptions = useMemo(() => uniqueInvoiceTerms(invoices), [invoices]);

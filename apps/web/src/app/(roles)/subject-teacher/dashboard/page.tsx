@@ -49,7 +49,7 @@ export default function SubjectTeacherDashboardPage() {
     return ids.size;
   }, [scope.subjectSlots]);
 
-  const students = studentsQ.data?.items ?? [];
+  const students = useMemo(() => studentsQ.data?.items ?? [], [studentsQ.data?.items]);
   const termLabel = scope.termId ? `Term ${scope.activeTerm?.termNumber ?? ""}` : "Not set";
 
   const loadStudents = Boolean(previewClassId);
