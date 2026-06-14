@@ -41,12 +41,30 @@ export function StudentImportPanel({ onImported }: { onImported?: () => void }) 
     }
   };
 
+  const downloadErrors = () => {
+    if (!result?.errors.length) return;
+    const lines = [
+      "row,field,message",
+      ...result.errors.map((e) => `${e.row},${e.field},"${e.message.replace(/"/g, '""')}"`),
+    ];
+    const blob = new Blob([`${lines.join("\n")}\n`], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "student-import-errors.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Card title="Bulk CSV enrolment">
       <p className="mb-4 text-sm text-muted-foreground">
-        Upload a CSV with columns: fullName, dateOfBirth, gender, className, classStream, guardianName,
-        guardianContact, and optional guardianEmail, address, previousSchool. Classes must exist in the
-        active academic year.
+        Upload a CSV with student details. Column names are flexible — e.g.{" "}
+        <code className="text-xs">fullName</code>, <code className="text-xs">Full Name</code>, or{" "}
+        <code className="text-xs">name</code>; <code className="text-xs">className</code> /{" "}
+        <code className="text-xs">Class</code> and <code className="text-xs">classStream</code> /{" "}
+        <code className="text-xs">Stream</code> (or combine as &quot;S1 Main&quot; in one class column). Classes
+        must match the active academic year exactly (case-insensitive). Download the template for the safest format.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="secondary" onClick={() => void downloadTemplate()}>
@@ -74,16 +92,23 @@ export function StudentImportPanel({ onImported }: { onImported?: () => void }) 
       {result ? (
         <div className="mt-4 space-y-2">
           <Alert tone={result.errors.length ? "info" : "success"}>
-            Created {result.created}; skipped {result.skipped}.
+            Imported {result.created} of {result.totalRows} row(s); {result.skipped} skipped.
           </Alert>
           {result.errors.length ? (
-            <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 text-xs">
-              {result.errors.map((err, idx) => (
-                <div key={`${err.row}-${idx}`}>
-                  Row {err.row} ({err.field}): {err.message}
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="secondary" className="!h-8 !px-3 text-xs" onClick={downloadErrors}>
+                  Download error report
+                </Button>
+              </div>
+              <div className="max-h-60 overflow-y-auto rounded-md border border-border p-2 text-xs">
+                {result.errors.map((err, idx) => (
+                  <div key={`${err.row}-${idx}`}>
+                    Row {err.row} ({err.field}): {err.message}
+                  </div>
+                ))}
+              </div>
+            </>
           ) : null}
         </div>
       ) : null}

@@ -201,6 +201,7 @@ export type StudentImportRowError = {
 export type StudentImportResult = {
   created: number;
   skipped: number;
+  totalRows: number;
   errors: StudentImportRowError[];
   createdStudentIds: string[];
 };
