@@ -3,7 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import bcrypt from "bcrypt";
 import type { Role } from "@uganda-cbc-sms/shared";
-import { pool, platformPool } from "../src/config/db";
+import type { PoolClient } from "pg";
+import { pool, platformPool, withTenant } from "../src/config/db";
 import { printPlatformAdminBanner, seedPlatformAdmin } from "./lib/seedPlatformAdmin.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -126,17 +127,18 @@ async function ensureAcademicBaseline(
   tenantId: string,
   classTeacherId: string | null,
   subjectTeacherId: string | null,
+  client: PoolClient,
 ): Promise<RefIds> {
   const yearName = process.env.SAMPLE_ACADEMIC_YEAR_NAME ?? "2026";
   let yearId =
     (
-      await pool.query<{ id: string }>(
+      await client.query<{ id: string }>(
         `SELECT id FROM academic_years WHERE tenant_id = $1 AND name = $2 ORDER BY created_at DESC LIMIT 1`,
         [tenantId, yearName],
       )
     ).rows[0]?.id ?? null;
   if (!yearId) {
-    const year = await pool.query<{ id: string }>(
+    const year = await client.query<{ id: string }>(
       `INSERT INTO academic_years (tenant_id, name, start_date, end_date, is_active)
        VALUES ($1, $2, '2026-02-03', '2026-12-04', true)
        RETURNING id`,
@@ -148,17 +150,17 @@ async function ensureAcademicBaseline(
     throw new Error("Could not create or locate academic year for student seed");
   }
 
-  await pool.query(`UPDATE academic_years SET is_active = (id = $1)`, [yearId]);
+  await client.query(`UPDATE academic_years SET is_active = (id = $1)`, [yearId]);
 
   let termId =
     (
-      await pool.query<{ id: string }>(
+      await client.query<{ id: string }>(
         `SELECT id FROM terms WHERE academic_year_id = $1 AND term_number = 1 ORDER BY created_at DESC LIMIT 1`,
         [yearId],
       )
     ).rows[0]?.id ?? null;
   if (!termId) {
-    const term = await pool.query<{ id: string }>(
+    const term = await client.query<{ id: string }>(
       `INSERT INTO terms (tenant_id, academic_year_id, term_number, start_date, end_date, is_active)
        VALUES ($1, $2, 1, '2026-02-03', '2026-05-02', true)
        RETURNING id`,
@@ -169,11 +171,11 @@ async function ensureAcademicBaseline(
   if (!termId) {
     throw new Error("Could not create or locate term for student seed");
   }
-  await pool.query(`UPDATE terms SET is_active = (id = $1)`, [termId]);
+  await client.query(`UPDATE terms SET is_active = (id = $1)`, [termId]);
 
   let oLevelClassId =
     (
-      await pool.query<{ id: string }>(
+      await client.query<{ id: string }>(
         `SELECT id FROM classes
          WHERE tenant_id = $1 AND name = 'S2' AND stream = 'North' AND level = 'O_LEVEL' AND academic_year_id = $2
          ORDER BY created_at DESC
@@ -182,7 +184,7 @@ async function ensureAcademicBaseline(
       )
     ).rows[0]?.id ?? null;
   if (!oLevelClassId) {
-    const oLevel = await pool.query<{ id: string }>(
+    const oLevel = await client.query<{ id: string }>(
       `INSERT INTO classes (tenant_id, name, stream, level, academic_year_id, class_teacher_id)
        VALUES ($1, 'S2', 'North', 'O_LEVEL', $2, $3)
        RETURNING id`,
@@ -196,7 +198,7 @@ async function ensureAcademicBaseline(
 
   let aLevelClassId =
     (
-      await pool.query<{ id: string }>(
+      await client.query<{ id: string }>(
         `SELECT id FROM classes
          WHERE tenant_id = $1 AND name = 'S5' AND stream = 'South' AND level = 'A_LEVEL' AND academic_year_id = $2
          ORDER BY created_at DESC
@@ -205,7 +207,7 @@ async function ensureAcademicBaseline(
       )
     ).rows[0]?.id ?? null;
   if (!aLevelClassId) {
-    const aLevel = await pool.query<{ id: string }>(
+    const aLevel = await client.query<{ id: string }>(
       `INSERT INTO classes (tenant_id, name, stream, level, academic_year_id, class_teacher_id)
        VALUES ($1, 'S5', 'South', 'A_LEVEL', $2, $3)
        RETURNING id`,
@@ -219,13 +221,13 @@ async function ensureAcademicBaseline(
 
   let comboId =
     (
-      await pool.query<{ id: string }>(
+      await client.query<{ id: string }>(
         `SELECT id FROM subject_combinations WHERE tenant_id = $1 AND code = 'PCM' ORDER BY id LIMIT 1`,
         [tenantId],
       )
     ).rows[0]?.id ?? null;
   if (!comboId) {
-    const combo = await pool.query<{ id: string }>(
+    const combo = await client.query<{ id: string }>(
       `INSERT INTO subject_combinations (tenant_id, code, name, level, subjects)
        VALUES ($1, 'PCM', 'Physics, Chemistry, Mathematics', 'A_LEVEL', '["Physics","Chemistry","Mathematics"]'::jsonb)
        ON CONFLICT (tenant_id, code) DO UPDATE SET name = EXCLUDED.name
@@ -239,19 +241,19 @@ async function ensureAcademicBaseline(
   }
 
   if (subjectTeacherId) {
-    await pool.query(
+    await client.query(
       `INSERT INTO subjects (tenant_id, name, code, level)
        VALUES ($1, 'Mathematics', 'MATH-SMS', 'O_LEVEL')
-       ON CONFLICT (tenant_id, code) DO NOTHING`,
+       ON CONFLICT (tenant_id, code, level) DO NOTHING`,
       [tenantId],
     );
-    const subject = await pool.query<{ id: string }>(
-      `SELECT id FROM subjects WHERE tenant_id = $1 AND code = 'MATH-SMS' LIMIT 1`,
+    const subject = await client.query<{ id: string }>(
+      `SELECT id FROM subjects WHERE tenant_id = $1 AND code = 'MATH-SMS' AND level = 'O_LEVEL' LIMIT 1`,
       [tenantId],
     );
     const subjectId = subject.rows[0]?.id ?? null;
     if (subjectId) {
-      await pool.query(
+      await client.query(
         `INSERT INTO class_subjects (tenant_id, class_id, subject_id, teacher_id, academic_year_id, term_id)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (class_id, subject_id, academic_year_id)
@@ -264,10 +266,10 @@ async function ensureAcademicBaseline(
   return { classTeacherId, subjectTeacherId, yearId, termId, oLevelClassId, aLevelClassId, comboId };
 }
 
-async function seedSampleStudents(tenantId: string, refs: RefIds): Promise<void> {
+async function seedSampleStudents(tenantId: string, refs: RefIds, client: PoolClient): Promise<void> {
   const students = buildSampleStudents(refs);
   for (const s of students) {
-    await pool.query(
+    await client.query(
       `INSERT INTO students (
         tenant_id, student_number, full_name, date_of_birth, gender, guardian_name, guardian_contact, class_id, combination_id
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -315,37 +317,39 @@ async function main(): Promise<void> {
     item.role === "admin" && adminEmail ? { ...item, email: adminEmail } : item,
   );
 
-  for (const user of usersToSeed) {
-    await pool.query(
-      `INSERT INTO users (tenant_id, full_name, email, password_hash, role, is_active)
-       VALUES ($1, $2, $3, $4, $5, true)
-       ON CONFLICT (tenant_id, email)
-       DO UPDATE SET
-         full_name = EXCLUDED.full_name,
-         role = EXCLUDED.role,
-         is_active = true,
-         password_hash = EXCLUDED.password_hash,
-         updated_at = NOW()`,
-      [tenantId, user.fullName, user.email.toLowerCase().trim(), hash, user.role],
-    );
-    console.log(`Seeded user: ${user.email} (${user.role})`);
-  }
+  await withTenant(tenantId, async (client) => {
+    for (const user of usersToSeed) {
+      await client.query(
+        `INSERT INTO users (tenant_id, full_name, email, password_hash, role, is_active)
+         VALUES ($1, $2, $3, $4, $5, true)
+         ON CONFLICT (tenant_id, email)
+         DO UPDATE SET
+           full_name = EXCLUDED.full_name,
+           role = EXCLUDED.role,
+           is_active = true,
+           password_hash = EXCLUDED.password_hash,
+           updated_at = NOW()`,
+        [tenantId, user.fullName, user.email.toLowerCase().trim(), hash, user.role],
+      );
+      console.log(`Seeded user: ${user.email} (${user.role})`);
+    }
 
-  const classTeacherId =
-    (
-      await pool.query<{ id: string }>(
-        `SELECT id FROM users WHERE role = 'class_teacher' ORDER BY created_at ASC LIMIT 1`,
-      )
-    ).rows[0]?.id ?? null;
-  const subjectTeacherId =
-    (
-      await pool.query<{ id: string }>(
-        `SELECT id FROM users WHERE role = 'subject_teacher' ORDER BY created_at ASC LIMIT 1`,
-      )
-    ).rows[0]?.id ?? null;
+    const classTeacherId =
+      (
+        await client.query<{ id: string }>(
+          `SELECT id FROM users WHERE role = 'class_teacher' ORDER BY created_at ASC LIMIT 1`,
+        )
+      ).rows[0]?.id ?? null;
+    const subjectTeacherId =
+      (
+        await client.query<{ id: string }>(
+          `SELECT id FROM users WHERE role = 'subject_teacher' ORDER BY created_at ASC LIMIT 1`,
+        )
+      ).rows[0]?.id ?? null;
 
-  const refs = await ensureAcademicBaseline(tenantId, classTeacherId, subjectTeacherId);
-  await seedSampleStudents(tenantId, refs);
+    const refs = await ensureAcademicBaseline(tenantId, classTeacherId, subjectTeacherId, client);
+    await seedSampleStudents(tenantId, refs, client);
+  });
 
   await pool.end();
 

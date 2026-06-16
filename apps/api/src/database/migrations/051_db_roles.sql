@@ -12,10 +12,20 @@ BEGIN
     CREATE ROLE school_app LOGIN PASSWORD 'change_me_school_app';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platform_app') THEN
+  BEGIN
     CREATE ROLE platform_app LOGIN PASSWORD 'change_me_platform_app' BYPASSRLS;
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      CREATE ROLE platform_app LOGIN PASSWORD 'change_me_platform_app';
+  END;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'migration_admin') THEN
+  BEGIN
     CREATE ROLE migration_admin LOGIN PASSWORD 'change_me_migration' BYPASSRLS;
+  EXCEPTION
+    WHEN insufficient_privilege THEN
+      CREATE ROLE migration_admin LOGIN PASSWORD 'change_me_migration';
+  END;
   END IF;
 END $$;
 

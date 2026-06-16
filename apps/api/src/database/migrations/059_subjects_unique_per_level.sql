@@ -4,6 +4,10 @@ DROP INDEX IF EXISTS subjects_tenant_code_uidx;
 CREATE UNIQUE INDEX IF NOT EXISTS subjects_tenant_code_level_uidx
   ON subjects (tenant_id, code, level);
 
+-- Cross-tenant catalogue repair: migration role may not bypass RLS on managed Postgres hosts.
+ALTER TABLE subjects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE class_subjects DISABLE ROW LEVEL SECURITY;
+
 -- Restore O-Level catalogue rows for codes shared with A-Level (previously overwritten).
 INSERT INTO subjects (tenant_id, name, code, level)
 SELECT t.id, v.name, v.code, 'O_LEVEL'
@@ -32,3 +36,8 @@ WHERE cs.class_id = c.id
   AND s_ok.code = s_wrong.code
   AND s_ok.level = c.level
   AND c.level <> s_wrong.level;
+
+ALTER TABLE subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subjects FORCE ROW LEVEL SECURITY;
+ALTER TABLE class_subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE class_subjects FORCE ROW LEVEL SECURITY;
