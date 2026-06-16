@@ -14,6 +14,7 @@ import {
   passwordSetupPath,
   tenantSlugFromHost,
 } from "@/lib/tenantHost";
+import { usesSubdomainTenancy } from "@/lib/tenantRouting";
 
 
 
@@ -170,7 +171,8 @@ function buildSchoolSubdomainUrl(
 
   if (!HOSTNAME_SLUG.test(slug)) return null;
 
-
+  const hostname = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
+  if (!usesSubdomainTenancy(hostname)) return null;
 
   const path = pathname.startsWith("/") ? pathname : `/${pathname}`;
 
@@ -260,7 +262,7 @@ function tenantHostRedirect(
 
   if (!targetSlug || !HOSTNAME_SLUG.test(targetSlug)) return null;
 
-
+  if (!usesSubdomainTenancy(hostname)) return null;
 
   const currentSlug = tenantSlugFromHost(hostname)?.toLowerCase() ?? null;
 
@@ -360,7 +362,7 @@ export function middleware(request: NextRequest) {
 
 
 
-    if (!isPlatformHost(hostname) && !isBareLocalHost(hostname)) {
+    if (!isPlatformHost(hostname) && !isBareLocalHost(hostname) && usesSubdomainTenancy(hostname)) {
 
       const url = buildSchoolSubdomainUrl(request, "platform", pathname);
 

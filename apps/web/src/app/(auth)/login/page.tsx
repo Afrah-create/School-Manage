@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { apiPost, getApiErrorMessage } from "@/lib/api";
 import { sessionInactivityMinutes } from "@/lib/sessionConfig";
 import { getTenantSlugFromHostname } from "@/lib/tenantHost";
+import { usesSubdomainTenancy } from "@/lib/tenantRouting";
 import type { TenantBillingStatus } from "@uganda-cbc-sms/shared";
 import { postLoginPath } from "@/lib/postLoginPath";
 import { redirectToSchoolTenant } from "@/lib/tenantRedirect";
@@ -200,11 +201,13 @@ function LoginPageContent() {
         typeof window !== "undefined"
           ? getTenantSlugFromHostname(window.location.hostname)?.toLowerCase() ?? null
           : null;
-      if (tenantSlug && hostSlug !== tenantSlug) {
+      const subdomainTenancy =
+        typeof window !== "undefined" && usesSubdomainTenancy(window.location.hostname);
+      if (subdomainTenancy && tenantSlug && hostSlug !== tenantSlug) {
         redirectToSchoolTenant(tenantSlug, dash);
         return;
       }
-      if (tenantSlug && !hostSlug) {
+      if (subdomainTenancy && tenantSlug && !hostSlug) {
         redirectToSchoolTenant(tenantSlug, dash);
         return;
       }

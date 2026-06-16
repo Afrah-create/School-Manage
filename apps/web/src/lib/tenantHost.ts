@@ -1,5 +1,6 @@
 import { getSmsTokenFromCookie } from "@/lib/cookies";
 import { decodeJwtPayload } from "@/lib/jwtPayload";
+import { usesSubdomainTenancy } from "@/lib/tenantRouting";
 
 /** Subdomain slug for the current school tenant, or null on bare localhost. */
 export function getTenantSlugFromHostname(hostname: string): string | null {
@@ -51,11 +52,17 @@ export function getApiTenantSlug(token?: string | null): string {
   return "default";
 }
 
-/** Dev: build origin for a school subdomain (*.localhost). */
+/** Dev: build origin for a school subdomain (*.localhost). Production uses the request host. */
 export function schoolOriginForSlug(
   slug: string,
-  request: { protocol: string; port?: string },
+  request: { protocol: string; port?: string; hostname?: string },
 ): string {
+  const hostname = request.hostname?.split(":")[0]?.toLowerCase() ?? "localhost";
+  if (!usesSubdomainTenancy(hostname)) {
+    const rawPort = request.port?.replace(/^:/, "") ?? "";
+    const portSuffix = rawPort ? `:${rawPort}` : "";
+    return `${request.protocol}//${hostname}${portSuffix}`;
+  }
   const rawPort = request.port?.replace(/^:/, "") ?? "";
   const portSuffix = rawPort ? `:${rawPort}` : "";
   return `${request.protocol}//${slug.toLowerCase()}.localhost${portSuffix}`;
@@ -82,6 +89,9 @@ export function isPublicSchoolAuthPath(pathname: string): boolean {
 
 export function schoolLoginUrl(slug: string): string {
   if (typeof window !== "undefined") {
+    if (!usesSubdomainTenancy(window.location.hostname)) {
+      return `${window.location.origin}/login`;
+    }
     const port = window.location.port ? `:${window.location.port}` : "";
     return `${window.location.protocol}//${slug}.localhost${port}/login`;
   }
