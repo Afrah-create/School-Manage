@@ -86,7 +86,7 @@ export async function createTenant(
   const email = input.adminEmail.toLowerCase().trim();
   const signInUrl =
     typeof env.WEB_APP_URL === "string" && env.WEB_APP_URL.trim()
-      ? `${env.WEB_APP_URL.trim().replace(/\/$/, "")}/login`
+      ? `${env.WEB_APP_URL.trim().replace(/\/$/, "")}/login?school=${encodeURIComponent(slug)}`
       : buildSignInUrl(slug);
   const temporaryPassword = input.adminPassword?.trim() || generateTemporaryPassword();
   const hash = await bcrypt.hash(temporaryPassword, env.BCRYPT_ROUNDS);

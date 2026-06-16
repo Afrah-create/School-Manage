@@ -15,14 +15,20 @@ function extractSubdomain(host: string, rootDomain: string): string | null {
     const parts = label.split(".");
     return parts[parts.length - 1] ?? null;
   }
+  // Shared hosting (Vercel/Render): tenant comes from X-Tenant-Slug, not the deployment hostname.
+  if (h.endsWith(".vercel.app") || h.endsWith(".onrender.com")) {
+    return null;
+  }
   if (rootDomain && h.endsWith(`.${rootDomain}`)) {
     const prefix = h.slice(0, -(rootDomain.length + 1));
-    const parts = prefix.split(".");
-    return parts[parts.length - 1] ?? null;
-  }
-  const parts = h.split(".");
-  if (parts.length >= 3) {
-    return parts[0] ?? null;
+    const parts = prefix.split(".").filter(Boolean);
+    if (parts.length === 1) {
+      return parts[0] ?? null;
+    }
+    if (parts.length > 1) {
+      return parts[parts.length - 1] ?? null;
+    }
+    return null;
   }
   return null;
 }

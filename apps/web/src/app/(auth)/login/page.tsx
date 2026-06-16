@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,7 +16,7 @@ import {
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { apiPost, getApiErrorMessage } from "@/lib/api";
 import { sessionInactivityMinutes } from "@/lib/sessionConfig";
-import { getTenantSlugFromHostname } from "@/lib/tenantHost";
+import { getTenantSlugFromHostname, getLoginTenantSlugOverride, setLoginTenantSlugOverride } from "@/lib/tenantHost";
 import { usesSubdomainTenancy } from "@/lib/tenantRouting";
 import type { TenantBillingStatus } from "@uganda-cbc-sms/shared";
 import { postLoginPath } from "@/lib/postLoginPath";
@@ -114,6 +114,19 @@ function LoginPageContent() {
   const [registerShake, setRegisterShake] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [sharedHostLogin, setSharedHostLogin] = useState(false);
+  const [schoolSlug, setSchoolSlug] = useState("default");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const shared = !usesSubdomainTenancy(window.location.hostname);
+    setSharedHostLogin(shared);
+    if (!shared) return;
+    const fromQuery = searchParams.get("school") ?? searchParams.get("tenant");
+    const slug = (fromQuery ?? getLoginTenantSlugOverride() ?? "default").trim().toLowerCase();
+    setSchoolSlug(slug);
+    setLoginTenantSlugOverride(slug);
+  }, [searchParams]);
 
   const timeoutNotice =
     searchParams.get("reason") === "timeout"
@@ -184,6 +197,9 @@ function LoginPageContent() {
     }
     try {
       setLoginLoading(true);
+      if (sharedHostLogin) {
+        setLoginTenantSlugOverride(schoolSlug.trim() || "default");
+      }
       const data = await apiPost<{
         token: string;
         user: AuthUser;
@@ -195,6 +211,9 @@ function LoginPageContent() {
         password: loginState.password,
       });
       loginToStore(data.user, data.token, data.session, data.tenant);
+      if (data.tenant?.slug) {
+        setLoginTenantSlugOverride(data.tenant.slug);
+      }
       const dash = postLoginPath(data.user, data.billing);
       const tenantSlug = data.tenant?.slug?.toLowerCase();
       const hostSlug =
@@ -268,6 +287,30 @@ function LoginPageContent() {
                   Sign in to access your school management dashboard.
                 </p>
               </motion.div>
+
+              {sharedHostLogin ? (
+                <motion.div variants={fieldItem} className="mb-3">
+                  <label className="font-body mb-2 block text-sm font-medium text-foreground">
+                    School code
+                  </label>
+                  <input
+                    type="text"
+                    value={schoolSlug}
+                    onChange={(e) => {
+                      const next = e.target.value.trim().toLowerCase();
+                      setSchoolSlug(next);
+                      setLoginTenantSlugOverride(next || "default");
+                    }}
+                    className={inputBase}
+                    placeholder="default"
+                    autoComplete="organization"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Use <span className="font-mono">default</span> for the demo school, or the slug from
+                    platform provisioning.
+                  </p>
+                </motion.div>
+              ) : null}
 
               <motion.div variants={fieldItem} className="mb-3">
                 <label className="font-body mb-2 block text-sm font-medium text-foreground">Email</label>
