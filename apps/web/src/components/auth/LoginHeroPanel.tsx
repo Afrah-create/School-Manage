@@ -3,6 +3,7 @@
 import { BrandGradientStrip } from "@/components/brand/BrandGradientStrip";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { AuthOrbitIllustration } from "@/components/auth/AuthOrbitIllustration";
+import { HeroCopyCarousel } from "@/components/auth/HeroCopyCarousel";
 
 export function LoginHeroPanel() {
   return (
@@ -18,6 +19,7 @@ export function LoginHeroPanel() {
             eyebrow="Sign in"
             subtitle="School administration made simple."
           />
+          <HeroCopyCarousel />
         </div>
       </BrandGradientStrip>
     </aside>
