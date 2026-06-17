@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { isForcePasswordChangePath } from "@/lib/tenantHost";
 import { useAuthStore } from "@/store/authStore";
+import { SessionLoadingScreen } from "@/components/auth/SessionLoadingScreen";
 
 /** Redirect staff to mandatory password change before using the app. */
 export function ForcePasswordChangeGate({ children }: { children: ReactNode }) {
@@ -20,19 +21,11 @@ export function ForcePasswordChangeGate({ children }: { children: ReactNode }) {
   }, [hydrated, user, pathname, router]);
 
   if (!hydrated) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <SessionLoadingScreen />;
   }
 
   if (user?.forcePasswordChange && user.role !== "admin" && !isForcePasswordChangePath(pathname)) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Redirecting to password setup…</p>
-      </div>
-    );
+    return <SessionLoadingScreen fixedMessage="Taking you to password setup…" />;
   }
 
   return <>{children}</>;

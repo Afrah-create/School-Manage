@@ -7,6 +7,7 @@ import type { TenantBillingStatus } from "@uganda-cbc-sms/shared";
 import { apiGet } from "@/lib/api";
 import { billingPageForRole } from "@/lib/billingPaths";
 import { useAuthStore } from "@/store/authStore";
+import { SessionLoadingScreen } from "@/components/auth/SessionLoadingScreen";
 
 const PAYMENT_ROLES = new Set(["admin", "headteacher"]);
 
@@ -35,19 +36,11 @@ export function BillingGate({ children }: { children: ReactNode }) {
   }, [hydrated, user, billing, onBillingPage, billingPath, router]);
 
   if (!hydrated || (PAYMENT_ROLES.has(user?.role ?? "") && billingQ.isLoading)) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <SessionLoadingScreen />;
   }
 
   if (user && PAYMENT_ROLES.has(user.role) && billing && !billing.canUseApp && !onBillingPage) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Redirecting to subscription payment…</p>
-      </div>
-    );
+    return <SessionLoadingScreen fixedMessage="Taking you to subscription payment…" />;
   }
 
   return <>{children}</>;

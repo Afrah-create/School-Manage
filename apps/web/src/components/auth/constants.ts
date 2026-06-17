@@ -29,3 +29,21 @@ export const AUTH_COPY = {
   checkEmailBody:
     "Click the link in the email to activate your account. The link expires in 24 hours.",
 };
+
+/** Rotating copy while the app restores or finishes signing in. */
+export const SESSION_LOADING_MESSAGES = [
+  "Just a moment…",
+  "Getting things ready…",
+  "Almost there…",
+  "Won't be long…",
+  "Preparing your workspace…",
+  "Hang tight…",
+] as const;
+
+export const SESSION_SIGN_IN_MESSAGES = [
+  "Signing you in…",
+  "Verifying your details…",
+  "Just a second…",
+  "Almost there…",
+  "Getting your dashboard ready…",
+] as const;

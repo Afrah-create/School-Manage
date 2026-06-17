@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { isPublicSchoolAuthPath } from "@/lib/tenantHost";
 import { useAuthStore } from "@/store/authStore";
+import { SessionLoadingScreen } from "@/components/auth/SessionLoadingScreen";
 
 /** Block protected pages until cookie session is hydrated (prevents 401 → logout loops). */
 export function AuthBootGate({ children }: { children: ReactNode }) {
@@ -22,9 +23,5 @@ export function AuthBootGate({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <p className="font-body text-sm text-muted-foreground">Loading session…</p>
-    </div>
-  );
+  return <SessionLoadingScreen />;
 }

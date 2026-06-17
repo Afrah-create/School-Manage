@@ -6,6 +6,7 @@ import { apiGet } from "@/lib/api";
 import { canPaySubscription } from "@/lib/billingPaths";
 import { SubscriptionBlockedScreen } from "@/components/billing/SchoolBillingPage";
 import { useAuthStore } from "@/store/authStore";
+import { SessionLoadingScreen } from "@/components/auth/SessionLoadingScreen";
 
 export function StaffSubscriptionGate({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user);
@@ -19,11 +20,7 @@ export function StaffSubscriptionGate({ children }: { children: React.ReactNode 
   });
 
   if (!hydrated || (user && !canPaySubscription(user.role) && billingQ.isLoading)) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <SessionLoadingScreen />;
   }
 
   if (user && !canPaySubscription(user.role) && billingQ.data && !billingQ.data.canUseApp) {

@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { OnboardingStatus } from "@uganda-cbc-sms/shared";
 import { apiGet } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
+import { SessionLoadingScreen } from "@/components/auth/SessionLoadingScreen";
 
 export function AdminOnboardingGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -31,11 +32,7 @@ export function AdminOnboardingGate({ children }: { children: React.ReactNode })
   }, [hydrated, user, isOnboarding, statusQ.data, router]);
 
   if (user?.role === "admin" && !isOnboarding && statusQ.isLoading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading school setup…</p>
-      </div>
-    );
+    return <SessionLoadingScreen />;
   }
 
   return <>{children}</>;

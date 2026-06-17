@@ -15,6 +15,8 @@ import {
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { LoginHeroPanel } from "@/components/auth/LoginHeroPanel";
+import { SESSION_SIGN_IN_MESSAGES } from "@/components/auth/constants";
+import { SessionLoadingScreen } from "@/components/auth/SessionLoadingScreen";
 import { apiPost, getApiErrorMessage } from "@/lib/api";
 import { sessionInactivityMinutes } from "@/lib/sessionConfig";
 import { getTenantSlugFromHostname, getLoginTenantSlugOverride, setLoginTenantSlugOverride } from "@/lib/tenantHost";
@@ -96,11 +98,7 @@ function cx(...values: Array<string | false | undefined>) {
 }
 
 function LoginPageFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <p className="font-body text-sm text-muted-foreground">Loading…</p>
-    </div>
-  );
+  return <SessionLoadingScreen messages={SESSION_SIGN_IN_MESSAGES} />;
 }
 
 function LoginPageContent() {
@@ -235,7 +233,6 @@ function LoginPageContent() {
     } catch (error) {
       setLoginError(getApiErrorMessage(error));
       triggerShake("login");
-    } finally {
       setLoginLoading(false);
     }
   };
@@ -379,7 +376,7 @@ function LoginPageContent() {
                   className="font-body h-10 w-full rounded-lg bg-[#2563EB] text-sm font-medium text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)]"
                   animate={loginShake ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
                 >
-                  {loginLoading ? "Signing in..." : "Sign In"}
+                  Sign In
                 </motion.button>
               </motion.div>
               {timeoutNotice ? (
@@ -634,6 +631,9 @@ function LoginPageContent() {
 
   return (
     <div className="min-h-screen bg-background transition-colors">
+      {loginLoading ? (
+        <SessionLoadingScreen messages={SESSION_SIGN_IN_MESSAGES} layout="overlay" />
+      ) : null}
       <div className="mx-auto hidden min-h-screen max-w-[1600px] lg:flex">
         <LoginHeroPanel />
 
