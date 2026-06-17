@@ -69,6 +69,15 @@ export function ClassRankingLeaderboard({
           } as Column<ClassReportRow>,
         ]
       : []),
+    ...(data?.track === "cbc"
+      ? [
+          {
+            key: "certification",
+            header: "Certification",
+            render: (r: ClassReportRow) => r.certificationLabel ?? "—",
+          } as Column<ClassReportRow>,
+        ]
+      : []),
   ];
 
   return (

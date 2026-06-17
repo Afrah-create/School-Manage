@@ -797,6 +797,7 @@ export async function listClassReports(classId: string, termId: string) {
           ranking: r.payload?.ranking ?? null,
           rankingLabel: r.payload?.ranking?.positionDisplay ?? null,
           aggregateLabel: r.payload?.ranking?.aggregateLabel ?? null,
+          certificationLabel: r.payload?.certification?.label ?? null,
         };
       }),
     };

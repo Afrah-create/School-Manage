@@ -259,6 +259,15 @@ export function ReportGeneratePanel({
           } as Column<ClassReportRow>,
         ]
       : []),
+    ...(isCbc
+      ? [
+          {
+            key: "certification",
+            header: "Certification",
+            render: (r: ClassReportRow) => r.certificationLabel ?? "—",
+          } as Column<ClassReportRow>,
+        ]
+      : []),
     {
       key: "actions",
       header: "",

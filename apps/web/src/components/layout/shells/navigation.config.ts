@@ -85,12 +85,6 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
             icon: "clipboardCheck",
             activePrefix: "/admin/academic/cbc-strands",
           },
-          {
-            href: "/admin/academic/grading-scales",
-            label: "Grading scales",
-            icon: "barChart3",
-            activePrefix: "/admin/academic/grading-scales",
-          },
         ],
       },
       {
@@ -105,6 +99,12 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
             label: "Assessment rules",
             icon: "clipboardCheck",
             activePrefix: "/admin/assessment/rules",
+          },
+          {
+            href: "/admin/academic/grading-scales",
+            label: "Grading scales",
+            icon: "barChart3",
+            activePrefix: "/admin/academic/grading-scales",
           },
           {
             href: "/admin/assessment/cbc",

@@ -91,6 +91,7 @@ export type ClassReportRow = {
   computedAt: string | null;
   division?: string | null;
   totalPoints?: number | null;
+  certificationLabel?: string | null;
   examLinkStatus?: ReportExamLinkStatus;
   reportSourceType?: "term" | "exam" | null;
   reportSourceLabel?: string;

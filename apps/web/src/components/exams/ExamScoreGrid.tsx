@@ -76,7 +76,7 @@ export function ExamScoreGrid({
               <th className="px-2 py-2 text-left">Student</th>
               <th className="px-2 py-2 text-left">Score</th>
               <th className="px-2 py-2 text-left">Grade</th>
-              <th className="px-2 py-2 text-left">Points</th>
+              {level === "A_LEVEL" ? <th className="px-2 py-2 text-left">Points</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -106,7 +106,7 @@ export function ExamScoreGrid({
                   )}
                 </td>
                 <td className="px-2 py-2">{row.out?.grade ?? "—"}</td>
-                <td className="px-2 py-2">{row.out?.points ?? "—"}</td>
+                {level === "A_LEVEL" ? <td className="px-2 py-2">{row.out?.points ?? "—"}</td> : null}
               </tr>
             ))}
           </tbody>
