@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Student } from "@uganda-cbc-sms/shared";
 import { CbcAssessmentGrid } from "@/components/assessment/CbcAssessmentGrid";
+import { ProjectWorkGrid } from "@/components/assessment/ProjectWorkGrid";
 import { SubmitLockBanner } from "@/components/assessment/SubmitLockBanner";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
@@ -42,6 +43,7 @@ export function TeacherCbcEntryPanel() {
   const yearId = searchParams.get("yearId") ?? "";
 
   const [strandId, setStrandId] = useState("");
+  const [entryTab, setEntryTab] = useState<"strands" | "projects">("projects");
   const [feedback, setFeedback] = useState<{ ok?: string; err?: string }>({});
 
   const contextReady = Boolean(classId && subjectId && termId && yearId);
@@ -120,6 +122,54 @@ export function TeacherCbcEntryPanel() {
       {feedback.ok ? <Alert tone="success">{feedback.ok}</Alert> : null}
       {feedback.err ? <Alert tone="error">{feedback.err}</Alert> : null}
 
+      <div className="flex gap-2 border-b border-border">
+        <button
+          type="button"
+          className={`px-3 py-2 text-sm font-medium ${entryTab === "projects" ? "border-b-2 border-brand text-brand" : "text-muted-foreground"}`}
+          onClick={() => setEntryTab("projects")}
+        >
+          Project work (official CA)
+        </button>
+        <button
+          type="button"
+          className={`px-3 py-2 text-sm font-medium ${entryTab === "strands" ? "border-b-2 border-brand text-brand" : "text-muted-foreground"}`}
+          onClick={() => setEntryTab("strands")}
+        >
+          Strand ratings (provisional)
+        </button>
+      </div>
+
+      <AsyncContent
+        status={manualStatus({
+          loading: studentsQ.isPending,
+          error: studentsQ.error,
+          data: students,
+        })}
+        loading={<FormSkeleton fields={4} />}
+        error={
+          <ErrorState
+            message={studentsQ.error instanceof Error ? studentsQ.error.message : "Could not load students."}
+            onRetry={() => void studentsQ.refetch()}
+          />
+        }
+      >
+        {entryTab === "projects" ? (
+          students.length === 0 ? (
+            <Alert tone="info">No students are enrolled in this class.</Alert>
+          ) : (
+            <ProjectWorkGrid
+              classId={classId}
+              subjectId={subjectId}
+              termId={termId}
+              yearId={yearId}
+              students={students}
+            />
+          )
+        ) : null}
+      </AsyncContent>
+
+      {entryTab === "strands" ? (
+        <>
       {strands.length > 1 ? (
         <Select
           label="Strand (optional filter)"
@@ -212,6 +262,8 @@ export function TeacherCbcEntryPanel() {
           </>
         )}
       </AsyncContent>
+        </>
+      ) : null}
     </div>
   );
 }

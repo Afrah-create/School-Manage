@@ -7,6 +7,7 @@ import {
 } from "@uganda-cbc-sms/shared";
 import { useEffect, useMemo, useState } from "react";
 import { PageWrapper } from "@/components/layout/PageWrapper";
+import { OlevelCaPolicyPanel } from "@/components/academic/OlevelCaPolicyPanel";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -326,6 +327,8 @@ export default function AdminGradingScalesPage() {
           <code className="rounded bg-muted px-1">npm run recalculate:alevel-grades</code> after bulk scale changes.
         </p>
       </Card>
+
+      {level === "O_LEVEL" ? <OlevelCaPolicyPanel /> : null}
 
       <ConfirmDialog
         open={confirmSave}

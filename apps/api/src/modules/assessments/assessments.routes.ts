@@ -51,6 +51,16 @@ assessmentsRouter.put(
   asyncHandler(c.putCbcProject),
 );
 assessmentsRouter.get(
+  "/project-work",
+  requireAssessmentRoles("subject_teacher", "class_teacher", "admin", "headteacher"),
+  asyncHandler(c.getProjectWork),
+);
+assessmentsRouter.post(
+  "/project-work/bulk",
+  requireAssessmentRoles("subject_teacher", "class_teacher"),
+  asyncHandler(c.postProjectWorkBulk),
+);
+assessmentsRouter.get(
   "/cbc/comments",
   requireAssessmentRoles("class_teacher", "headteacher", "admin"),
   asyncHandler(c.getCbcComments),

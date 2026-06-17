@@ -19,6 +19,7 @@
     "seed:structure": "tsx scripts/seed-structure.ts",
     "seed:structure": "tsx scripts/seed-structure.ts",
     "recalculate:alevel-grades": "tsx scripts/recalculate-alevel-grades.ts",
+    "recalculate:olevel-grades": "tsx scripts/recalculate-olevel-grades.ts",
     "billing:overdue": "tsx scripts/billing-overdue.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js",

@@ -21,6 +21,7 @@
     "test:security": "npm run test:security --workspace=apps/api",
     "seed:platform": "npm run seed:platform --workspace=apps/api",
     "recalculate:alevel-grades": "npm run recalculate:alevel-grades --workspace=apps/api",
+    "recalculate:olevel-grades": "npm run recalculate:olevel-grades --workspace=apps/api",
     "billing:overdue": "npm run billing:overdue --workspace=apps/api"
   },
   "devDependencies": {

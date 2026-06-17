@@ -75,6 +75,7 @@ academicRouter.get("/grading-scales", academicReaders, asyncHandler(c.getGrading
 academicRouter.put("/grading-scales", requireRoles("admin"), asyncHandler(c.putGradingScales));
 academicRouter.post("/grading-scales/apply-cbc-defaults", requireRoles("admin"), asyncHandler(c.postApplyOlevelCbcDefaults));
 academicRouter.post("/grading-scales/recalculate", requireRoles("admin"), asyncHandler(c.recalculateGradingScales));
+academicRouter.post("/grading-scales/recalculate-olevel", requireRoles("admin"), asyncHandler(c.recalculateOlevelGrades));
 academicRouter.get("/curriculum/status", academicLeads, asyncHandler(c.getCurriculumStatus));
 academicRouter.post("/curriculum/setup", academicLeads, asyncHandler(c.postCurriculumSetup));
 academicRouter.post("/curriculum/seed-catalog", academicLeads, asyncHandler(c.postCurriculumCatalogSeed));

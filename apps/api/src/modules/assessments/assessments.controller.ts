@@ -1,8 +1,10 @@
 import { cbcRatingSchema } from "@uganda-cbc-sms/shared";
 import { z } from "zod";
+import { projectWorkBulkSchema } from "@uganda-cbc-sms/shared";
 import type { Request, Response } from "express";
 import { HttpError } from "../../utils/httpError";
 import { assertTeacherOwnsClassSubject, assertTeacherOwnsStudentSubject } from "./assessmentAccess";
+import * as projectWorkSvc from "./projectWork.service";
 import * as svc from "./assessments.service";
 
 const cbcItemSchema = z.object({
@@ -350,4 +352,27 @@ export async function getStrands(req: Request, res: Response) {
 export async function getCombinations(_req: Request, res: Response) {
   const rows = await svc.combinations();
   res.json({ success: true, data: rows });
+}
+
+export async function getProjectWork(req: Request, res: Response) {
+  const classId = req.query["classId"] as string | undefined;
+  const subjectId = req.query["subjectId"] as string | undefined;
+  const termId = req.query["termId"] as string | undefined;
+  const yearId = req.query["yearId"] as string | undefined;
+  const role = req.user?.role ?? "";
+  if ((role === "subject_teacher" || role === "class_teacher") && classId && subjectId && yearId) {
+    await assertTeacherOwnsClassSubject(req.user!.id, classId, subjectId, yearId);
+  }
+  const rows = await projectWorkSvc.listProjectWork({ classId, subjectId, termId, yearId });
+  res.json({ success: true, data: rows, message: "Project work scores loaded." });
+}
+
+export async function postProjectWorkBulk(req: Request, res: Response) {
+  const body = projectWorkBulkSchema.parse(req.body);
+  const rows = await projectWorkSvc.upsertProjectWorkBulk(body, req.user!.id);
+  res.json({
+    success: true,
+    data: rows,
+    message: "Project work saved. Run O-Level grade recalculation to update composites.",
+  });
 }

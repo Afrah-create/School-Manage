@@ -6,15 +6,35 @@ import {
 import { DEFAULT_O_LEVEL_COMPULSORY_SUBJECT_CODES } from "../constants/defaultCurriculumCatalog";
 import { resolveGradeFromScaleRows, type DefaultGradingScaleRow } from "../constants/assessmentGradingScales";
 
+export type CaSource = "project_work" | "strand_fallback" | "incomplete";
+
+export type CurriculumForm = "S1" | "S2" | "S3" | "S4";
+
+export type CaYearWindow = "S1_S4" | "S3_S4" | "custom";
+
 export type CaRulesMethod = "school_defined" | "rating_score_map" | "weighted_strand_average";
+
+export type ProjectWorkAggregation = "mean_of_projects" | "mean_of_term_means";
+
+export const OLEVEL_FORMULA_VERSION = "cbc_ca_v2";
 
 export type AssessmentConfig = {
   caWeight: number;
   eocWeight: number;
+  caYearWindow: CaYearWindow;
+  caCustomForms: CurriculumForm[];
+  allowIncompleteCaOverride: boolean;
+  policyVerifiedAt: string | null;
+  projectWork: {
+    expectedPerTerm: number;
+    policyVerifiedAt: string | null;
+  };
   caRules: {
     method: CaRulesMethod;
-    ratingScoreMap: Record<CbcRating, number>;
+    /** Provisional fallback only — used when no project_work_scores exist in the window. */
+    fallbackRatingScoreMap: Record<CbcRating, number>;
     strandWeights?: Record<string, Record<string, number>>;
+    aggregation: ProjectWorkAggregation;
   };
   minimumSubjects: number;
   qualifyingGradeMin: CbcRating;
@@ -32,9 +52,18 @@ export const DEFAULT_CA_RATING_SCORE_MAP: Record<CbcRating, number> = {
 export const DEFAULT_ASSESSMENT_CONFIG: AssessmentConfig = {
   caWeight: 0.2,
   eocWeight: 0.8,
+  caYearWindow: "S1_S4",
+  caCustomForms: ["S1", "S2", "S3", "S4"],
+  allowIncompleteCaOverride: false,
+  policyVerifiedAt: null,
+  projectWork: {
+    expectedPerTerm: 4,
+    policyVerifiedAt: null,
+  },
   caRules: {
     method: "rating_score_map",
-    ratingScoreMap: { ...DEFAULT_CA_RATING_SCORE_MAP },
+    fallbackRatingScoreMap: { ...DEFAULT_CA_RATING_SCORE_MAP },
+    aggregation: "mean_of_projects",
   },
   minimumSubjects: 8,
   qualifyingGradeMin: "D",
@@ -46,12 +75,30 @@ export type StrandRating = {
   rating: string;
 };
 
+export type ProjectScoreRow = {
+  score: number;
+  maxScore: number;
+  termId: string;
+  projectNumber: number;
+};
+
+export type CaScoreResult = {
+  score: number | null;
+  source: CaSource;
+  projectsCompleted: number;
+  projectsExpected: number;
+  complete: boolean;
+};
+
 export type OlevelSubjectResultInput = {
   subjectCode: string;
   caScore: number | null;
   eocScore: number | null;
   caComplete: boolean;
+  caSource: CaSource | null;
   projectComplete: boolean;
+  projectsCompleted: number;
+  projectsExpected: number;
   finalGrade: CbcRating | null;
   compositeScore: number | null;
 };
@@ -60,6 +107,8 @@ export type OlevelCertificationReason =
   | "missing_compulsory"
   | "subjects_lt_8"
   | "missing_ca"
+  | "ca_provisional_fallback"
+  | "ca_incomplete_projects"
   | "missing_project"
   | "all_grade_e"
   | "no_qualifying_grade";
@@ -77,20 +126,44 @@ const QUALIFYING_GRADES: Record<CbcRating, CbcRating[]> = {
   E: ["A", "B", "C", "D", "E"],
 };
 
+const WINDOW_FORMS: Record<CaYearWindow, CurriculumForm[]> = {
+  S1_S4: ["S1", "S2", "S3", "S4"],
+  S3_S4: ["S3", "S4"],
+  custom: [],
+};
+
 export function mergeAssessmentConfig(
   partial: Partial<AssessmentConfig> | null | undefined,
 ): AssessmentConfig {
   if (!partial || typeof partial !== "object") return { ...DEFAULT_ASSESSMENT_CONFIG };
+  const legacyMap =
+    (partial.caRules as { ratingScoreMap?: Record<CbcRating, number> } | undefined)?.ratingScoreMap;
+  const fallbackMap = partial.caRules?.fallbackRatingScoreMap ?? legacyMap;
   return {
     caWeight: partial.caWeight ?? DEFAULT_ASSESSMENT_CONFIG.caWeight,
     eocWeight: partial.eocWeight ?? DEFAULT_ASSESSMENT_CONFIG.eocWeight,
+    caYearWindow: partial.caYearWindow ?? DEFAULT_ASSESSMENT_CONFIG.caYearWindow,
+    caCustomForms: partial.caCustomForms?.length
+      ? partial.caCustomForms
+      : DEFAULT_ASSESSMENT_CONFIG.caCustomForms,
+    allowIncompleteCaOverride:
+      partial.allowIncompleteCaOverride ?? DEFAULT_ASSESSMENT_CONFIG.allowIncompleteCaOverride,
+    policyVerifiedAt: partial.policyVerifiedAt ?? DEFAULT_ASSESSMENT_CONFIG.policyVerifiedAt,
+    projectWork: {
+      expectedPerTerm:
+        partial.projectWork?.expectedPerTerm ?? DEFAULT_ASSESSMENT_CONFIG.projectWork.expectedPerTerm,
+      policyVerifiedAt:
+        partial.projectWork?.policyVerifiedAt ??
+        DEFAULT_ASSESSMENT_CONFIG.projectWork.policyVerifiedAt,
+    },
     caRules: {
       method: partial.caRules?.method ?? DEFAULT_ASSESSMENT_CONFIG.caRules.method,
-      ratingScoreMap: {
+      fallbackRatingScoreMap: {
         ...DEFAULT_CA_RATING_SCORE_MAP,
-        ...(partial.caRules?.ratingScoreMap ?? {}),
+        ...(fallbackMap ?? {}),
       },
       strandWeights: partial.caRules?.strandWeights,
+      aggregation: partial.caRules?.aggregation ?? DEFAULT_ASSESSMENT_CONFIG.caRules.aggregation,
     },
     minimumSubjects: partial.minimumSubjects ?? DEFAULT_ASSESSMENT_CONFIG.minimumSubjects,
     qualifyingGradeMin: partial.qualifyingGradeMin ?? DEFAULT_ASSESSMENT_CONFIG.qualifyingGradeMin,
@@ -105,17 +178,73 @@ export function resolveCompulsorySubjectCodes(config: AssessmentConfig): string[
   return config.compulsorySubjectCodes ?? [...DEFAULT_O_LEVEL_COMPULSORY_SUBJECT_CODES];
 }
 
-/** Convert strand competency ratings to a 0–100 CA percentage using school rules. */
-export function resolveCaScore(
+export function resolveWindowForms(config: AssessmentConfig): CurriculumForm[] {
+  if (config.caYearWindow === "custom") {
+    return config.caCustomForms.length ? config.caCustomForms : ["S4"];
+  }
+  return WINDOW_FORMS[config.caYearWindow];
+}
+
+/** Count expected project slots in the CA window (terms × expected per term). */
+export function computeProjectsExpected(
+  config: AssessmentConfig,
+  termCountInWindow: number,
+): number {
+  const perTerm = Math.max(1, config.projectWork.expectedPerTerm);
+  return perTerm * Math.max(1, termCountInWindow);
+}
+
+function normalizeProjectPct(score: number, maxScore: number): number | null {
+  const max = maxScore > 0 ? maxScore : 100;
+  const pct = (score / max) * 100;
+  if (Number.isNaN(pct)) return null;
+  return Math.round(pct * 100) / 100;
+}
+
+function aggregateProjectScores(
+  rows: ProjectScoreRow[],
+  aggregation: ProjectWorkAggregation,
+): number | null {
+  if (rows.length === 0) return null;
+  if (aggregation === "mean_of_term_means") {
+    const byTerm = new Map<string, number[]>();
+    for (const r of rows) {
+      const pct = normalizeProjectPct(r.score, r.maxScore);
+      if (pct == null) continue;
+      const list = byTerm.get(r.termId) ?? [];
+      list.push(pct);
+      byTerm.set(r.termId, list);
+    }
+    const termMeans: number[] = [];
+    for (const vals of byTerm.values()) {
+      if (vals.length === 0) continue;
+      termMeans.push(vals.reduce((s, v) => s + v, 0) / vals.length);
+    }
+    if (termMeans.length === 0) return null;
+    const avg = termMeans.reduce((s, v) => s + v, 0) / termMeans.length;
+    return Math.round(avg * 100) / 100;
+  }
+  const pcts: number[] = [];
+  for (const r of rows) {
+    const pct = normalizeProjectPct(r.score, r.maxScore);
+    if (pct != null) pcts.push(pct);
+  }
+  if (pcts.length === 0) return null;
+  const avg = pcts.reduce((s, v) => s + v, 0) / pcts.length;
+  return Math.round(avg * 100) / 100;
+}
+
+/** Derive CA from strand ratings using the admin fallback map (provisional only). */
+export function resolveCaFromStrandFallback(
   strandRatings: StrandRating[],
   config: AssessmentConfig,
   subjectCode?: string,
 ): { score: number | null; complete: boolean } {
   if (strandRatings.length === 0) return { score: null, complete: false };
 
-  const method = config.caRules.method === "school_defined"
-    ? "rating_score_map"
-    : config.caRules.method;
+  const map = config.caRules.fallbackRatingScoreMap;
+  const method =
+    config.caRules.method === "school_defined" ? "rating_score_map" : config.caRules.method;
 
   if (method === "weighted_strand_average" && subjectCode && config.caRules.strandWeights?.[subjectCode]) {
     const weights = config.caRules.strandWeights[subjectCode]!;
@@ -124,7 +253,7 @@ export function resolveCaScore(
     for (const row of strandRatings) {
       const w = weights[row.strand] ?? 1;
       const rating = row.rating.trim().toUpperCase() as CbcRating;
-      const pct = config.caRules.ratingScoreMap[rating];
+      const pct = map[rating];
       if (pct == null) continue;
       weightedSum += pct * w;
       weightTotal += w;
@@ -133,7 +262,6 @@ export function resolveCaScore(
     return { score: Math.round((weightedSum / weightTotal) * 100) / 100, complete: true };
   }
 
-  const map = config.caRules.ratingScoreMap;
   const values: number[] = [];
   for (const row of strandRatings) {
     const rating = row.rating.trim().toUpperCase() as CbcRating;
@@ -146,6 +274,78 @@ export function resolveCaScore(
     score: Math.round(avg * 100) / 100,
     complete: values.length === strandRatings.length,
   };
+}
+
+/**
+ * HYBRID CA resolver: project work is authoritative; strand ratings are provisional fallback only.
+ */
+export function ca_score_for(input: {
+  projectScores: ProjectScoreRow[];
+  strandRatings: StrandRating[];
+  projectsExpected: number;
+  config: AssessmentConfig;
+  subjectCode?: string;
+}): CaScoreResult {
+  const { projectScores, strandRatings, projectsExpected, config, subjectCode } = input;
+  const projectsCompleted = projectScores.length;
+  const expected = Math.max(1, projectsExpected);
+
+  if (projectScores.length > 0) {
+    const score = aggregateProjectScores(projectScores, config.caRules.aggregation);
+    const complete =
+      projectsCompleted >= expected || Boolean(config.allowIncompleteCaOverride);
+    if (!complete) {
+      return {
+        score: null,
+        source: "incomplete",
+        projectsCompleted,
+        projectsExpected: expected,
+        complete: false,
+      };
+    }
+    return {
+      score,
+      source: "project_work",
+      projectsCompleted,
+      projectsExpected: expected,
+      complete: true,
+    };
+  }
+
+  if (strandRatings.length > 0) {
+    const fallback = resolveCaFromStrandFallback(strandRatings, config, subjectCode);
+    return {
+      score: fallback.score,
+      source: "strand_fallback",
+      projectsCompleted: 0,
+      projectsExpected: expected,
+      complete: fallback.complete,
+    };
+  }
+
+  return {
+    score: null,
+    source: "incomplete",
+    projectsCompleted: 0,
+    projectsExpected: expected,
+    complete: false,
+  };
+}
+
+/** @deprecated Use ca_score_for — strand-only CA is no longer authoritative. */
+export function resolveCaScore(
+  strandRatings: StrandRating[],
+  config: AssessmentConfig,
+  subjectCode?: string,
+): { score: number | null; complete: boolean } {
+  const result = ca_score_for({
+    projectScores: [],
+    strandRatings,
+    projectsExpected: config.projectWork.expectedPerTerm,
+    config,
+    subjectCode,
+  });
+  return { score: result.score, complete: result.complete };
 }
 
 export function computeCompositeScore(
@@ -176,6 +376,14 @@ function isQualifyingGrade(grade: CbcRating, minGrade: CbcRating): boolean {
   return (QUALIFYING_GRADES[minGrade] ?? QUALIFYING_GRADES.D).includes(grade);
 }
 
+function hasValidOfficialCa(subject: OlevelSubjectResultInput): boolean {
+  return (
+    subject.caSource === "project_work" &&
+    subject.projectsCompleted >= subject.projectsExpected &&
+    subject.caComplete
+  );
+}
+
 /** Compute UCE Result 1 / 2 / 3 from per-subject summaries. */
 export function computeOlevelCertification(
   subjects: OlevelSubjectResultInput[],
@@ -200,8 +408,18 @@ export function computeOlevelCertification(
     reasons.push("subjects_lt_8");
   }
 
-  const incompleteCa = sat.some((s) => !s.caComplete);
-  if (incompleteCa) reasons.push("missing_ca");
+  const provisionalCa = sat.some((s) => s.caSource === "strand_fallback");
+  if (provisionalCa) reasons.push("ca_provisional_fallback");
+
+  const incompleteCa = sat.some(
+    (s) => s.caSource === "incomplete" || !hasValidOfficialCa(s),
+  );
+  if (incompleteCa) {
+    reasons.push("missing_ca");
+    if (sat.some((s) => s.caSource === "incomplete")) {
+      reasons.push("ca_incomplete_projects");
+    }
+  }
 
   const incompleteProject = sat.some((s) => !s.projectComplete);
   if (incompleteProject) reasons.push("missing_project");
@@ -214,7 +432,7 @@ export function computeOlevelCertification(
   }
 
   if (reasons.length > 0) {
-    return { resultCode: "RESULT_2", reasonCodes: reasons };
+    return { resultCode: "RESULT_2", reasonCodes: [...new Set(reasons)] };
   }
 
   return { resultCode: "RESULT_1", reasonCodes: [] };
@@ -229,8 +447,19 @@ export const OLEVEL_CERTIFICATION_LABELS: Record<string, string> = {
 export const OLEVEL_CERTIFICATION_REASON_LABELS: Record<OlevelCertificationReason, string> = {
   missing_compulsory: "One or more compulsory subjects not sat",
   subjects_lt_8: "Fewer than 8 subjects with final grades",
-  missing_ca: "Continuous assessment incomplete for one or more subjects",
+  missing_ca: "Continuous assessment incomplete or not from official project work",
+  ca_provisional_fallback: "CA derived from strand ratings only (provisional — not official project work)",
+  ca_incomplete_projects: "Required project work slots not complete",
   missing_project: "Project work incomplete for one or more subjects",
   all_grade_e: "Every sat subject at grade E",
   no_qualifying_grade: "No subject at D or better (D+)",
 };
+
+export const CA_SOURCE_LABELS: Record<CaSource, string> = {
+  project_work: "Official (project work)",
+  strand_fallback: "Provisional (strand estimate)",
+  incomplete: "Incomplete",
+};
+
+// Re-export for consumers that used getCbcRatingScore via this module
+export { getCbcRatingScore };

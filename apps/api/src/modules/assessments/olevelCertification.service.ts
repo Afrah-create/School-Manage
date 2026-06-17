@@ -2,6 +2,7 @@ import {
   computeOlevelCertification,
   OLEVEL_CERTIFICATION_LABELS,
   OLEVEL_CERTIFICATION_REASON_LABELS,
+  type CaSource,
   type OlevelSubjectResultInput,
 } from "@uganda-cbc-sms/shared";
 import { query } from "../../config/db";
@@ -30,9 +31,13 @@ export async function recomputeOlevelCertification(
     final_grade: string | null;
     ca_complete: boolean;
     project_complete: boolean;
+    ca_source: string | null;
+    projects_completed: number | null;
+    projects_expected: number | null;
   }>(
     `SELECT sub.code AS subject_code, osr.ca_score::text, osr.eoc_score::text,
-            osr.composite_score::text, osr.final_grade, osr.ca_complete, osr.project_complete
+            osr.composite_score::text, osr.final_grade, osr.ca_complete, osr.project_complete,
+            osr.ca_source, osr.projects_completed, osr.projects_expected
      FROM olevel_subject_results osr
      JOIN subjects sub ON sub.id = osr.subject_id
      WHERE osr.student_id = $1 AND osr.academic_year_id = $2`,
@@ -46,7 +51,10 @@ export async function recomputeOlevelCertification(
     compositeScore: r.composite_score != null ? Number(r.composite_score) : null,
     finalGrade: (r.final_grade?.toUpperCase() as OlevelSubjectResultInput["finalGrade"]) ?? null,
     caComplete: r.ca_complete,
+    caSource: (r.ca_source as CaSource | null) ?? null,
     projectComplete: r.project_complete,
+    projectsCompleted: r.projects_completed ?? 0,
+    projectsExpected: r.projects_expected ?? config.projectWork.expectedPerTerm,
   }));
 
   const result = computeOlevelCertification(subjects, config);

@@ -479,6 +479,24 @@ export async function recalculateGradingScales(req: Request, res: Response): Pro
   });
 }
 
+export async function recalculateOlevelGrades(req: Request, res: Response): Promise<void> {
+  const { recalculateOlevelGrades: recalc } = await import("../../utils/olevelSubjectGrade.js");
+  const academicYearId = typeof req.body?.yearId === "string" ? req.body.yearId : undefined;
+  const classId = typeof req.body?.classId === "string" ? req.body.classId : undefined;
+  const studentId = typeof req.body?.studentId === "string" ? req.body.studentId : undefined;
+  const data = await recalc({
+    academicYearId,
+    classId,
+    studentId,
+    computedBy: req.user?.id ?? null,
+  });
+  res.json({
+    success: true,
+    data,
+    message: "O-Level subject composites and certification were recalculated.",
+  });
+}
+
 export async function getCurriculumStatus(req: Request, res: Response): Promise<void> {
   const academicYearId = typeof req.query.academicYearId === "string" ? req.query.academicYearId : "";
   if (!academicYearId) throw new HttpError(400, "academicYearId is required");

@@ -1,3 +1,4 @@
+import { CA_SOURCE_LABELS, type CaSource } from "@uganda-cbc-sms/shared";
 import { query } from "../../config/db";
 import { activeTenantIdFromContext } from "../../utils/activeTenant.js";
 import { HttpError } from "../../utils/httpError";
@@ -139,10 +140,14 @@ export async function compileCbcReportPayload(
     composite_score: string | null;
     final_grade: string | null;
     project_complete: boolean;
+    ca_source: string | null;
+    projects_completed: number | null;
+    projects_expected: number | null;
   }>(
     `SELECT sub.name AS subject_name, sub.code AS subject_code,
             osr.ca_score::text, osr.eoc_score::text, osr.composite_score::text,
-            osr.final_grade, osr.project_complete
+            osr.final_grade, osr.project_complete, osr.ca_source,
+            osr.projects_completed, osr.projects_expected
      FROM olevel_subject_results osr
      JOIN subjects sub ON sub.id = osr.subject_id
      WHERE osr.student_id = $1 AND osr.academic_year_id = $2
@@ -170,15 +175,22 @@ export async function compileCbcReportPayload(
       rating: r.rating,
       descriptor: getCbcDescriptor(r.rating),
     })),
-    subjectSummaries: summaries.map((r) => ({
-      code: r.subject_code,
-      name: r.subject_name,
-      finalGrade: r.final_grade,
-      caScore: r.ca_score != null ? Number(r.ca_score) : null,
-      eocScore: r.eoc_score != null ? Number(r.eoc_score) : null,
-      composite: r.composite_score != null ? Number(r.composite_score) : null,
-      projectStatus: r.project_complete ? "Complete" : "Incomplete",
-    })),
+    subjectSummaries: summaries.map((r) => {
+      const src = r.ca_source as CaSource | null;
+      return {
+        code: r.subject_code,
+        name: r.subject_name,
+        finalGrade: r.final_grade,
+        caScore: r.ca_score != null ? Number(r.ca_score) : null,
+        eocScore: r.eoc_score != null ? Number(r.eoc_score) : null,
+        composite: r.composite_score != null ? Number(r.composite_score) : null,
+        projectStatus: r.project_complete ? "Complete" : "Incomplete",
+        caSource: src,
+        caSourceLabel: src ? CA_SOURCE_LABELS[src] : null,
+        projectsCompleted: r.projects_completed,
+        projectsExpected: r.projects_expected,
+      };
+    }),
     certification: certification
       ? {
           resultCode: certification.resultCode,

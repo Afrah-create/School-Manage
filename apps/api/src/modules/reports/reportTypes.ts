@@ -39,6 +39,10 @@ export type CbcReportSubjectSummary = {
   eocScore: number | null;
   composite: number | null;
   projectStatus: string | null;
+  caSource?: string | null;
+  caSourceLabel?: string | null;
+  projectsCompleted?: number | null;
+  projectsExpected?: number | null;
 };
 
 export type CbcReportCertification = {

@@ -1,7 +1,6 @@
 import type { CbcRating } from "@uganda-cbc-sms/shared";
 import { query } from "../../config/db";
 import { syncAssessmentsCbcToLegacy } from "../../utils/cbcRatingWrite";
-import { recomputeOlevelSubjectResults } from "../../utils/olevelSubjectGrade";
 import { HttpError } from "../../utils/httpError";
 import { resolveConfiguredGrade } from "../../utils/gradingScales";
 
@@ -152,7 +151,7 @@ export async function upsertCbc(item: CbcUpsertItem, termId: string, yearId: str
     yearId,
     teacherId,
   });
-  void recomputeOlevelSubjectResults(item.studentId, yearId).catch(() => undefined);
+  // Composites update only via explicit recalculate:olevel-grades (not on every strand save).
 }
 
 export async function upsertCbcBulk(items: CbcUpsertItem[], termId: string, yearId: string, teacherId: string) {
@@ -251,7 +250,6 @@ export async function createCbcProject(input: CbcProjectIn, teacherId: string) {
       teacherId,
     ],
   );
-  void recomputeOlevelSubjectResults(input.studentId, input.yearId).catch(() => undefined);
   return rows[0];
 }
 
@@ -267,8 +265,6 @@ export async function updateCbcProject(id: string, input: Partial<CbcProjectIn>,
     [id, input.assessmentTitle ?? null, input.score ?? null, input.maxScore ?? null, teacherId],
   );
   if (!rows[0]) throw new HttpError(404, "Project assessment not found");
-  const row = rows[0] as { student_id: string; academic_year_id: string };
-  void recomputeOlevelSubjectResults(row.student_id, row.academic_year_id).catch(() => undefined);
   return rows[0];
 }
 

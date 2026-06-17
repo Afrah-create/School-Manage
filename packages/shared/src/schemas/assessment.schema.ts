@@ -53,6 +53,7 @@ export const academicYearSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   isActive: z.boolean().optional(),
+  curriculumForm: z.enum(["S1", "S2", "S3", "S4"]).nullable().optional(),
 });
 
 export const updateAcademicYearSchema = academicYearSchema.partial().refine((v) => Object.keys(v).length > 0, {
@@ -365,19 +366,59 @@ const caRatingScoreMapSchema = z.object({
   E: z.coerce.number().min(0).max(100),
 });
 
+const curriculumFormSchema = z.enum(["S1", "S2", "S3", "S4"]);
+
 export const assessmentConfigSchema = z.object({
   caWeight: z.coerce.number().min(0).max(1).optional(),
   eocWeight: z.coerce.number().min(0).max(1).optional(),
+  caYearWindow: z.enum(["S1_S4", "S3_S4", "custom"]).optional(),
+  caCustomForms: z.array(curriculumFormSchema).optional(),
+  allowIncompleteCaOverride: z.boolean().optional(),
+  policyVerifiedAt: z.string().datetime().nullable().optional(),
+  projectWork: z
+    .object({
+      expectedPerTerm: z.coerce.number().int().min(1).max(20).optional(),
+      policyVerifiedAt: z.string().datetime().nullable().optional(),
+    })
+    .optional(),
   caRules: z
     .object({
       method: z.enum(["school_defined", "rating_score_map", "weighted_strand_average"]).optional(),
       ratingScoreMap: caRatingScoreMapSchema.partial().optional(),
+      fallbackRatingScoreMap: caRatingScoreMapSchema.partial().optional(),
       strandWeights: z.record(z.string(), z.record(z.string(), z.coerce.number().min(0))).optional(),
+      aggregation: z.enum(["mean_of_projects", "mean_of_term_means"]).optional(),
     })
     .optional(),
   minimumSubjects: z.coerce.number().int().min(1).max(20).optional(),
   qualifyingGradeMin: cbcRatingSchema.optional(),
   compulsorySubjectCodes: z.array(z.string().min(1).max(20)).nullable().optional(),
+});
+
+export const projectWorkScoreSchema = z.object({
+  studentId: z.string().uuid(),
+  classSubjectId: z.string().uuid(),
+  termId: z.string().uuid(),
+  projectNumber: z.coerce.number().int().min(1).max(20),
+  score: z.coerce.number().min(0),
+  maxScore: z.coerce.number().min(1).default(100),
+  evidenceRef: z.string().max(2000).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const projectWorkBulkSchema = z.object({
+  classId: z.string().uuid(),
+  subjectId: z.string().uuid(),
+  termId: z.string().uuid(),
+  yearId: z.string().uuid(),
+  scores: z.array(
+    z.object({
+      studentId: z.string().uuid(),
+      projectNumber: z.coerce.number().int().min(1).max(20),
+      score: z.coerce.number().min(0).nullable(),
+      maxScore: z.coerce.number().min(1).optional(),
+    }),
+  ),
 });
 
 export const gradingConfigSchema = z.object({

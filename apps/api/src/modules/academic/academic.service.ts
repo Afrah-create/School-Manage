@@ -83,6 +83,7 @@ function mapYear(r: {
   start_date: string;
   end_date: string;
   is_active: boolean;
+  curriculum_form?: string | null;
 }) {
   return {
     id: r.id,
@@ -90,6 +91,7 @@ function mapYear(r: {
     startDate: r.start_date,
     endDate: r.end_date,
     isActive: r.is_active,
+    curriculumForm: (r.curriculum_form as "S1" | "S2" | "S3" | "S4" | null) ?? null,
   };
 }
 
@@ -186,9 +188,9 @@ export async function createAcademicYear(input: YearIn) {
       await query(`UPDATE academic_years SET is_active = false`);
     }
     const { rows } = await query(
-      `INSERT INTO academic_years (name, start_date, end_date, is_active)
-       VALUES ($1, $2, $3, COALESCE($4, false)) RETURNING *`,
-      [input.name, input.startDate, input.endDate, input.isActive ?? false],
+      `INSERT INTO academic_years (name, start_date, end_date, is_active, curriculum_form)
+       VALUES ($1, $2, $3, COALESCE($4, false), $5) RETURNING *`,
+      [input.name, input.startDate, input.endDate, input.isActive ?? false, input.curriculumForm ?? null],
     );
     return mapYear(rows[0]! as never);
   } catch (e) {
@@ -266,6 +268,10 @@ export async function updateAcademicYear(id: string, input: YearUpdateIn) {
     if (input.isActive) await query(`UPDATE academic_years SET is_active = false`);
     sets.push(`is_active = $${i++}`);
     values.push(input.isActive);
+  }
+  if (input.curriculumForm !== undefined) {
+    sets.push(`curriculum_form = $${i++}`);
+    values.push(input.curriculumForm);
   }
   values.push(id);
   const { rows } = await query(
