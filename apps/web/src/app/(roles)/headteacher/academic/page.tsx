@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import type { AcademicYear, SchoolClass, Term } from "@uganda-cbc-sms/shared";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Calendar, GraduationCap, Layers } from "lucide-react";
 import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { PageWrapper } from "@/components/layout/PageWrapper";
@@ -64,43 +62,8 @@ export default function HeadteacherAcademicPage() {
   return (
     <PageWrapper
       title="Academic structure"
-      description="Read-only overview of years, terms, classes, and subjects"
+      description="Read-only overview of years, terms, classes, and subjects. Open related tools from the Academic menu."
     >
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Link
-          href="/headteacher/academic/timetable"
-          className="rounded-xl border border-border bg-card p-4 shadow-sm transition-ui hover:border-brand/40 hover:shadow-md"
-        >
-          <Calendar className="mb-2 h-5 w-5 text-brand" />
-          <p className="font-medium">Timetable</p>
-          <p className="mt-1 text-xs text-muted-foreground">View class schedules</p>
-        </Link>
-        <Link
-          href="/headteacher/assessment"
-          className="rounded-xl border border-border bg-card p-4 shadow-sm transition-ui hover:border-brand/40 hover:shadow-md"
-        >
-          <BookOpen className="mb-2 h-5 w-5 text-brand" />
-          <p className="font-medium">Assessments</p>
-          <p className="mt-1 text-xs text-muted-foreground">CBC & A-Level progress</p>
-        </Link>
-        <Link
-          href="/headteacher/exams"
-          className="rounded-xl border border-border bg-card p-4 shadow-sm transition-ui hover:border-brand/40 hover:shadow-md"
-        >
-          <Layers className="mb-2 h-5 w-5 text-brand" />
-          <p className="font-medium">Exams</p>
-          <p className="mt-1 text-xs text-muted-foreground">Formal exam events</p>
-        </Link>
-        <Link
-          href="/headteacher/students"
-          className="rounded-xl border border-border bg-card p-4 shadow-sm transition-ui hover:border-brand/40 hover:shadow-md"
-        >
-          <GraduationCap className="mb-2 h-5 w-5 text-brand" />
-          <p className="font-medium">Students</p>
-          <p className="mt-1 text-xs text-muted-foreground">Enrolment directory</p>
-        </Link>
-      </div>
-
       <div className="mb-6">
       <Card title="Academic year">
         <Select

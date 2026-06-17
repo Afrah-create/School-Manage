@@ -1,3 +1,4 @@
+import { flattenNavItems } from "@/components/layout/shells/navFlatten";
 import type { NavIconId, NavItem, RoleKey, RoleShellConfig } from "@/components/layout/shells/types";
 
 export type ShellSearchEntry = {
@@ -122,7 +123,7 @@ function navToEntry(item: NavItem): ShellSearchEntry {
 }
 
 export function buildShellSearchIndex(config: RoleShellConfig): ShellSearchEntry[] {
-  const pages = config.items.map(navToEntry);
+  const pages = flattenNavItems(config.items).map(navToEntry);
   const actions = (ROLE_QUICK_ACTIONS[config.role] ?? []).map((a) => ({
     id: `action:${a.href}`,
     type: "action" as const,

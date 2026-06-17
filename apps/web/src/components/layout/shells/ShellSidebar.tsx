@@ -1,16 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useNavigationLoading } from "@/components/navigation/NavigationProvider";
-import { NAV_ICON_MAP } from "./navIconMap";
-import { isNavItemActive } from "./navActive";
-import { resolveUploadUrl } from "@/lib/media";
 import { BrandGradientStrip } from "@/components/brand/BrandGradientStrip";
 import { BrandMark } from "@/components/brand/BrandMark";
+import { resolveUploadUrl } from "@/lib/media";
 import { useAuthStore } from "@/store/authStore";
+import { isNavItemActive } from "./navActive";
+import { ShellNavGroup } from "./ShellNavGroup";
+import { ShellNavLink } from "./ShellNavGroup";
 import type { NavItem, RoleShellConfig } from "./types";
 
 type ShellSidebarProps = {
@@ -18,65 +18,6 @@ type ShellSidebarProps = {
   mobile?: boolean;
   onNavigate?: () => void;
 };
-
-function NavLink({
-  item,
-  active,
-  pending,
-  onNavClick,
-}: {
-  item: NavItem;
-  active: boolean;
-  pending?: boolean;
-  onNavClick: (href: string, onDone?: () => void) => void;
-}) {
-  const Icon = NAV_ICON_MAP[item.icon];
-
-  const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-    e.preventDefault();
-    onNavClick(item.href);
-  };
-
-  return (
-    <Link
-      href={item.href}
-      onClick={handleClick}
-      aria-current={active ? "page" : undefined}
-      aria-busy={pending}
-      className={`group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-ui focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar ${
-        pending ? "opacity-70" : ""
-      } ${
-        active
-          ? "bg-nav-active font-medium text-nav-active-foreground shadow-sm"
-          : "font-normal text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"
-      }`}
-    >
-      {active ? (
-        <span
-          className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-brand"
-          aria-hidden
-        />
-      ) : null}
-      <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-ui ${
-          active
-            ? "bg-brand/15 text-brand dark:bg-brand/25 dark:text-emerald-300"
-            : "bg-sidebar-accent/80 text-sidebar-muted group-hover:bg-sidebar-accent group-hover:text-sidebar-foreground"
-        }`}
-      >
-        <Icon className="h-[1.125rem] w-[1.125rem] stroke-[1.75]" />
-      </span>
-      <span className="min-w-0 flex-1 truncate leading-snug">{item.label}</span>
-      {pending ? (
-        <span
-          className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-brand"
-          aria-hidden
-        />
-      ) : null}
-    </Link>
-  );
-}
 
 export function ShellSidebar({ config, mobile = false, onNavigate }: ShellSidebarProps) {
   const pathname = usePathname();
@@ -114,25 +55,48 @@ export function ShellSidebar({ config, mobile = false, onNavigate }: ShellSideba
     return { mainItem: dashboard, menuItems: rest };
   }, [config.items]);
 
+  const renderMenuItem = (item: NavItem) => {
+    if (item.children?.length) {
+      return (
+        <ShellNavGroup
+          key={item.href}
+          item={item}
+          pathname={pathname}
+          allItems={config.items}
+          pendingHref={pendingHref}
+          onNavClick={handleNavClick}
+        />
+      );
+    }
+
+    return (
+      <ShellNavLink
+        key={item.href}
+        item={item}
+        active={isNavItemActive(item, pathname, config.items)}
+        pending={pendingHref === item.href}
+        onNavClick={handleNavClick}
+      />
+    );
+  };
+
   return (
     <aside
       className={`${mobile ? "flex" : "hidden lg:flex"} h-full w-[var(--sidebar-width)] shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-ui`}
     >
-      {/* Brand — matches auth gradient panel */}
       <BrandGradientStrip className="shrink-0 border-b border-sidebar-border">
         <div className="px-4 py-4">
           <BrandMark tone="gradient" size="compact" subtitle={config.roleLabel} />
         </div>
       </BrandGradientStrip>
 
-      {/* Navigation */}
       <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-4 [scrollbar-width:thin]">
         {mainItem ? (
           <div className="mb-5">
             <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
               Overview
             </p>
-            <NavLink
+            <ShellNavLink
               item={mainItem}
               active={isNavItemActive(mainItem, pathname, config.items)}
               pending={pendingHref === mainItem.href}
@@ -146,22 +110,11 @@ export function ShellSidebar({ config, mobile = false, onNavigate }: ShellSideba
             <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
               Menu
             </p>
-            <nav className="flex flex-col gap-0.5">
-              {menuItems.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={isNavItemActive(item, pathname, config.items)}
-                  pending={pendingHref === item.href}
-                  onNavClick={handleNavClick}
-                />
-              ))}
-            </nav>
+            <nav className="flex flex-col gap-0.5">{menuItems.map(renderMenuItem)}</nav>
           </div>
         ) : null}
       </div>
 
-      {/* User */}
       <div className="shrink-0 border-t border-sidebar-border p-3">
         <button
           type="button"

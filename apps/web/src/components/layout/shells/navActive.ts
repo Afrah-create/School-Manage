@@ -1,18 +1,13 @@
+import { flattenNavItems, navItemMatches } from "./navFlatten";
 import type { NavItem } from "./types";
-
-function navItemMatches(pathname: string, item: NavItem): boolean {
-  if (item.href.endsWith("/dashboard")) return pathname === item.href;
-  if (item.exactMatch) return pathname === item.href;
-  const prefix = item.activePrefix ?? item.href;
-  return pathname === prefix || pathname.startsWith(`${prefix}/`);
-}
 
 /** Picks the single nav item with the longest matching prefix (avoids parent + child both active). */
 export function resolveActiveNavItem(items: NavItem[], pathname: string): NavItem | undefined {
+  const leaves = flattenNavItems(items);
   let best: NavItem | undefined;
   let bestScore = -1;
 
-  for (const item of items) {
+  for (const item of leaves) {
     if (!navItemMatches(pathname, item)) continue;
     const prefix = item.activePrefix ?? item.href;
     const score = prefix.length;

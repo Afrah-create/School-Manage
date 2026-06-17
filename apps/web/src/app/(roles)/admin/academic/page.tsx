@@ -9,29 +9,6 @@ import { apiGet } from "@/lib/api";
 import { queryKeys, STRUCTURAL_STALE_MS } from "@/lib/queryKeys";
 import { getApiTenantSlug } from "@/lib/tenantHost";
 
-const SETUP_LINKS = [
-  {
-    href: "/admin/academic/structure",
-    title: "Structure setup",
-    desc: "Auto-install years, 3 terms, and default classes",
-  },
-  { href: "/admin/academic/years", title: "Academic years", desc: "Create and view school years" },
-  { href: "/admin/academic/terms", title: "Terms", desc: "Terms within a year" },
-  { href: "/admin/academic/classes", title: "Classes", desc: "Streams and O-Level / A-Level class groups" },
-  { href: "/admin/academic/subjects", title: "Subjects", desc: "O-Level and A-Level subject catalogue" },
-];
-
-const CURRICULUM_LINKS = [
-  {
-    href: "/admin/academic/curriculum",
-    title: "Curriculum setup",
-    desc: "Auto-install subjects, CBC strands, and class–subject slots",
-  },
-  { href: "/admin/academic/combinations", title: "Subject combinations", desc: "O-Level and A-Level combinations" },
-  { href: "/admin/academic/cbc-strands", title: "CBC strands", desc: "O-Level strands and sub-strands" },
-  { href: "/admin/academic/grading-scales", title: "Grading scales", desc: "Grade ranges, points, and descriptors" },
-];
-
 type AcademicSummary = {
   years: number;
   terms: number;
@@ -56,7 +33,10 @@ export default function AdminAcademicHubPage() {
     summaryQ.error instanceof Error ? summaryQ.error.message : summaryQ.isError ? "Failed to load" : null;
 
   return (
-    <PageWrapper title="Academic" description="Structure, years, terms, classes, subjects, and teaching assignments">
+    <PageWrapper
+      title="Academic"
+      description="Use the Academic menu in the sidebar for structure, curriculum, assignments, and timetable tools."
+    >
       {loading ? <p className="animate-pulse text-muted-foreground">Loading summary…</p> : null}
       {err ? <Alert tone="error">{err}</Alert> : null}
       {counts ? (
@@ -92,38 +72,6 @@ export default function AdminAcademicHubPage() {
               Homeroom, combination subjects, and subject teachers for UNEB classes.
             </p>
           </Link>
-        </div>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">School structure</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          {SETUP_LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="block rounded-lg border border-border bg-card p-4 transition-ui hover:bg-accent"
-            >
-              <div className="font-semibold text-brand">{l.title}</div>
-              <p className="text-sm text-muted-foreground">{l.desc}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold text-foreground">Curriculum & grading</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          {CURRICULUM_LINKS.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="block rounded-lg border border-border bg-card p-4 transition-ui hover:bg-accent"
-            >
-              <div className="font-semibold text-brand">{l.title}</div>
-              <p className="text-sm text-muted-foreground">{l.desc}</p>
-            </Link>
-          ))}
         </div>
       </section>
 

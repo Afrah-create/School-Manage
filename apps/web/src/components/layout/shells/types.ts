@@ -22,6 +22,7 @@ export type NavItem = {
   icon: NavIconId;
   activePrefix?: string;
   exactMatch?: boolean;
+  children?: NavItem[];
 };
 
 export type RoleShellConfig = {
