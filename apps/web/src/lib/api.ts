@@ -12,13 +12,25 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  const requestPath = `${config.baseURL ?? ""}${config.url ?? ""}`;
+  const isLoginRequest =
+    /\b\/auth\/login\b/.test(requestPath) || String(config.url ?? "").includes("/auth/login");
+
+  if (typeof window !== "undefined") {
+    config.headers["X-Tenant-Slug"] = isLoginRequest
+      ? getApiTenantSlug()
+      : getApiTenantSlug(useAuthStore.getState().token ?? getSmsTokenFromCookie());
+  }
+
+  if (isLoginRequest) {
+    delete config.headers.Authorization;
+    return config;
+  }
+
   const storeToken = useAuthStore.getState().token;
   const token = storeToken ?? getSmsTokenFromCookie();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-  }
-  if (typeof window !== "undefined") {
-    config.headers["X-Tenant-Slug"] = getApiTenantSlug(token);
   }
   return config;
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -17,6 +17,7 @@ import { BrandMark } from "@/components/brand/BrandMark";
 import { LoginHeroPanel } from "@/components/auth/LoginHeroPanel";
 import { SESSION_SIGN_IN_MESSAGES } from "@/components/auth/constants";
 import { SessionLoadingScreen } from "@/components/auth/SessionLoadingScreen";
+import { Spinner } from "@/components/feedback/Spinner";
 import { apiPost, getApiErrorMessage } from "@/lib/api";
 import { sessionInactivityMinutes } from "@/lib/sessionConfig";
 import { getTenantSlugFromHostname, getLoginTenantSlugOverride, setLoginTenantSlugOverride } from "@/lib/tenantHost";
@@ -28,6 +29,7 @@ import type { AuthUser, SessionInfo } from "@/store/authStore";
 import { useAuthStore } from "@/store/authStore";
 
 type AuthView = "login" | "register";
+type LoginPhase = "idle" | "authenticating" | "redirecting";
 type StrengthLevel = "weak" | "fair" | "strong";
 
 type LoginState = {
@@ -97,8 +99,44 @@ function cx(...values: Array<string | false | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+function LoginFormSkeleton() {
+  return (
+    <div className="w-full animate-pulse rounded-3xl bg-card/90 p-5 shadow-lg sm:p-6">
+      <div className="mb-5 space-y-2">
+        <div className="h-7 w-36 rounded-md bg-muted" />
+        <div className="h-4 w-full max-w-xs rounded-md bg-muted" />
+      </div>
+      <div className="space-y-3">
+        <div className="h-10 w-full rounded-lg bg-muted" />
+        <div className="h-10 w-full rounded-lg bg-muted" />
+        <div className="h-10 w-full rounded-lg bg-muted" />
+      </div>
+    </div>
+  );
+}
+
+function loginFailureMessage(error: unknown): string {
+  const msg = getApiErrorMessage(error);
+  if (msg === "You need to sign in to continue, or your session has expired.") {
+    return "Incorrect email or password.";
+  }
+  return msg;
+}
+
 function LoginPageFallback() {
-  return <SessionLoadingScreen messages={SESSION_SIGN_IN_MESSAGES} />;
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto hidden min-h-screen max-w-[1600px] lg:flex">
+        <div className="hidden w-2/5 bg-muted/30 lg:block" />
+        <section className="flex w-3/5 items-center justify-center px-8 py-6">
+          <LoginFormSkeleton />
+        </section>
+      </div>
+      <div className="px-4 py-6 lg:hidden">
+        <LoginFormSkeleton />
+      </div>
+    </div>
+  );
 }
 
 function LoginPageContent() {
@@ -111,8 +149,9 @@ function LoginPageContent() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loginShake, setLoginShake] = useState(false);
   const [registerShake, setRegisterShake] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginPhase, setLoginPhase] = useState<LoginPhase>("idle");
   const [loginError, setLoginError] = useState<string | null>(null);
+  const loginPasswordRef = useRef<HTMLInputElement>(null);
   const [sharedHostLogin, setSharedHostLogin] = useState(false);
   const [schoolSlug, setSchoolSlug] = useState("default");
 
@@ -195,7 +234,7 @@ function LoginPageContent() {
       return;
     }
     try {
-      setLoginLoading(true);
+      setLoginPhase("authenticating");
       if (sharedHostLogin) {
         setLoginTenantSlugOverride(schoolSlug.trim() || "default");
       }
@@ -213,6 +252,7 @@ function LoginPageContent() {
       if (data.tenant?.slug) {
         setLoginTenantSlugOverride(data.tenant.slug);
       }
+      setLoginPhase("redirecting");
       const dash = postLoginPath(data.user, data.billing);
       const tenantSlug = data.tenant?.slug?.toLowerCase();
       const hostSlug =
@@ -231,9 +271,10 @@ function LoginPageContent() {
       }
       window.location.assign(dash);
     } catch (error) {
-      setLoginError(getApiErrorMessage(error));
+      setLoginError(loginFailureMessage(error));
       triggerShake("login");
-      setLoginLoading(false);
+      setLoginPhase("idle");
+      loginPasswordRef.current?.focus();
     }
   };
 
@@ -329,6 +370,7 @@ function LoginPageContent() {
                 <div className="relative">
                   <Lock className="hidden" />
                   <input
+                    ref={loginPasswordRef}
                     type={showLoginPassword ? "text" : "password"}
                     value={loginState.password}
                     onChange={(e) => setLoginState((s) => ({ ...s, password: e.target.value }))}
@@ -371,14 +413,26 @@ function LoginPageContent() {
               <motion.div variants={fieldItem}>
                 <motion.button
                   type="submit"
-                  whileTap={{ scale: 0.98 }}
-                  disabled={loginLoading}
-                  className="font-body h-10 w-full rounded-lg bg-[#2563EB] text-sm font-medium text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)]"
+                  whileTap={loginPhase === "idle" ? { scale: 0.98 } : undefined}
+                  disabled={loginPhase !== "idle"}
+                  className="font-body flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#2563EB] text-sm font-medium text-white shadow-[0_16px_30px_-16px_rgba(37,99,235,0.8)] transition hover:-translate-y-[1px] hover:bg-[#1D4ED8] hover:shadow-[0_20px_34px_-16px_rgba(30,64,175,0.85)] disabled:cursor-not-allowed disabled:opacity-80 disabled:hover:translate-y-0"
                   animate={loginShake ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
                 >
-                  Sign In
+                  {loginPhase === "authenticating" ? (
+                    <>
+                      <Spinner size="sm" className="text-white" />
+                      Signing in…
+                    </>
+                  ) : (
+                    "Sign In"
+                  )}
                 </motion.button>
               </motion.div>
+              {loginPhase === "authenticating" ? (
+                <motion.p variants={fieldItem} className="mt-2 text-center text-xs text-muted-foreground">
+                  Checking your credentials…
+                </motion.p>
+              ) : null}
               {timeoutNotice ? (
                 <motion.p variants={fieldItem} className="mt-2 text-sm text-amber-700 dark:text-amber-400">
                   {timeoutNotice}
@@ -631,7 +685,7 @@ function LoginPageContent() {
 
   return (
     <div className="min-h-screen bg-background transition-colors">
-      {loginLoading ? (
+      {loginPhase === "redirecting" ? (
         <SessionLoadingScreen messages={SESSION_SIGN_IN_MESSAGES} layout="overlay" />
       ) : null}
       <div className="mx-auto hidden min-h-screen max-w-[1600px] lg:flex">
