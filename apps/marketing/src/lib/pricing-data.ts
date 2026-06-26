@@ -23,12 +23,12 @@ export const pricingTiers = [
   },
   {
     name: "Multi-Campus",
-    description: "For school groups or operators managing more than one campus.",
+    description: "For school groups managing more than one campus.",
     features: [
       "Everything in Growing School",
-      "Separate tenant per school with isolated data",
-      "Platform administration for provisioning schools",
-      "Per-school module toggles (fees, exams, analytics, and more)",
+      "Separate records and staff accounts for each campus",
+      "Coordinated setup for groups with multiple sites",
+      "Choose which modules each school uses (fees, exams, analytics, and more)",
       "Dedicated onboarding and support planning",
     ],
   },

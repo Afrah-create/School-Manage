@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BRAND } from "@uganda-cbc-sms/brand";
 import { mainNavLinks } from "@/lib/site-nav";
+import { BrandLogo } from "./BrandLogo";
 import { Container } from "./Container";
 import { HeaderMobileMenu } from "./HeaderMobileMenu";
 import { CtaButton } from "./CtaButton";
@@ -33,12 +34,9 @@ export function Header() {
         <div className="grid h-16 grid-cols-[1fr_auto] items-center gap-3 lg:h-[4.25rem] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:gap-6">
           <Link
             href="/"
-            className="flex min-w-0 items-center gap-2.5 justify-self-start font-display text-heading-3 font-bold text-foreground"
+            className="flex min-w-0 items-center gap-3 justify-self-start font-display text-heading-3 font-bold text-foreground"
           >
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-brand-light ring-1 ring-brand/15">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={BRAND.logoIcon} alt={`${BRAND.productName} logo`} className="h-full w-full object-cover" />
-            </span>
+            <BrandLogo size="md" />
             <span className="truncate text-small font-bold sm:text-heading-3">{BRAND.productName}</span>
           </Link>
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { BRAND } from "@uganda-cbc-sms/brand";
 import { homeSectionLinks } from "@/lib/site-nav";
+import { BrandLogo } from "./BrandLogo";
 import { ThemeToggle } from "./ThemeToggle";
 import { CtaButton } from "./CtaButton";
 
@@ -82,14 +83,11 @@ export function HeaderMobileMenu({ links }: HeaderMobileMenuProps) {
           <div className="mx-auto flex h-16 max-w-content items-center justify-between">
             <Link
               href="/"
-              className="flex min-w-0 items-center gap-2.5 font-display text-small font-bold text-foreground sm:text-heading-3"
+              className="flex min-w-0 items-center gap-3 font-display text-small font-bold text-foreground sm:text-heading-3"
               onClick={close}
               tabIndex={mobileOpen ? 0 : -1}
             >
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-brand-light ring-1 ring-brand/15">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={BRAND.logoIcon} alt="" className="h-full w-full object-cover" />
-              </span>
+              <BrandLogo size="md" alt="" />
               <span className="truncate">{BRAND.productName}</span>
             </Link>
             <button

@@ -14,7 +14,7 @@ export const faqItems: FaqItem[] = [
   {
     question: "How is our school data kept secure?",
     answer:
-      "Each school operates in its own isolated tenant. Staff sign in with email and password. The API uses JWT authentication with role-based access so users only reach features allowed for their role. In production, data is protected with PostgreSQL row-level security, encrypted connections, session timeouts, and audit logging. School data is never mixed between tenants.",
+      "Staff sign in with their own email and password. Each person sees only the screens and data allowed for their role — teachers enter assessments, bursars handle fees, headteachers approve reports. Your school's records are kept separate from other schools. Connections are encrypted, sessions time out after inactivity, and access is logged for accountability.",
   },
   {
     question: "Can we record mobile money fee payments?",
@@ -24,12 +24,12 @@ export const faqItems: FaqItem[] = [
   {
     question: "Can one organisation manage multiple schools?",
     answer:
-      "Yes. SchoolManage supports multi-tenant architecture: each school gets its own subdomain and isolated data. A platform administrator can provision new schools, toggle modules per school (fees, exams, A-Level, attendance, analytics, and more), and manage tenants centrally. Custom domains and advanced production operations are on the roadmap.",
+      "Yes. School groups and organisations with more than one campus can use SchoolManage with a dedicated setup for each school. Each campus keeps its own student records, staff accounts, and settings. Contact us to discuss how this fits your group and which modules each school needs.",
   },
   {
     question: "How is data backed up?",
     answer:
-      "Your hosting environment should include regular database backups. The system supports standard PostgreSQL backup and restore workflows for operators. Per-tenant export tooling for production is planned. We recommend agreeing a backup schedule with your IT contact or hosting provider before go-live.",
+      "Regular backups are part of the hosted service. Before go-live we agree recovery expectations with your school. If you need copies of your data for your own records, contact us to discuss export options.",
   },
   {
     question: "Do you provide training and onboarding?",

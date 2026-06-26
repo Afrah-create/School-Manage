@@ -64,13 +64,13 @@ export const roleShowcaseItems: RoleShowcaseItem[] = [
     id: "onboarding",
     title: "School setup",
     description:
-      "Administrators configure academic years, classes, subjects, and grading scales once. New staff accounts are added with the right role so everyone lands on the correct dashboard.",
+      "School admins configure academic years, classes, subjects, and grading scales once. New staff accounts are added with the right role so everyone lands on the correct dashboard.",
     image: "/images/StaffOnboarding.png",
-    imageAlt: "Administrator setting up school structure and staff accounts",
+    imageAlt: "School admin setting up school structure and staff accounts",
     points: [
       "Guided setup for years, terms, and classes",
       "CBC strands and UNEB grading scale defaults",
-      "Role-based accounts for admin, teachers, and bursar",
+      "Role-based accounts for school admin, teachers, and bursar",
     ],
   },
   {

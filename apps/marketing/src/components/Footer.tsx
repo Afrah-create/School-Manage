@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BRAND } from "@uganda-cbc-sms/brand";
 import { homeSectionLinks, legalLinks, mainNavLinks } from "@/lib/site-nav";
+import { BrandLogo } from "./BrandLogo";
 import { Container } from "./Container";
 
 function FooterLinkGroup({ title, links }: { title: string; links: readonly { href: string; label: string }[] }) {
@@ -28,11 +29,8 @@ export function Footer() {
       <Container className="py-12 md:py-14">
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
           <div className="max-w-xs shrink-0">
-            <Link href="/" className="inline-flex items-center gap-2.5 font-display text-heading-3 font-bold text-foreground">
-              <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-brand-light ring-1 ring-brand/15">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={BRAND.logoIcon} alt={`${BRAND.productName} logo`} className="h-full w-full object-cover" />
-              </span>
+            <Link href="/" className="inline-flex items-center gap-3 font-display text-heading-3 font-bold text-foreground">
+              <BrandLogo size="md" />
               {BRAND.productName}
             </Link>
             <p className="mt-4 text-small leading-relaxed text-muted-foreground">

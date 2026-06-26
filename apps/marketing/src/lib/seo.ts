@@ -21,11 +21,11 @@ export const siteKeywords = [
 ] as const;
 
 export const defaultOgImage = {
-  url: `${siteUrl}${BRAND.logoIcon}`,
+  url: `${siteUrl}/images/Logo-icon-512.png`,
   width: 512,
   height: 512,
   alt: `${BRAND.productName} — school management for Ugandan secondary schools`,
-  type: "image/jpeg",
+  type: "image/png",
 } as const;
 
 const defaultDescription =
@@ -137,9 +137,13 @@ export const rootMetadata: Metadata = {
     },
   },
   icons: {
-    icon: [{ url: BRAND.logoIcon, type: "image/jpeg" }],
-    shortcut: BRAND.logoIcon,
-    apple: BRAND.logoIcon,
+    icon: [
+      { url: "/images/Logo-icon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/images/Logo-icon-180.png", sizes: "180x180", type: "image/png" },
+      { url: BRAND.logoIcon, sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/images/Logo-icon-32.png",
+    apple: "/images/Logo-icon-180.png",
   },
   manifest: "/site.webmanifest",
 };

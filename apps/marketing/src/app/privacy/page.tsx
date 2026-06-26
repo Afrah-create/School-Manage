@@ -47,7 +47,7 @@ export default function PrivacyPage() {
             <li>Staff account details (name, email, role, login activity)</li>
             <li>Student records (name, class, assessment results, attendance, photos where uploaded)</li>
             <li>Fee and payment information recorded by the school</li>
-            <li>Technical logs (IP address, browser type, API request metadata for security)</li>
+            <li>Technical logs (IP address, browser type, and sign-in activity for security)</li>
           </ul>
         </section>
 
@@ -76,9 +76,9 @@ export default function PrivacyPage() {
           <h2 className="font-display text-xl font-bold text-foreground">5. Data retention and security</h2>
           <p>
             Data is retained for as long as the school&apos;s account is active and as required by applicable law or
-            contractual obligations. We apply technical measures including tenant isolation, access controls, and encrypted
-            transport in production deployments. Details of retention periods and subprocessors should be added here after
-            legal review.
+            contractual obligations. We apply technical measures including access controls, separation of school data,
+            and encrypted connections in production. Details of retention periods and subprocessors should be added here
+            after legal review.
           </p>
         </section>
 

@@ -2,8 +2,8 @@ export const BRAND = {
   productName: "SchoolManage",
   companyName: "SlimCyberTech",
   companyTagline: "Building the future with code.",
-  logoIcon: "/images/Logo.jpeg",
-  logoFull: "/images/Slim.jpeg",
+  logoIcon: "/images/Logo-mark.png",
+  logoFull: "/images/Logo.png",
 } as const;
 
 export const COLORS = {

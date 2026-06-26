@@ -42,7 +42,7 @@ export default function TermsPage() {
           <p>
             {BRAND.productName} is a web-based school management system for Ugandan secondary schools, including modules
             for academic structure, student records, O-Level CBC assessment, A-Level UNEB assessment, fees, attendance,
-            reporting, and related features as enabled for your tenant.
+            reporting, and related features as enabled for your school.
           </p>
         </section>
 
@@ -71,7 +71,7 @@ export default function TermsPage() {
           <h2 className="font-display text-xl font-bold text-foreground">5. Fees and payment</h2>
           <p>
             Subscription fees, billing cycles, and payment terms are set out in your separate quotation or service
-            agreement. Module availability may depend on your plan and enabled feature flags.
+            agreement. Module availability may depend on your plan and selected modules.
           </p>
         </section>
 
