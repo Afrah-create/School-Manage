@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { contactEmail } from "@/lib/contact";
 
 const formEndpoint = process.env.NEXT_PUBLIC_CONTACT_FORM_ENDPOINT ?? "";
-const fallbackEmail = "hello@slimcybertech.com";
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
@@ -26,7 +26,7 @@ export function ContactForm() {
       const body = encodeURIComponent(
         `Name: ${data.get("name")}\nSchool: ${data.get("school")}\nEmail: ${data.get("email")}\nPhone: ${data.get("phone")}\n\n${data.get("message")}`,
       );
-      window.location.href = `mailto:${fallbackEmail}?subject=${subject}&body=${body}`;
+      window.location.href = `mailto:${contactEmail}?subject=${subject}&body=${body}`;
       return;
     }
 
@@ -65,8 +65,8 @@ export function ContactForm() {
         {!formEndpoint ? (
           <p className="mb-6 rounded-lg border border-border bg-muted/40 px-4 py-3 text-small text-muted-foreground">
             Form handler not configured yet. Submit will open your email app, or write to{" "}
-            <a href={`mailto:${fallbackEmail}`} className="link-brand">
-              {fallbackEmail}
+            <a href={`mailto:${contactEmail}`} className="link-brand">
+              {contactEmail}
             </a>
             .
           </p>
@@ -139,8 +139,8 @@ export function ContactForm() {
             </button>
             <p className="text-small text-muted-foreground">
               Or email{" "}
-              <a href={`mailto:${fallbackEmail}`} className="link-brand">
-                {fallbackEmail}
+              <a href={`mailto:${contactEmail}`} className="link-brand">
+                {contactEmail}
               </a>
             </p>
           </div>

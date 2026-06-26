@@ -5,7 +5,8 @@ import { CtaBanner } from "@/components/CtaBanner";
 import { CtaButton } from "@/components/CtaButton";
 import { CurriculumComparison } from "@/components/CurriculumComparison";
 import { HomeFaqSection } from "@/components/HomeFaqSection";
-import { MarketingImage } from "@/components/MarketingImage";
+import { HomePricingSection } from "@/components/HomePricingSection";
+import { ImageReveal } from "@/components/ImageReveal";
 import { RevealOnScroll } from "@/components/RevealOnScroll";
 import { RoleShowcase } from "@/components/RoleShowcase";
 import { SectionHeading } from "@/components/SectionHeading";
@@ -91,14 +92,14 @@ export default function HomePage() {
               </div>
             </div>
           </RevealOnScroll>
-          <RevealOnScroll delay={100}>
-            <MarketingImage
-              src="/images/Hero.png"
-              alt="School administrator reviewing the SchoolManage dashboard on a laptop in the office"
-              priority
-              className="aspect-[4/3] shadow-elevated lg:aspect-[5/4]"
-            />
-          </RevealOnScroll>
+          <ImageReveal
+            src="/images/Hero.png"
+            alt="School administrator reviewing the SchoolManage dashboard on a laptop in the office"
+            variant="hero"
+            priority
+            delay={120}
+            className="aspect-[4/3] lg:aspect-[5/4]"
+          />
         </Container>
       </section>
 
@@ -171,6 +172,8 @@ export default function HomePage() {
         </Container>
       </section>
 
+      <HomePricingSection />
+
       <HomeFaqSection />
 
       <CtaBanner
@@ -179,7 +182,7 @@ export default function HomePage() {
         primaryLabel="See it in action"
         primaryHref="/contact"
         secondaryLabel="View pricing"
-        secondaryHref="/pricing"
+        secondaryHref="/#pricing"
       />
     </>
   );

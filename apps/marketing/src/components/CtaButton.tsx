@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 
-const appLoginUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://default.localhost:3000"}/login`;
-
 type CtaButtonProps = {
   children: React.ReactNode;
   className?: string;
   href?: string;
   variant?: "primary" | "accent";
+  onClick?: () => void;
 };
 
-export function CtaButton({ children, className = "", href = appLoginUrl, variant = "primary" }: CtaButtonProps) {
+export function CtaButton({
+  children,
+  className = "",
+  href = "/contact",
+  variant = "primary",
+  onClick,
+}: CtaButtonProps) {
   const variantClass =
     variant === "accent"
       ? "bg-accent hover:bg-accent-deep focus-visible:outline-accent"
@@ -20,6 +25,7 @@ export function CtaButton({ children, className = "", href = appLoginUrl, varian
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={`inline-flex items-center justify-center rounded-md px-5 py-2.5 text-small font-semibold text-white transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${variantClass} ${className}`}
     >
       {children}
