@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 export default function AdminCbcAssessmentPage() {
   return (
     <PageWrapper
-      title="CBC competency oversight"
+      title="Competency oversight"
       description="Read-only view of NCDC term summaries after teachers record assessment activity ratings"
     >
       <Link href="/admin/assessment" className="mb-4 inline-block text-sm font-medium text-brand hover:underline">

@@ -51,14 +51,14 @@ const sections = [
   },
   {
     id: "cbc-assessment",
-    title: "CBC Assessment (O-Level)",
+    title: "Competency & grading (O-Level)",
     description:
-      "Support NCDC-aligned O-Level assessment: teachers record strand and competency ratings (A–E), enter scored project work for continuous assessment, and add end-of-cycle exam marks. The system computes CA, EOC, and composite grades, and tracks Result 1 / 2 / 3 certification status.",
+      "Support NCDC-aligned O-Level assessment: teachers record competency levels on the four-point descriptor scale (Exceeds, Meets, Approaching, and Below Expectations), enter scored project work for continuous assessment, and add end-of-cycle exam marks. The system computes CA, EOC, and composite A–E final grades, and tracks Result 1 / 2 / 3 certification status.",
     bullets: [
-      "Record strand and competency ratings from A through E",
+      "Record NCDC competency levels per assessment activity and strand",
       "Enter project work scores that feed official continuous assessment",
       "Compute 20/80 CA + EOC composites with configurable weights",
-      "Submit assessments for review; headteachers unlock submitted entries when changes are needed",
+      "Headteachers review term summaries; legacy sheet unlock available for pre-migration data",
     ],
     icon: IconCbc,
     variant: "brand" as const,

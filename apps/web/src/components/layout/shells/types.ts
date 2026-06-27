@@ -22,6 +22,8 @@ export type NavItem = {
   icon: NavIconId;
   activePrefix?: string;
   exactMatch?: boolean;
+  /** Renders a non-interactive subheader before this child in a nav group sidebar. */
+  sectionLabel?: string;
   children?: NavItem[];
 };
 

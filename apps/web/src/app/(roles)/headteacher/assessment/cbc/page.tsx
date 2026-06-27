@@ -21,7 +21,7 @@ export default function HeadteacherCbcAssessmentPage() {
 
   return (
     <PageWrapper
-      title="CBC assessments"
+      title="Competency assessment"
       description="Review NCDC term competency summaries, apply overrides, and manage legacy sheet unlock"
     >
       <p className="-mt-2 mb-4 text-sm text-muted-foreground">

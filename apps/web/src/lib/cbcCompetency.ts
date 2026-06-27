@@ -178,7 +178,7 @@ export function pickCompetencyLevel(row: Record<string, unknown>): CompetencyLev
 
 export function mapCbcRatingsError(status: number | undefined): string {
   if (status === 400) {
-    return "This activity is locked. You cannot change ratings unless the headteacher unlocks the sheet (legacy) or you use an unlocked activity.";
+    return "This activity is locked — you cannot save further competency ratings for it. Activity lock is separate from legacy strand-sheet unlock (headteacher only on the old submission flow).";
   }
   if (status === 403) {
     return "You are not assigned to this class and subject, or you did not create this activity.";

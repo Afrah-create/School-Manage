@@ -40,7 +40,7 @@ function trackBarData(track: ReportTrackStats, label: string) {
 
 function mixPieData(pipeline: PipelineData) {
   return [
-    { name: "CBC reports", value: pipeline.cbc.generated },
+    { name: "O-Level reports", value: pipeline.cbc.generated },
     { name: "A-Level reports", value: pipeline.alevel.generated },
   ].filter((d) => d.value > 0);
 }
@@ -57,14 +57,14 @@ function timelineSeries(timeline: PipelineData["approvalTimeline"]) {
 }
 
 export function ReportPipelineCharts({ pipeline }: { pipeline: PipelineData }) {
-  const cbcBars = trackBarData(pipeline.cbc, "CBC");
+  const cbcBars = trackBarData(pipeline.cbc, "O-Level");
   const alBars = trackBarData(pipeline.alevel, "A-Level");
   const mix = mixPieData(pipeline);
   const timeline = timelineSeries(pipeline.approvalTimeline);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <ChartPanel title="CBC report pipeline" subtitle={`${pipeline.activeStudents} active students in class`}>
+      <ChartPanel title="O-Level report card pipeline" subtitle={`${pipeline.activeStudents} active students in class`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={cbcBars} layout="vertical" margin={{ left: 8, right: 16 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -119,7 +119,7 @@ export function ReportPipelineCharts({ pipeline }: { pipeline: PipelineData }) {
               <YAxis allowDecimals={false} />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="cbc" name="CBC" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="cbc" name="O-Level" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ r: 3 }} />
               <Line type="monotone" dataKey="alevel" name="A-Level" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>

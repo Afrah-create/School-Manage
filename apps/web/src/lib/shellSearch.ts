@@ -87,7 +87,7 @@ const ROLE_QUICK_ACTIONS: Partial<Record<RoleKey, QuickActionDef[]>> = {
   "subject-teacher": [
     {
       href: "/subject-teacher/assessment/cbc",
-      label: "CBC assessment",
+      label: "Competency assessment",
       description: "Competency ratings",
       icon: "clipboardCheck",
     },

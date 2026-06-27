@@ -30,6 +30,14 @@ type ScaleRow = {
 
 const LEVEL_OPTIONS: Level[] = ["O_LEVEL", "A_LEVEL"];
 
+type OLevelPanel = "bands" | "ca-policy";
+
+function readOLevelPanelFromLocation(): OLevelPanel {
+  if (typeof window === "undefined") return "bands";
+  if (window.location.hash === "#ca-policy") return "ca-policy";
+  return new URLSearchParams(window.location.search).get("panel") === "ca-policy" ? "ca-policy" : "bands";
+}
+
 function rowsFromDefaults(level: Level): ScaleRow[] {
   return DEFAULT_ASSESSMENT_GRADING_SCALES[level].map((row) => ({
     level,
@@ -45,6 +53,7 @@ function rowsFromDefaults(level: Level): ScaleRow[] {
 
 export default function AdminGradingScalesPage() {
   const [level, setLevel] = useState<Level>("A_LEVEL");
+  const [oLevelPanel, setOLevelPanel] = useState<OLevelPanel>("bands");
   const [rows, setRows] = useState<ScaleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,6 +79,25 @@ export default function AdminGradingScalesPage() {
   useEffect(() => {
     void load(level);
   }, [level]);
+
+  useEffect(() => {
+    const panel = readOLevelPanelFromLocation();
+    if (panel === "ca-policy") {
+      setLevel("O_LEVEL");
+      setOLevelPanel("ca-policy");
+    }
+  }, []);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.hash === "#ca-policy") {
+        setLevel("O_LEVEL");
+        setOLevelPanel("ca-policy");
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   const validationError = useMemo(
     () =>
@@ -164,7 +192,7 @@ export default function AdminGradingScalesPage() {
     try {
       const saved = await apiPost<ScaleRow[]>("/academic/grading-scales/apply-cbc-defaults", { force });
       setRows(saved.length ? saved : rowsFromDefaults("O_LEVEL"));
-      toast.success("CBC A–E defaults applied. Confirm cut-points with NCDC/UNEB.", "Defaults applied");
+      toast.success("O-Level A–E grade bands applied. Confirm cut-points with NCDC/UNEB.", "Defaults applied");
     } catch (e) {
       toast.error(getApiErrorMessage(e), "Could not apply defaults");
     } finally {
@@ -178,16 +206,89 @@ export default function AdminGradingScalesPage() {
       title="Grading scales"
       description={
         level === "O_LEVEL"
-          ? "O-Level CBC competency bands (A–E). Points are not used; composites use CA + EOC."
+          ? "Composite A–E final grades (CA + EOC). Points are not used; composites use CA + EOC."
           : "A-Level score ranges, grades, and UNEB points"
       }
     >
-      <Card title="Scale settings">
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <label className="text-sm">
+          <span className="mb-1 block text-muted-foreground">Level</span>
+          <select
+            value={level}
+            onChange={(e) => {
+              const next = e.target.value as Level;
+              setLevel(next);
+              if (next === "O_LEVEL") {
+                setOLevelPanel("bands");
+              }
+            }}
+            className="rounded border border-border bg-background px-2 py-2 text-sm"
+          >
+            {LEVEL_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt === "A_LEVEL" ? "A-Level" : "O-Level"}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {level === "O_LEVEL" ? (
+        <div
+          className="mb-4 flex gap-1 rounded-lg border border-border bg-muted/30 p-1"
+          role="tablist"
+          aria-label="O-Level grading sections"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={oLevelPanel === "bands"}
+            onClick={() => {
+              setOLevelPanel("bands");
+              if (typeof window !== "undefined" && window.location.hash) {
+                window.history.replaceState(null, "", window.location.pathname + window.location.search);
+              }
+            }}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-ui ${
+              oLevelPanel === "bands"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            A–E grade bands
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={oLevelPanel === "ca-policy"}
+            onClick={() => {
+              setOLevelPanel("ca-policy");
+              if (typeof window !== "undefined") {
+                window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#ca-policy`);
+              }
+            }}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-ui ${
+              oLevelPanel === "ca-policy"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            O-Level CA policy
+          </button>
+        </div>
+      ) : null}
+
+      {level === "O_LEVEL" && oLevelPanel === "ca-policy" ? (
+        <div id="ca-policy">
+          <OlevelCaPolicyPanel />
+        </div>
+      ) : (
+      <Card title={level === "O_LEVEL" ? "A–E grade bands" : "Scale settings"}>
         {level === "O_LEVEL" ? (
           <div className="mb-3">
             <Alert tone="info">
               Cut-points shown are <strong>UNCONFIRMED placeholders</strong>. Confirm with your NCDC/UNEB circular
-              before end-of-cycle reporting. Use &quot;Apply CBC defaults&quot; only when no O-Level scale exists, or
+              before end-of-cycle reporting. Use &quot;Apply composite grading defaults&quot; only when no O-Level scale exists, or
               to force-replace with defaults.
             </Alert>
           </div>
@@ -204,20 +305,6 @@ export default function AdminGradingScalesPage() {
             : "Final subject grades map composite scores (20% CA + 80% EOC) to A–E bands. Points column is not used for O-Level CBC."}
         </p>
         <div className="mb-3 flex flex-wrap items-end gap-3">
-          <label className="text-sm">
-            <span className="mb-1 block text-muted-foreground">Level</span>
-            <select
-              value={level}
-              onChange={(e) => setLevel(e.target.value as Level)}
-              className="rounded border border-border bg-background px-2 py-2 text-sm"
-            >
-              {LEVEL_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt === "A_LEVEL" ? "A-Level" : "O-Level"}
-                </option>
-              ))}
-            </select>
-          </label>
           <Button variant="secondary" onClick={addRow} disabled={loading}>
             Add row
           </Button>
@@ -226,7 +313,7 @@ export default function AdminGradingScalesPage() {
           </Button>
           {level === "O_LEVEL" ? (
             <Button variant="secondary" onClick={() => setConfirmApplyCbc(true)} disabled={loading || applyingCbc}>
-              {applyingCbc ? "Applying…" : "Apply CBC defaults"}
+              {applyingCbc ? "Applying…" : "Apply composite grading defaults"}
             </Button>
           ) : null}
           <Button onClick={() => setConfirmSave(true)} disabled={saving || loading || Boolean(validationError)}>
@@ -327,8 +414,7 @@ export default function AdminGradingScalesPage() {
           <code className="rounded bg-muted px-1">npm run recalculate:alevel-grades</code> after bulk scale changes.
         </p>
       </Card>
-
-      {level === "O_LEVEL" ? <OlevelCaPolicyPanel /> : null}
+      )}
 
       <ConfirmDialog
         open={confirmSave}
@@ -349,8 +435,8 @@ export default function AdminGradingScalesPage() {
       />
       <ConfirmDialog
         open={confirmApplyCbc}
-        title="Apply O-Level CBC defaults?"
-        description="This loads A–E bands with UNCONFIRMED cut-points. If a scale already exists, use force from API or delete rows first."
+        title="Apply composite grading defaults?"
+        description="This loads O-Level A–E grade bands with UNCONFIRMED cut-points. If a scale already exists, use force from API or delete rows first."
         confirmLabel="Apply"
         loading={applyingCbc}
         onConfirm={() => void applyCbcDefaults(false)}

@@ -6,12 +6,12 @@ import { TeacherAssessmentAssignmentsList } from "@/components/assessment/Teache
 export default function SubjectTeacherCbcListPage() {
   return (
     <PageWrapper
-      title="CBC assessment"
+      title="Competency assessment"
       description="NCDC 4-level competency ratings via assessment activities. Formal exams are under Exams."
     >
       <TeacherAssessmentAssignmentsList
         track="cbc"
-        emptyTitle="No CBC assignments"
+        emptyTitle="No competency assignments"
         emptyDescription="When you are assigned to teach a subject on a class timetable, it will appear here for term assessment entry."
       />
     </PageWrapper>

@@ -63,7 +63,7 @@ export default function AdminAssessmentRulesPage() {
     >
       <p className="-mt-2 mb-4 text-sm text-muted-foreground">
         CA weights, project work policy, and strand fallback maps are on{" "}
-        <Link href="/admin/academic/grading-scales" className="text-brand hover:underline">
+        <Link href="/admin/academic/grading-scales#ca-policy" className="text-brand hover:underline">
           Grading scales → O-Level CA policy
         </Link>
         . Grade bands (A–E) are on the same page.

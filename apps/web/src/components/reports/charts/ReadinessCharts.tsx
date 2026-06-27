@@ -92,9 +92,9 @@ export function ReadinessCharts({
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <StatusPie rows={cbc} title="CBC submission overview" />
+      <StatusPie rows={cbc} title="Legacy CBC sheet submission overview" />
       <StatusPie rows={alevel} title="A-Level submission overview" />
-      <StatusBars rows={cbc} title="CBC status by subject" />
+      <StatusBars rows={cbc} title="Legacy CBC sheet status by subject" />
       <StatusBars rows={alevel} title="A-Level status by subject" />
     </div>
   );

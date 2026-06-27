@@ -6,7 +6,7 @@ import { TeacherCbcEntryPanel } from "@/components/assessment/TeacherCbcEntryPan
 export default function SubjectTeacherCbcEntryPage() {
   return (
     <PageWrapper
-      title="CBC competency entry"
+      title="Competency entry"
       description="Create assessment activities, enter NCDC competency levels, and record learning outcomes."
     >
       <TeacherCbcEntryPanel />

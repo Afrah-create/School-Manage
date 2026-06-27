@@ -24,7 +24,7 @@ export default function HeadteacherAssessmentHubPage() {
               className="inline-flex items-center gap-2 font-medium text-brand hover:underline"
             >
               <Unlock className="h-4 w-4" />
-              Unlock CBC submissions
+              Unlock legacy CBC sheet
             </Link>
           </li>
           <li>

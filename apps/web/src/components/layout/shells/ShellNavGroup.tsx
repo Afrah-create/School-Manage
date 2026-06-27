@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type MouseEvent } from "react";
 import { NAV_ICON_MAP } from "./navIconMap";
 import { isNavItemActive } from "./navActive";
 import { isNavGroupActive } from "./navFlatten";
@@ -71,6 +71,17 @@ type NavGroupProps = {
   pendingHref: string | null;
   onNavClick: (href: string) => void;
 };
+
+function ShellNavSectionLabel({ label }: { label: string }) {
+  return (
+    <p
+      className="mb-1 mt-2.5 pl-9 pr-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted first:mt-1"
+      role="presentation"
+    >
+      {label}
+    </p>
+  );
+}
 
 export function ShellNavGroup({ item, pathname, allItems, pendingHref, onNavClick }: NavGroupProps) {
   const children = item.children ?? [];
@@ -146,16 +157,25 @@ export function ShellNavGroup({ item, pathname, allItems, pendingHref, onNavClic
 
       {open ? (
         <div className="flex flex-col gap-0.5 pb-0.5">
-          {children.map((child) => (
-            <ShellNavLink
-              key={child.href}
-              item={child}
-              nested
-              active={isNavItemActive(child, pathname, allItems)}
-              pending={pendingHref === child.href}
-              onNavClick={onNavClick}
-            />
-          ))}
+          {children.map((child, index) => {
+            const prevSection = index > 0 ? children[index - 1]?.sectionLabel : undefined;
+            const showSection = Boolean(child.sectionLabel && child.sectionLabel !== prevSection);
+
+            return (
+              <Fragment key={child.href}>
+                {showSection && child.sectionLabel ? (
+                  <ShellNavSectionLabel label={child.sectionLabel} />
+                ) : null}
+                <ShellNavLink
+                  item={child}
+                  nested
+                  active={isNavItemActive(child, pathname, allItems)}
+                  pending={pendingHref === child.href}
+                  onNavClick={onNavClick}
+                />
+              </Fragment>
+            );
+          })}
         </div>
       ) : null}
     </div>

@@ -49,7 +49,7 @@ export function PerformanceCharts({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <ChartPanel title="CBC ratings by subject" subtitle="Stacked counts per rating" empty={cbcChart.length === 0}>
+      <ChartPanel title="Legacy CBC letter ratings by subject" subtitle="Stacked counts per A–E letter (cbc_scores)" empty={cbcChart.length === 0}>
         {cbcChart.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={cbcChart} margin={{ bottom: 48 }}>
@@ -66,7 +66,7 @@ export function PerformanceCharts({
         ) : null}
       </ChartPanel>
 
-      <ChartPanel title="CBC grade distribution" subtitle="All subjects combined" empty={ratingTotals.every((r) => r.count === 0)}>
+      <ChartPanel title="Legacy CBC letter distribution" subtitle="All subjects combined (A–E from cbc_scores)" empty={ratingTotals.every((r) => r.count === 0)}>
         {ratingTotals.some((r) => r.count > 0) ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ratingTotals}>

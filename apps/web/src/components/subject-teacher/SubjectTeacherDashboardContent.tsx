@@ -40,8 +40,8 @@ const QUICK_GROUPS = [
       },
       {
         href: "/subject-teacher/assessment/cbc",
-        label: "CBC competencies",
-        description: "Ratings and submissions",
+        label: "Competency assessment",
+        description: "NCDC competency ratings and activities",
         icon: BookOpen,
       },
     ],
@@ -126,9 +126,9 @@ export function SubjectTeacherDashboardContent({
       deltaTone: "neutral",
     },
     {
-      label: "CBC rows",
+      label: "Legacy sheet rows",
       value: hasAssignments ? String(cbcTotal) : "—",
-      delta: `${cbcSubmitted} done · ${cbcPending} pending`,
+      delta: `${cbcSubmitted} submitted · ${cbcPending} pending`,
       deltaTone: cbcPending > 0 ? "negative" : "positive",
     },
     {
@@ -194,7 +194,7 @@ export function SubjectTeacherDashboardContent({
           {hasAssignments && cbcTotal > 0 ? (
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">CBC submitted</span>
+                <span className="text-muted-foreground">Legacy sheet submitted</span>
                 <span className="font-medium tabular-nums text-foreground">
                   {cbcSubmitted}/{cbcTotal}
                   {cbcPending > 0 ? (
@@ -214,7 +214,7 @@ export function SubjectTeacherDashboardContent({
                 aria-valuenow={cbcPct}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-label="CBC submission progress"
+                aria-label="Legacy CBC sheet submission progress"
               >
                 <div
                   className="h-full rounded-full bg-brand transition-[width]"
@@ -227,7 +227,7 @@ export function SubjectTeacherDashboardContent({
               href="/subject-teacher/assessment/cbc"
               className="mt-auto inline-block pt-4 text-sm font-medium text-brand hover:underline"
             >
-              Continue CBC entry →
+              Continue competency entry →
             </Link>
           ) : null}
         </div>

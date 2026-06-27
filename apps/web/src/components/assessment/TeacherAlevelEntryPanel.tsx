@@ -103,7 +103,7 @@ export function TeacherAlevelEntryPanel() {
           }
           className="font-medium text-brand hover:underline"
         >
-          CBC assessment
+          Competency assessment
         </Link>{" "}
         for O-Level learners.
       </Alert>

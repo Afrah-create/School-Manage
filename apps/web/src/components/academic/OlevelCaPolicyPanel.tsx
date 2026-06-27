@@ -90,7 +90,7 @@ export function OlevelCaPolicyPanel() {
   if (loading) return <p className="text-sm text-muted-foreground">Loading CA policy…</p>;
 
   return (
-    <Card title="O-Level CA policy (project work)">
+    <Card title="O-Level CA policy">
       <Alert tone="info">
         Official CA is built from <strong>scored project work</strong> (default 4 projects/term per NCDC).
         Strand rating → % map below is a <strong>provisional fallback only</strong> when no project scores exist.
