@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { PageWrapper } from "@/components/layout/PageWrapper";
-import { HeadteacherTermSummaryPanel } from "@/components/cbc/HeadteacherTermSummaryPanel";
+import { CbcTermSummaryPanel } from "@/components/cbc/CbcTermSummaryPanel";
 import { HeadteacherAssessmentStatusPanel } from "@/components/headteacher/HeadteacherAssessmentStatusPanel";
 import type { HeadteacherPeriodValue } from "@/components/headteacher/HeadteacherPeriodFilters";
 import { useCbcActions } from "@/hooks/useCBCAssessment";
@@ -30,7 +30,7 @@ export default function HeadteacherCbcAssessmentPage() {
         </Link>
       </p>
 
-      <HeadteacherTermSummaryPanel allowOverride />
+      <CbcTermSummaryPanel variant="headteacher" />
 
       <div className="mt-10">
         <HeadteacherAssessmentStatusPanel

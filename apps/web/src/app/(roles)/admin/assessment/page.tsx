@@ -32,6 +32,17 @@ export default function AdminAssessmentHubPage() {
         </p>
       </Card>
 
+      <Card title="Documentation">
+        <p className="text-sm text-muted-foreground">
+          Role-by-role CBC workflow (admin setup through class teacher entry and headteacher review):{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">docs/cbc-workflow-role-guide.md</code>.
+          Technical API reference:{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">docs/api-cbc-competency-endpoints.md</code>.
+          Policy and grading detail:{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">docs/uganda-cbc-assessment.md</code>.
+        </p>
+      </Card>
+
       <Card title="Execution workflow">
         <p className="text-sm text-muted-foreground">
           Teachers enter{" "}
