@@ -28,6 +28,27 @@ function roleBase(pathname: string): "/class-teacher" | "/subject-teacher" {
   return pathname.includes("/class-teacher/") ? "/class-teacher" : "/subject-teacher";
 }
 
+const MAIN_TABS = [
+  {
+    id: "activities",
+    label: "Activities & ratings",
+    subtitle: "Record NCDC competency levels per activity",
+  },
+  {
+    id: "outcomes",
+    label: "Learning outcomes",
+    subtitle: "Track specific learning outcomes per strand",
+  },
+  {
+    id: "projects",
+    label: "Project work (official CA)",
+    subtitle:
+      "Official continuous assessment — feeds your composite A–E grade, separate from competency ratings above",
+  },
+] as const;
+
+type MainTabId = (typeof MAIN_TABS)[number]["id"];
+
 export function TeacherCbcCompetencyWorkspace() {
   const pathname = usePathname();
   const listHref = `${roleBase(pathname)}/assessment/cbc`;
@@ -38,7 +59,7 @@ export function TeacherCbcCompetencyWorkspace() {
   const yearId = searchParams.get("yearId") ?? "";
   const initialActivityId = searchParams.get("activityId") ?? "";
 
-  const [mainTab, setMainTab] = useState<"activities" | "projects" | "outcomes">("activities");
+  const [mainTab, setMainTab] = useState<MainTabId>("activities");
   const [activities, setActivities] = useState<AssessmentActivity[]>([]);
   const [selectedActivityId, setSelectedActivityId] = useState("");
   const [strandFilter, setStrandFilter] = useState("");
@@ -122,20 +143,23 @@ export function TeacherCbcCompetencyWorkspace() {
       </Link>
 
       <div className="flex flex-wrap gap-2 border-b border-border">
-        {(
-          [
-            ["activities", "Activities & ratings"],
-            ["projects", "Project work (official CA)"],
-            ["outcomes", "Learning outcomes"],
-          ] as const
-        ).map(([id, label]) => (
+        {MAIN_TABS.map((tab) => (
           <button
-            key={id}
+            key={tab.id}
             type="button"
-            className={`px-3 py-2 text-sm font-medium ${mainTab === id ? "border-b-2 border-brand text-brand" : "text-muted-foreground"}`}
-            onClick={() => setMainTab(id)}
+            className={`px-3 py-2 text-left ${
+              mainTab === tab.id ? "border-b-2 border-brand" : "border-b-2 border-transparent"
+            }`}
+            onClick={() => setMainTab(tab.id)}
           >
-            {label}
+            <span
+              className={`block text-sm font-medium ${
+                mainTab === tab.id ? "text-brand" : "text-foreground"
+              }`}
+            >
+              {tab.label}
+            </span>
+            <span className="mt-0.5 block text-sm text-muted-foreground">{tab.subtitle}</span>
           </button>
         ))}
       </div>

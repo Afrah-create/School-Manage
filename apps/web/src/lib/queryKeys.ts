@@ -11,6 +11,8 @@ export const queryKeys = {
     ["curriculum-status", tenantScope(tenantSlug), academicYearId] as const,
   structureStatus: (tenantSlug: string, academicYearId: string) =>
     ["structure-status", tenantScope(tenantSlug), academicYearId] as const,
+  academicSetupStatus: (tenantSlug: string, academicYearId: string) =>
+    ["academic-setup-status", tenantScope(tenantSlug), academicYearId] as const,
 };
 
 /** Stable reference data (years, subjects, KPIs) — safe to keep fresh for several minutes. */

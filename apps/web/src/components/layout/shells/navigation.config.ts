@@ -18,6 +18,12 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
         children: [
           { href: "/admin/academic", label: "Overview", icon: "bookOpen", exactMatch: true },
           {
+            href: "/admin/academic/setup",
+            label: "Setup status",
+            icon: "clipboardCheck",
+            activePrefix: "/admin/academic/setup",
+          },
+          {
             href: "/admin/academic/structure",
             label: "Structure setup",
             icon: "school",

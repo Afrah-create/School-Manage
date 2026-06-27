@@ -34,7 +34,8 @@ export function TeacherAssessmentScopeNote({
         <p>
           This page is for <strong className="text-foreground">term CBC competency ratings</strong> (NCDC 4-level
           descriptors per strand). Only subjects explicitly assigned to you on Subject teachers appear below, and only
-          when CBC strands are configured.
+          when CBC strands are configured. Open an assignment to enter ratings; the same screen also has{" "}
+          <strong className="text-foreground">project work (official CA)</strong> for composite A–E grades.
         </p>
         <p>
           <strong className="text-foreground">Formal exam marks</strong> (e.g. MT III) are entered under{" "}

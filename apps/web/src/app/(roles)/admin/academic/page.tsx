@@ -37,6 +37,13 @@ export default function AdminAcademicHubPage() {
       title="Academic"
       description="Use the Academic menu in the sidebar for structure, curriculum, assignments, and timetable tools."
     >
+      <p className="mb-4 text-sm text-muted-foreground">
+        Track year-by-year readiness for competency assessment on{" "}
+        <Link href="/admin/academic/setup" className="font-medium text-brand hover:underline">
+          Setup status
+        </Link>
+        .
+      </p>
       {loading ? <p className="animate-pulse text-muted-foreground">Loading summary…</p> : null}
       {err ? <Alert tone="error">{err}</Alert> : null}
       {counts ? (
