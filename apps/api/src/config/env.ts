@@ -36,6 +36,8 @@ const envSchema = z.object({
   FLUTTERWAVE_SECRET_KEY: z.string().optional(),
   FLUTTERWAVE_WEBHOOK_SECRET: z.string().optional(),
   WEB_APP_URL: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -76,6 +78,8 @@ export function loadEnv(): Env {
     FLUTTERWAVE_SECRET_KEY: process.env.FLUTTERWAVE_SECRET_KEY,
     FLUTTERWAVE_WEBHOOK_SECRET: process.env.FLUTTERWAVE_WEBHOOK_SECRET,
     WEB_APP_URL: process.env.WEB_APP_URL,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    EMAIL_FROM: process.env.EMAIL_FROM,
   });
 
   if (!parsed.success) {

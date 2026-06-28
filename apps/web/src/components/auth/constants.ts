@@ -21,7 +21,7 @@ export const AUTH_COLORS = {
 
 export const AUTH_COPY = {
   forgotSubtitle:
-    "Enter the email address linked to your account and we'll send you a reset link.",
+    "Enter the email address linked to your account and we'll send you a reset code.",
   resetSubtitle:
     "Your new password must be at least 8 characters and include a mix of letters and numbers.",
   verifyLoadingSubtext: "This will only take a moment.",
@@ -29,6 +29,12 @@ export const AUTH_COPY = {
   checkEmailBody:
     "Click the link in the email to activate your account. The link expires in 24 hours.",
 };
+
+/** Matches backend PASSWORD_RESET_EXPIRES_SECONDS (15 minutes). */
+export const PASSWORD_RESET_CODE_EXPIRES_MINUTES = 15;
+
+/** Client resend cooldown — backend authRateLimiter allows 10 requests per 15 minutes. */
+export const PASSWORD_RESET_RESEND_COOLDOWN_SECONDS = 60;
 
 /** Rotating copy while the app restores or finishes signing in. */
 export const SESSION_LOADING_MESSAGES = [

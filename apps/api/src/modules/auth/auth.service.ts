@@ -19,6 +19,7 @@ import { signToken, verifyToken, tokenRemainingSeconds } from "../../utils/jwt";
 import { blacklistToken } from "../../utils/tokenBlacklist.js";
 import { toUserPublic } from "../../utils/userMapper";
 import { logUserAction } from "../users/audit.service";
+import { sendPasswordResetCodeEmail } from "../../services/mail/sendPasswordResetCode.js";
 import {
   idleExpiresAtFrom,
   sessionInactivityMinutes,
@@ -312,27 +313,47 @@ export async function changePassword(
   }
 }
 
-export async function requestPasswordResetCode(input: RequestOtpInput): Promise<{ expiresInSeconds: number }> {
+export const PASSWORD_RESET_EXPIRES_SECONDS = 15 * 60;
+
+export async function requestPasswordResetCode(
+  input: RequestOtpInput,
+  tenantId: string,
+): Promise<{ expiresInSeconds: number }> {
   const email = normalizeEmail(input.email);
   const code = generateOtpCode();
   const codeHash = hashSecret(code);
-  const expiresInSeconds = 15 * 60;
+  const expiresInSeconds = PASSWORD_RESET_EXPIRES_SECONDS;
   const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
-  const { rows } = await query<{ id: string }>(`SELECT id FROM users WHERE email = $1 AND is_active = true`, [email]);
+  const { rows } = await query<{ id: string }>(
+    `SELECT id FROM users WHERE tenant_id = $1 AND email = $2 AND is_active = true`,
+    [tenantId, email],
+  );
   const userId = rows[0]?.id ?? null;
 
-  await query(`DELETE FROM password_reset_codes WHERE email = $1 AND used_at IS NULL`, [email]);
   await query(
-    `INSERT INTO password_reset_codes (user_id, email, code_hash, expires_at)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, email, codeHash, expiresAt],
+    `DELETE FROM password_reset_codes WHERE tenant_id = $1 AND email = $2 AND used_at IS NULL`,
+    [tenantId, email],
   );
+  await query(
+    `INSERT INTO password_reset_codes (tenant_id, user_id, email, code_hash, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [tenantId, userId, email, codeHash, expiresAt],
+  );
+
+  if (userId) {
+    void sendPasswordResetCodeEmail(email, code, expiresInSeconds / 60).catch((err) => {
+      console.error(
+        "[auth] password reset email dispatch failed:",
+        err instanceof Error ? err.message : err,
+      );
+    });
+  }
 
   return { expiresInSeconds };
 }
 
-export async function verifyPasswordResetCode(input: VerifyOtpInput): Promise<void> {
+export async function verifyPasswordResetCode(input: VerifyOtpInput, tenantId: string): Promise<void> {
   const email = normalizeEmail(input.email);
   const codeHash = hashSecret(input.code);
 
@@ -345,11 +366,11 @@ export async function verifyPasswordResetCode(input: VerifyOtpInput): Promise<vo
     }>(
       `SELECT id, code_hash, expires_at, attempt_count
        FROM password_reset_codes
-       WHERE email = $1 AND used_at IS NULL
+       WHERE tenant_id = $1 AND email = $2 AND used_at IS NULL
        ORDER BY created_at DESC
        LIMIT 1
        FOR UPDATE`,
-      [email],
+      [tenantId, email],
     );
     if (rows.length === 0)
       throw new HttpError(
@@ -369,7 +390,7 @@ export async function verifyPasswordResetCode(input: VerifyOtpInput): Promise<vo
   });
 }
 
-export async function resetPasswordWithCode(input: ResetPasswordWithOtpInput): Promise<void> {
+export async function resetPasswordWithCode(input: ResetPasswordWithOtpInput, tenantId: string): Promise<void> {
   const email = normalizeEmail(input.email);
   const codeHash = hashSecret(input.code);
   const rounds = Number(process.env.BCRYPT_ROUNDS ?? 10);
@@ -379,11 +400,11 @@ export async function resetPasswordWithCode(input: ResetPasswordWithOtpInput): P
     const { rows } = await client.query<{ id: string; user_id: string | null; expires_at: Date; code_hash: string }>(
       `SELECT id, user_id, expires_at, code_hash
        FROM password_reset_codes
-       WHERE email = $1 AND used_at IS NULL
+       WHERE tenant_id = $1 AND email = $2 AND used_at IS NULL
        ORDER BY created_at DESC
        LIMIT 1
        FOR UPDATE`,
-      [email],
+      [tenantId, email],
     );
     if (rows.length === 0)
       throw new HttpError(
@@ -422,27 +443,36 @@ export async function resetPasswordWithCode(input: ResetPasswordWithOtpInput): P
   });
 }
 
-export async function requestEmailVerificationCode(input: RequestOtpInput): Promise<{ expiresInSeconds: number }> {
+export async function requestEmailVerificationCode(
+  input: RequestOtpInput,
+  tenantId: string,
+): Promise<{ expiresInSeconds: number }> {
   const email = normalizeEmail(input.email);
   const code = generateOtpCode();
   const codeHash = hashSecret(code);
   const expiresInSeconds = 24 * 60 * 60;
   const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
-  const { rows } = await query<{ id: string }>(`SELECT id FROM users WHERE email = $1 AND is_active = true`, [email]);
+  const { rows } = await query<{ id: string }>(
+    `SELECT id FROM users WHERE tenant_id = $1 AND email = $2 AND is_active = true`,
+    [tenantId, email],
+  );
   const userId = rows[0]?.id ?? null;
 
-  await query(`DELETE FROM email_verification_codes WHERE email = $1 AND used_at IS NULL`, [email]);
   await query(
-    `INSERT INTO email_verification_codes (user_id, email, code_hash, expires_at)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, email, codeHash, expiresAt],
+    `DELETE FROM email_verification_codes WHERE tenant_id = $1 AND email = $2 AND used_at IS NULL`,
+    [tenantId, email],
+  );
+  await query(
+    `INSERT INTO email_verification_codes (tenant_id, user_id, email, code_hash, expires_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [tenantId, userId, email, codeHash, expiresAt],
   );
 
   return { expiresInSeconds };
 }
 
-export async function verifyEmailCode(input: VerifyOtpInput): Promise<void> {
+export async function verifyEmailCode(input: VerifyOtpInput, tenantId: string): Promise<void> {
   const email = normalizeEmail(input.email);
   const codeHash = hashSecret(input.code);
 
@@ -450,11 +480,11 @@ export async function verifyEmailCode(input: VerifyOtpInput): Promise<void> {
     const { rows } = await client.query<{ id: string; user_id: string | null; expires_at: Date; code_hash: string }>(
       `SELECT id, user_id, expires_at, code_hash
        FROM email_verification_codes
-       WHERE email = $1 AND used_at IS NULL
+       WHERE tenant_id = $1 AND email = $2 AND used_at IS NULL
        ORDER BY created_at DESC
        LIMIT 1
        FOR UPDATE`,
-      [email],
+      [tenantId, email],
     );
     if (rows.length === 0)
       throw new HttpError(

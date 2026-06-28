@@ -81,4 +81,41 @@ describe("tenant isolation", () => {
     );
     expect(cross.rows).toHaveLength(0);
   });
+
+  it("scopes password_reset_codes to current tenant", async () => {
+    if (!dbAvailable) return;
+    const sharedEmail = `reset-${Date.now()}@test.local`;
+
+    await withTenant(tenantA, async (client) => {
+      await client.query(
+        `INSERT INTO password_reset_codes (tenant_id, email, code_hash, expires_at)
+         VALUES ($1, $2, 'hash-a', NOW() + interval '15 minutes')`,
+        [tenantA, sharedEmail],
+      );
+    });
+
+    await withTenant(tenantB, async (client) => {
+      await client.query(
+        `INSERT INTO password_reset_codes (tenant_id, email, code_hash, expires_at)
+         VALUES ($1, $2, 'hash-b', NOW() + interval '15 minutes')`,
+        [tenantB, sharedEmail],
+      );
+    });
+
+    const rowsA = await tenantQuery<{ code_hash: string }>(
+      tenantA,
+      `SELECT code_hash FROM password_reset_codes WHERE email = $1 AND used_at IS NULL`,
+      [sharedEmail],
+    );
+    expect(rowsA.rows).toHaveLength(1);
+    expect(rowsA.rows[0]!.code_hash).toBe("hash-a");
+
+    const rowsB = await tenantQuery<{ code_hash: string }>(
+      tenantB,
+      `SELECT code_hash FROM password_reset_codes WHERE email = $1 AND used_at IS NULL`,
+      [sharedEmail],
+    );
+    expect(rowsB.rows).toHaveLength(1);
+    expect(rowsB.rows[0]!.code_hash).toBe("hash-b");
+  });
 });

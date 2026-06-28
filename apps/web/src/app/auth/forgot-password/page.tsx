@@ -8,10 +8,15 @@ import { useMemo, useState } from "react";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { stateMotion } from "@/components/auth/AuthMotion";
+import {
+  AUTH_COPY,
+  PASSWORD_RESET_CODE_EXPIRES_MINUTES,
+  PASSWORD_RESET_RESEND_COOLDOWN_SECONDS,
+} from "@/components/auth/constants";
 import { FormInput } from "@/components/auth/FormInput";
 import { PrimaryButton } from "@/components/auth/PrimaryButton";
-import { AUTH_COPY } from "@/components/auth/constants";
 import { useCountdown } from "@/hooks/useCountdown";
+import { apiPost, getApiErrorMessage } from "@/lib/api";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -19,7 +24,8 @@ export default function ForgotPasswordPage() {
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const cooldown = useCountdown(60, false);
+  const [error, setError] = useState("");
+  const cooldown = useCountdown(PASSWORD_RESET_RESEND_COOLDOWN_SECONDS, false);
 
   const emailError = useMemo(() => {
     if (!touched) return "";
@@ -28,14 +34,31 @@ export default function ForgotPasswordPage() {
     return "";
   }, [email, touched]);
 
+  const requestCode = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await apiPost<{ expiresInSeconds: number }>("/auth/password-reset/request-code", {
+        email: email.trim(),
+      });
+      setSent(true);
+      cooldown.reset(PASSWORD_RESET_RESEND_COOLDOWN_SECONDS);
+    } catch (e) {
+      setError(getApiErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const submit = async () => {
     setTouched(true);
     if (emailError || !email) return;
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
-    setLoading(false);
-    setSent(true);
-    cooldown.reset(60);
+    await requestCode();
+  };
+
+  const resend = async () => {
+    if (cooldown.secondsLeft > 0 || loading) return;
+    await requestCode();
   };
 
   return (
@@ -76,6 +99,8 @@ export default function ForgotPasswordPage() {
                   error={emailError}
                 />
 
+                {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
                 <PrimaryButton type="button" onClick={submit} loading={loading}>
                   Send Reset Code
                 </PrimaryButton>
@@ -106,8 +131,8 @@ export default function ForgotPasswordPage() {
               </motion.div>
               <h2 className="font-heading text-2xl font-semibold text-slate-900">Check your inbox</h2>
               <p className="font-body mt-2 text-sm text-slate-600">
-                We sent a 6-digit reset code to <span className="font-semibold">{email}</span>. It expires
-                in 15 minutes.
+                If an account exists for <span className="font-semibold">{email}</span>, we sent a 6-digit reset
+                code. It expires in {PASSWORD_RESET_CODE_EXPIRES_MINUTES} minutes.
               </p>
               <div className="mt-4">
                 <PrimaryButton onClick={() => router.push(`/auth/reset-password?email=${encodeURIComponent(email)}`)}>
@@ -118,14 +143,15 @@ export default function ForgotPasswordPage() {
                 Didn&apos;t receive it?{" "}
                 <button
                   type="button"
-                  onClick={() => cooldown.reset(60)}
-                  disabled={cooldown.secondsLeft > 0}
+                  onClick={() => void resend()}
+                  disabled={cooldown.secondsLeft > 0 || loading}
                   className="font-semibold text-[#2563EB] disabled:text-slate-400"
                 >
                   Resend
                 </button>{" "}
                 {cooldown.secondsLeft > 0 ? `in 0:${cooldown.secondsLeft.toString().padStart(2, "0")}` : ""}
               </p>
+              {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
               <p className="mt-4">
                 <Link href="/login" className="font-body text-sm font-medium text-[#2563EB] hover:underline">
                   ← Back to Sign In

@@ -30,6 +30,18 @@ const {
   verifyOtpSchema: { parse: (value: unknown) => unknown };
 };
 
+function requireTenant(req: Request, res: Response): string | null {
+  if (!req.tenant?.id) {
+    res.status(400).json({
+      success: false,
+      error: "Open your school's sign-in URL (e.g. default.localhost) to continue.",
+      code: "TENANT_REQUIRED",
+    });
+    return null;
+  }
+  return req.tenant.id;
+}
+
 export async function login(req: Request, res: Response): Promise<void> {
   const body = loginSchema.parse(req.body) as LoginInput;
   if (!req.tenant?.id) {
@@ -98,31 +110,41 @@ export async function changePassword(req: Request, res: Response): Promise<void>
 }
 
 export async function requestPasswordResetCode(req: Request, res: Response): Promise<void> {
+  const tenantId = requireTenant(req, res);
+  if (!tenantId) return;
   const body = requestOtpSchema.parse(req.body) as RequestOtpInput;
-  const result = await authService.requestPasswordResetCode(body);
+  const result = await authService.requestPasswordResetCode(body, tenantId);
   res.json({ success: true, data: result });
 }
 
 export async function verifyPasswordResetCode(req: Request, res: Response): Promise<void> {
+  const tenantId = requireTenant(req, res);
+  if (!tenantId) return;
   const body = verifyOtpSchema.parse(req.body) as VerifyOtpInput;
-  await authService.verifyPasswordResetCode(body);
+  await authService.verifyPasswordResetCode(body, tenantId);
   res.json({ success: true, data: { message: "Reset code verified" } });
 }
 
 export async function resetPasswordWithCode(req: Request, res: Response): Promise<void> {
+  const tenantId = requireTenant(req, res);
+  if (!tenantId) return;
   const body = resetPasswordWithOtpSchema.parse(req.body) as ResetPasswordWithOtpInput;
-  await authService.resetPasswordWithCode(body);
+  await authService.resetPasswordWithCode(body, tenantId);
   res.json({ success: true, data: { message: "Password reset successful" } });
 }
 
 export async function requestEmailVerificationCode(req: Request, res: Response): Promise<void> {
+  const tenantId = requireTenant(req, res);
+  if (!tenantId) return;
   const body = requestOtpSchema.parse(req.body) as RequestOtpInput;
-  const result = await authService.requestEmailVerificationCode(body);
+  const result = await authService.requestEmailVerificationCode(body, tenantId);
   res.json({ success: true, data: result });
 }
 
 export async function verifyEmailCode(req: Request, res: Response): Promise<void> {
+  const tenantId = requireTenant(req, res);
+  if (!tenantId) return;
   const body = verifyOtpSchema.parse(req.body) as VerifyOtpInput;
-  await authService.verifyEmailCode(body);
+  await authService.verifyEmailCode(body, tenantId);
   res.json({ success: true, data: { message: "Email verified successfully" } });
 }

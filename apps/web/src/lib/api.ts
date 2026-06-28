@@ -11,18 +11,24 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+function isPublicTenantAuthRequest(url: string, requestPath: string): boolean {
+  if (/\b\/auth\/login\b/.test(requestPath) || url.includes("/auth/login")) return true;
+  if (/\b\/auth\/password-reset\b/.test(requestPath) || url.includes("/auth/password-reset")) return true;
+  return false;
+}
+
 api.interceptors.request.use((config) => {
   const requestPath = `${config.baseURL ?? ""}${config.url ?? ""}`;
-  const isLoginRequest =
-    /\b\/auth\/login\b/.test(requestPath) || String(config.url ?? "").includes("/auth/login");
+  const url = String(config.url ?? "");
+  const isPublicTenantAuth = isPublicTenantAuthRequest(url, requestPath);
 
   if (typeof window !== "undefined") {
-    config.headers["X-Tenant-Slug"] = isLoginRequest
+    config.headers["X-Tenant-Slug"] = isPublicTenantAuth
       ? getApiTenantSlug()
       : getApiTenantSlug(useAuthStore.getState().token ?? getSmsTokenFromCookie());
   }
 
-  if (isLoginRequest) {
+  if (isPublicTenantAuth) {
     delete config.headers.Authorization;
     return config;
   }
