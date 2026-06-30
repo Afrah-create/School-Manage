@@ -1,4 +1,4 @@
-/** Default Uganda CBC / UNEB-oriented catalogue (tenant installs via curriculum setup). */
+/** Default Uganda CBC / NCDC Lower Secondary catalogue (tenant installs via curriculum setup). */
 
 export type CatalogSubject = {
   code: string;
@@ -11,20 +11,59 @@ export type CatalogStrand = {
   subStrands: string[];
 };
 
+/**
+ * NCDC Lower Secondary teaching subjects (21 national menu items).
+ * Schools offer 12 at S1–S2: 11 compulsory + at least 1 elective.
+ * CRE and IRE are separate catalog entries; learners take one RE offering (or both
+ * where the school provides both — override compulsorySubjectCodes in assessment_config).
+ */
 export const DEFAULT_O_LEVEL_SUBJECTS: CatalogSubject[] = [
+  // Compulsory at S1–S2 (11)
   { code: "ENG", name: "English" },
   { code: "MATH", name: "Mathematics" },
-  { code: "SCI", name: "Integrated Science" },
-  { code: "SST", name: "Social Studies" },
+  { code: "PHY", name: "Physics" },
+  { code: "CHEM", name: "Chemistry" },
+  { code: "BIO", name: "Biology" },
+  { code: "GEO", name: "Geography" },
+  { code: "HPE", name: "History and Political Education" },
   { code: "CRE", name: "Christian Religious Education" },
-  { code: "ICT", name: "ICT" },
+  { code: "IRE", name: "Islamic Religious Education" },
+  { code: "KISW", name: "Kiswahili" },
+  { code: "ENT", name: "Entrepreneurship" },
+  { code: "PE", name: "Physical Education" },
+  // Electives (school picks at least 1 for S1–S2; more as the school scales)
   { code: "LIT", name: "Literature in English" },
   { code: "ART", name: "Art and Design" },
-  { code: "PE", name: "Physical Education" },
+  { code: "PFA", name: "Performing Arts" },
+  { code: "AGR", name: "Agriculture" },
+  { code: "TAD", name: "Technology and Design" },
+  { code: "ICT", name: "ICT" },
+  { code: "NFT", name: "Nutrition and Food Technology" },
+  { code: "FRE", name: "French" },
+  { code: "GER", name: "German" },
+  { code: "ARA", name: "Arabic" },
+  { code: "CHI", name: "Chinese" },
+  { code: "LOCL", name: "Local Language (school-specific)" },
 ];
 
-/** Compulsory O-Level subjects for UCE certification (school may override in assessment_config). */
-export const DEFAULT_O_LEVEL_COMPULSORY_SUBJECT_CODES = ["ENG", "MATH", "SCI", "SST", "CRE"] as const;
+/**
+ * Default compulsory O-Level subjects for UCE certification (school may override in assessment_config).
+ * Religious Education: CRE is the default compulsory code; schools offering IRE instead should
+ * replace CRE with IRE (or configure both offerings) in assessment_config.compulsorySubjectCodes.
+ */
+export const DEFAULT_O_LEVEL_COMPULSORY_SUBJECT_CODES = [
+  "ENG",
+  "MATH",
+  "PHY",
+  "CHEM",
+  "BIO",
+  "GEO",
+  "HPE",
+  "CRE",
+  "KISW",
+  "ENT",
+  "PE",
+] as const;
 
 export const DEFAULT_A_LEVEL_SUBJECTS: CatalogSubject[] = [
   { code: "GP", name: "General Paper" },
@@ -84,7 +123,7 @@ export const DEFAULT_CBC_STRANDS_BY_SUBJECT_CODE: Record<string, CatalogStrand[]
       subStrands: ["Expressions", "Equations and inequalities"],
     },
     {
-      code: "GEO",
+      code: "GEOM",
       name: "Geometry and Measurement",
       subStrands: ["Shapes and space", "Measurement"],
     },
@@ -94,35 +133,24 @@ export const DEFAULT_CBC_STRANDS_BY_SUBJECT_CODE: Record<string, CatalogStrand[]
       subStrands: ["Statistics", "Probability"],
     },
   ],
-  SCI: [
+  // TODO(ncdc-strands): Source strand/sub-strand names from official NCDC syllabus PDFs
+  // (https://ncdc.go.ug/resource) before production use — do not invent placeholder names.
+  PHY: [],
+  CHEM: [],
+  BIO: [],
+  GEO: [
     {
-      code: "BIO",
-      name: "Biology Concepts",
-      subStrands: ["Living things", "Human body systems"],
+      code: "PHYSGEO",
+      name: "Physical Geography",
+      subStrands: ["Physical geography"],
     },
     {
-      code: "CHEM",
-      name: "Chemistry Concepts",
-      subStrands: ["Matter and materials", "Chemical reactions"],
-    },
-    {
-      code: "PHY",
-      name: "Physics Concepts",
-      subStrands: ["Energy", "Forces and motion"],
-    },
-  ],
-  SST: [
-    {
-      code: "HIST",
-      name: "History and Citizenship",
-      subStrands: ["Uganda history", "Citizenship"],
-    },
-    {
-      code: "GEO",
-      name: "Geography",
-      subStrands: ["Physical geography", "Human geography"],
+      code: "HUMGEO",
+      name: "Human Geography",
+      subStrands: ["Human geography"],
     },
   ],
+  HPE: [],
   CRE: [
     {
       code: "BIB",
@@ -135,6 +163,10 @@ export const DEFAULT_CBC_STRANDS_BY_SUBJECT_CODE: Record<string, CatalogStrand[]
       subStrands: ["Values and ethics", "Service and leadership"],
     },
   ],
+  // TODO(ncdc-strands): Source from NCDC IRE syllabus PDFs at ncdc.go.ug/resource.
+  IRE: [],
+  KISW: [],
+  ENT: [],
   ICT: [
     {
       code: "COMP",

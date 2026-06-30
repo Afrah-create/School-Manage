@@ -15,7 +15,7 @@ import { IconAlevel, IconCbc, IconFees, IconRoles } from "@/components/icons";
 import { createPageMetadata } from "@/lib/seo";
 
 export const metadata = createPageMetadata({
-  title: "CBC & UNEB School Management",
+  title: "SchoolManage",
   description:
     "SchoolManage helps Ugandan secondary schools manage students, O-Level CBC assessments, A-Level UNEB grading, fees in UGX, and report cards on one platform.",
   path: "/",

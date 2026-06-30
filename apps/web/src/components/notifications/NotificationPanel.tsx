@@ -128,8 +128,8 @@ export function NotificationPanel({ open, onClose }: Props) {
           }
           empty={
             <EmptyState
-              title="No notifications yet"
-              description="When something needs your attention, it will show up here."
+              title="No new notifications found"
+              description="Nothing needs your attention right now."
               icon={Bell}
             />
           }

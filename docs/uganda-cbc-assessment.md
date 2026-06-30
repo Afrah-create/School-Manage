@@ -47,7 +47,7 @@ UCE certification is computed per student per academic year (`olevel_certificati
 
 - At least one subject at **D+** (grades A, B, C, or D)
 - At least **8** subjects with final grades
-- All **compulsory** subjects sat (catalog default: ENG, MATH, SCI, SST, CRE — overridable per school)
+- All **compulsory** subjects sat (catalog default: ENG, MATH, PHY, CHEM, BIO, GEO, HPE, CRE, KISW, ENT, PE — overridable per school; IRE replaces CRE where the school offers Islamic RE)
 - **Official project-work CA** (`ca_source = project_work`) with required project slots complete for each sat subject
 
 Result 2 stores explicit `reason_codes` (e.g. `ca_provisional_fallback`, `ca_incomplete_projects`, `missing_project`).
