@@ -2,17 +2,22 @@ import PDFDocument from "pdfkit";
 import { PassThrough, type Readable } from "stream";
 import {
   drawCommentBlocks,
+  drawCompactGradingLegend,
   drawDataTable,
   drawReportFooter,
   drawReportFrame,
   drawReportHeader,
-  drawSectionTitle,
+  drawSectionTitleWithBranding,
   drawStudentIdentityBlock,
-  drawSummaryStrip,
+  formatDescriptorForPrint,
   formatPercent,
+  MUTED_TEXT,
+  overallGradeFromRows,
+  PDF_CONTENT_WIDTH,
   PDF_MARGIN,
   type ReportBranding,
   type ReportLayoutOptions,
+  type TableColumn,
 } from "./pdf/reportCardLayout";
 
 function createReportDoc(): InstanceType<typeof PDFDocument> {
@@ -98,43 +103,65 @@ export function streamCbcReportCard(data: {
     motto: data.motto,
     branding: data.branding,
     layout: data.layout,
+    photoUrl: data.photoPath,
   });
+
+  const termRows = data.termSubjectRows ?? [];
+  const overallGrade = overallGradeFromRows(termRows);
 
   y = drawStudentIdentityBlock(doc, y, {
     studentName: data.studentName,
     studentNumber: data.studentNumber,
     photoUrl: data.photoPath,
-    layout: data.layout,
+    layout: { ...data.layout, showStudentPhoto: false },
     rows: identityRows,
+    summaryStats: [
+      {
+        label: "Total",
+        value: data.overallTotal != null ? String(data.overallTotal) : "—",
+      },
+      {
+        label: "Average",
+        value: data.overallAverage != null ? String(data.overallAverage) : "—",
+        emphasis: true,
+      },
+      {
+        label: "Grade",
+        value: overallGrade,
+        emphasis: true,
+      },
+      { label: "Subjects", value: String(termRows.length) },
+    ],
   });
 
-  const termRows = data.termSubjectRows ?? [];
   const examCols = data.examColumns ?? [];
   const showProjectWork = termRows.some((r) => r.includeProjectWork);
 
   if (termRows.length > 0) {
-    y = drawSectionTitle(doc, y, "Academic performance");
-    const colWidth = Math.min(42, Math.floor(320 / Math.max(examCols.length, 1)));
-    const tableCols = [
-      { header: "Code", width: 40, align: "center" as const },
-      { header: "Subject", width: showProjectWork ? 88 : 100 },
+    y = drawSectionTitleWithBranding(doc, y, "Academic performance", data.branding);
+    const examColWidth = Math.max(28, Math.min(36, Math.floor(140 / Math.max(examCols.length, 1))));
+    const tableCols: TableColumn[] = [
+      { header: "No.", width: 24, align: "center" },
+      { header: "Code", width: 34, align: "center" },
+      { header: "Subject", width: 88, flex: true },
       ...examCols.map((_, i) => ({
-        header: `C${i + 1}`,
-        width: colWidth,
+        header: examCols.length === 1 ? "Score" : `C${i + 1}`,
+        width: examColWidth,
         align: "center" as const,
       })),
       ...(showProjectWork
         ? [
-            { header: "CA%", width: 36, align: "center" as const },
-            { header: "EOC%", width: 36, align: "center" as const },
+            { header: "CA%", width: 30, align: "center" as const },
+            { header: "EOC%", width: 30, align: "center" as const },
           ]
         : []),
-      { header: "AVG", width: 42, align: "center" as const },
-      { header: "Grade", width: 38, align: "center" as const },
-      { header: "Comment", width: showProjectWork ? 60 : 72 },
-      { header: "Init.", width: 32, align: "center" as const },
+      { header: "AVG", width: 32, align: "center" as const },
+      { header: "Grade", width: 30, align: "center" as const },
+      { header: "Remark", width: 72, flex: true },
+      { header: "Init.", width: 26, align: "center" as const },
     ];
-    const tableRows = termRows.map((s) => [
+    const tableRows = termRows.map((s, idx) => [
+      String(idx + 1),
       s.code,
       s.name,
       ...s.examScores.map((sc) => (sc != null ? String(sc) : "—")),
@@ -146,54 +173,26 @@ export function streamCbcReportCard(data: {
         : []),
       s.average != null ? String(s.average) : "—",
       s.finalGrade ?? "—",
-      s.descriptor,
+      formatDescriptorForPrint(s.descriptor),
       s.teacherInitial ?? "—",
     ]);
     y = drawDataTable(doc, y, tableCols, tableRows, {
-      rowHeight: 15,
-      fontSize: 7,
+      fontSize: 7.5,
       branding: data.branding,
       layout: data.layout,
     });
-
-    y = drawSummaryStrip(
-      doc,
-      y,
-      [
-        { label: "Overall total", value: data.overallTotal != null ? String(data.overallTotal) : "—" },
-        { label: "Overall average", value: data.overallAverage != null ? String(data.overallAverage) : "—" },
-        { label: "Subjects", value: String(termRows.length) },
-      ],
-      data.branding,
-    );
   } else {
-    y = drawSectionTitle(doc, y, "Academic performance");
+    y = drawSectionTitleWithBranding(doc, y, "Academic performance", data.branding);
     doc.fillColor("#64748B").font("Helvetica").fontSize(9);
     doc.text("No term subject grades recorded.", PDF_MARGIN, y);
     y += 22;
   }
 
   if (data.gradingScaleLegend && data.gradingScaleLegend.length > 0) {
-    y = drawSectionTitle(doc, y, "Grading scale");
-    const legendCols = [
-      { header: "Range", width: 100, align: "center" as const },
-      { header: "Grade", width: 50, align: "center" as const },
-      { header: "Descriptor", width: 200 },
-    ];
-    const legendRows = data.gradingScaleLegend.map((g) => [
-      `${g.minScore} – ${g.maxScore}`,
-      g.grade,
-      g.descriptor,
-    ]);
-    y = drawDataTable(doc, y, legendCols, legendRows, {
-      rowHeight: 14,
-      fontSize: 8,
-      branding: data.branding,
-      layout: data.layout,
-    });
+    y = drawCompactGradingLegend(doc, y, data.gradingScaleLegend, data.branding);
   }
 
-  y = drawSectionTitle(doc, y, "Comments");
+  y = drawSectionTitleWithBranding(doc, y, "Comments", data.branding);
   y = drawCommentBlocks(
     doc,
     y,
@@ -262,35 +261,54 @@ export function streamAlevelReportCard(data: {
     motto: data.motto,
     branding: data.branding,
     layout: data.layout,
+    photoUrl: data.photoPath,
   });
 
   y = drawStudentIdentityBlock(doc, y, {
     studentName: data.studentName,
     studentNumber: data.studentNumber,
     photoUrl: data.photoPath,
-    layout: data.layout,
+    layout: { ...data.layout, showStudentPhoto: false },
     rows: identityRows,
+    summaryStats: [
+      {
+        label: "Points",
+        value: data.totalPoints != null ? String(data.totalPoints) : "—",
+        emphasis: true,
+      },
+      {
+        label: "Division",
+        value: data.division ?? "—",
+        emphasis: true,
+      },
+      { label: "Subjects", value: String(data.subjects.length) },
+      ...(data.ranking
+        ? [{ label: "Position", value: data.ranking.positionDisplay }]
+        : []),
+    ],
   });
 
   if (data.sourceExamName) {
-    doc.fillColor("#64748B").font("Helvetica-Oblique").fontSize(8);
-    doc.text(`Scores compiled from formal exam: ${data.sourceExamName}`, PDF_MARGIN, y, {
-      width: 520,
+    doc.fillColor(MUTED_TEXT).font("Helvetica-Oblique").fontSize(7.5);
+    doc.text(`Formal exam: ${data.sourceExamName}`, PDF_MARGIN, y, {
+      width: PDF_CONTENT_WIDTH,
       align: "center",
     });
-    y += 18;
+    y += 14;
   }
 
   if (data.subjects.length > 0) {
-    y = drawSectionTitle(doc, y, "Subject performance");
-    const cols = [
-      { header: "Subject", width: 155 },
-      { header: "Code", width: 50, align: "center" as const },
-      { header: "Score", width: 55, align: "center" as const },
-      { header: "Grade", width: 50, align: "center" as const },
-      { header: "Points", width: 50, align: "center" as const },
+    y = drawSectionTitleWithBranding(doc, y, "Subject performance", data.branding);
+    const cols: TableColumn[] = [
+      { header: "No.", width: 24, align: "center" },
+      { header: "Subject", width: 140, flex: true },
+      { header: "Code", width: 44, align: "center" },
+      { header: "Score", width: 44, align: "center" },
+      { header: "Grade", width: 40, align: "center" },
+      { header: "Points", width: 40, align: "center" },
     ];
-    const rows = data.subjects.map((s) => [
+    const rows = data.subjects.map((s, idx) => [
+      String(idx + 1),
       s.name,
       s.code ?? "—",
       s.score,
@@ -299,26 +317,13 @@ export function streamAlevelReportCard(data: {
     ]);
     y = drawDataTable(doc, y, cols, rows, { branding: data.branding, layout: data.layout });
   } else {
-    y = drawSectionTitle(doc, y, "Subject performance");
+    y = drawSectionTitleWithBranding(doc, y, "Subject performance", data.branding);
     doc.fillColor("#64748B").font("Helvetica").fontSize(9);
     doc.text("No subject scores recorded for this term.", PDF_MARGIN, y);
     y += 22;
   }
 
-  const summaryCells: { label: string; value: string }[] = [
-    { label: "Total points (best 3)", value: data.totalPoints != null ? String(data.totalPoints) : "—" },
-    { label: "Division", value: data.division ?? "—" },
-    { label: "Subjects", value: String(data.subjects.length) },
-  ];
-  if (data.ranking) {
-    summaryCells.unshift({
-      label: "Class position",
-      value: data.ranking.positionDisplay,
-    });
-  }
-  y = drawSummaryStrip(doc, y, summaryCells, data.branding);
-
-  y = drawSectionTitle(doc, y, "Comments");
+  y = drawSectionTitleWithBranding(doc, y, "Comments", data.branding);
   y = drawCommentBlocks(
     doc,
     y,

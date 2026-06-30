@@ -4,18 +4,24 @@ import PDFDocument from "pdfkit";
 
 type PdfDoc = InstanceType<typeof PDFDocument>;
 
-export const PDF_MARGIN = 42;
+export const PDF_MARGIN = 40;
 export const PDF_PAGE_WIDTH = 612;
 export const PDF_PAGE_HEIGHT = 792;
 export const PDF_CONTENT_WIDTH = PDF_PAGE_WIDTH - PDF_MARGIN * 2;
 
 export const BRAND_GREEN = "#1B6B3A";
 export const BRAND_GREEN_DARK = "#145229";
+export const BRAND_NAVY = "#1E3A5F";
 export const BRAND_TINT = "#E8F5EC";
 export const BORDER_COLOR = "#CBD5E1";
+export const PANEL_BG = "#F1F5F9";
 export const MUTED_TEXT = "#64748B";
 export const HEADER_TEXT = "#FFFFFF";
 export const HEADER_TEXT_DARK = "#0F172A";
+export const BODY_TEXT = "#0F172A";
+
+const CELL_PAD_X = 6;
+const CELL_PAD_Y = 5;
 
 export type ReportBranding = {
   logoUrl?: string | null;
@@ -34,7 +40,15 @@ export type ReportLayoutOptions = {
   baseFontSize?: number;
 };
 
-function normalizeColor(color: string | null | undefined, fallback: string): string {
+export type TableColumn = {
+  header: string;
+  width: number;
+  align?: "left" | "center" | "right";
+  /** When true, extra table width is allocated here first */
+  flex?: boolean;
+};
+
+export function normalizeColor(color: string | null | undefined, fallback: string): string {
   if (!color) return fallback;
   const t = color.trim();
   return /^#([0-9A-Fa-f]{6})$/.test(t) ? t.toUpperCase() : fallback;
@@ -74,12 +88,49 @@ export function resolveSchoolLogoPath(logoUrl?: string | null): string | null {
   return null;
 }
 
+/** Strip internal grading notes from printed descriptors */
+export function formatDescriptorForPrint(descriptor: string): string {
+  return descriptor
+    .replace(/\s*\(confirm cut-points\)/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function fitTableColumns(columns: TableColumn[], totalWidth: number): TableColumn[] {
+  const fixed = columns.filter((c) => !c.flex);
+  const flexCols = columns.filter((c) => c.flex);
+  const fixedTotal = fixed.reduce((s, c) => s + c.width, 0);
+  const flexBase = flexCols.reduce((s, c) => s + c.width, 0);
+  const remaining = Math.max(0, totalWidth - fixedTotal - flexBase);
+  const flexShare = flexCols.length > 0 ? Math.floor(remaining / flexCols.length) : 0;
+
+  return columns.map((col) => {
+    if (!col.flex) return { ...col };
+    return { ...col, width: col.width + flexShare };
+  });
+}
+
 export function ensurePageSpace(doc: PdfDoc, y: number, needed: number): number {
-  if (y + needed > PDF_PAGE_HEIGHT - PDF_MARGIN) {
+  if (y + needed > PDF_PAGE_HEIGHT - PDF_MARGIN - 28) {
     doc.addPage();
+    drawPageWatermark(doc);
     return PDF_MARGIN;
   }
   return y;
+}
+
+function drawPageWatermark(doc: PdfDoc, schoolName?: string) {
+  if (!schoolName?.trim()) return;
+  const label = schoolName.trim().slice(0, 24).toUpperCase();
+  doc.save();
+  doc.opacity(0.035);
+  doc.fillColor("#94A3B8").font("Helvetica-Bold").fontSize(52);
+  doc.text(label, PDF_MARGIN, PDF_PAGE_HEIGHT * 0.38, {
+    width: PDF_CONTENT_WIDTH,
+    align: "center",
+  });
+  doc.opacity(1);
+  doc.restore();
 }
 
 export function drawReportFrame(doc: PdfDoc) {
@@ -87,12 +138,11 @@ export function drawReportFrame(doc: PdfDoc) {
 }
 
 export function drawReportFrameWithBranding(doc: PdfDoc, branding?: ReportBranding) {
-  const primary = normalizeColor(branding?.primaryColor, BRAND_GREEN);
-  const radius = 6;
+  const primary = normalizeColor(branding?.primaryColor, BRAND_NAVY);
   doc
-    .lineWidth(1.2)
-    .strokeColor(primary)
-    .roundedRect(PDF_MARGIN - 8, PDF_MARGIN - 8, PDF_CONTENT_WIDTH + 16, PDF_PAGE_HEIGHT - (PDF_MARGIN - 8) * 2, radius)
+    .lineWidth(0.75)
+    .strokeColor(`${primary}55`)
+    .roundedRect(PDF_MARGIN - 6, PDF_MARGIN - 6, PDF_CONTENT_WIDTH + 12, PDF_PAGE_HEIGHT - (PDF_MARGIN - 6) * 2, 4)
     .stroke();
 }
 
@@ -105,61 +155,87 @@ export function drawReportHeader(
     motto?: string | null;
     branding?: ReportBranding;
     layout?: ReportLayoutOptions;
+    photoUrl?: string | null;
   },
 ): number {
-  const headerTop = PDF_MARGIN;
-  const headerHeight = opts.motto?.trim() ? 90 : 78;
-  const primary = normalizeColor(opts.branding?.primaryColor, BRAND_GREEN);
+  const primary = normalizeColor(opts.branding?.primaryColor, BRAND_NAVY);
+  const secondary = normalizeColor(opts.branding?.secondaryColor, BRAND_GREEN_DARK);
   const headerText = pickHeaderTextColor(primary);
-  const termText = headerText === HEADER_TEXT ? "#D1FAE5" : "#334155";
+  const subText = headerText === HEADER_TEXT ? "#E2E8F0" : "#475569";
+  const showPhoto = opts.layout?.showStudentPhoto !== false;
+  const photoSize = 52;
+  const headerTop = PDF_MARGIN;
+  const headerHeight = opts.motto?.trim() ? 96 : 84;
 
   doc.save();
-  doc.roundedRect(PDF_MARGIN, headerTop, PDF_CONTENT_WIDTH, headerHeight, 4).fill(primary);
+  doc.roundedRect(PDF_MARGIN, headerTop, PDF_CONTENT_WIDTH, headerHeight, 5).fill(primary);
   doc.restore();
 
   const logoPath = resolveSchoolLogoPath(opts.branding?.logoUrl);
-  let titleX = PDF_MARGIN + 14;
+  const logoSlot = 58;
+  let centerX = PDF_MARGIN + logoSlot;
+  let centerW = PDF_CONTENT_WIDTH - logoSlot - (showPhoto ? photoSize + 20 : 12);
+
   if (logoPath) {
     try {
-      doc.image(logoPath, PDF_MARGIN + 12, headerTop + 10, { width: 44, height: 44 });
-      titleX = PDF_MARGIN + 64;
+      doc.save();
+      doc.roundedRect(PDF_MARGIN + 10, headerTop + 12, 44, 44, 4).clip();
+      doc.image(logoPath, PDF_MARGIN + 10, headerTop + 12, { width: 44, height: 44 });
+      doc.restore();
     } catch {
-      /* skip broken logo */
+      /* skip */
     }
   }
 
-  const name = opts.schoolName.trim() || "School Report";
-  doc.fillColor(headerText).font("Helvetica-Bold").fontSize(16);
-  const leftPreferred = opts.layout?.headerAlignment !== "center";
-  const align = leftPreferred ? (logoPath ? "left" : "center") : "center";
-  const textX = align === "center" ? PDF_MARGIN + 12 : titleX;
-  const textW = align === "center" ? PDF_CONTENT_WIDTH - 24 : PDF_CONTENT_WIDTH - (titleX - PDF_MARGIN) - 12;
-  doc.text(name, textX, headerTop + 14, {
-    width: textW,
-    align,
-  });
-
-  doc.font("Helvetica").fontSize(11);
-  doc.text(opts.subtitle, textX, headerTop + 36, {
-    width: textW,
-    align,
-  });
-
-  if (opts.motto?.trim()) {
-    doc.font("Helvetica-Oblique").fontSize(8).fillColor(termText);
-    doc.text(opts.motto.trim(), textX, headerTop + 52, {
-      width: textW,
-      align,
-    });
+  if (showPhoto) {
+    const photoX = PDF_MARGIN + PDF_CONTENT_WIDTH - photoSize - 10;
+    const photoY = headerTop + 10;
+    const photoPath = resolveUploadFilePath(opts.photoUrl);
+    doc.save();
+    doc.roundedRect(photoX, photoY, photoSize, photoSize, 4).lineWidth(1).strokeColor("#FFFFFF55").stroke();
+    if (photoPath) {
+      try {
+        doc.save();
+        doc.roundedRect(photoX, photoY, photoSize, photoSize, 4).clip();
+        doc.image(photoPath, photoX, photoY, { width: photoSize, height: photoSize, fit: [photoSize, photoSize] });
+        doc.restore();
+      } catch {
+        drawPhotoPlaceholder(doc, photoX, photoY, photoSize, photoSize, "");
+      }
+    } else {
+      drawPhotoPlaceholder(doc, photoX, photoY, photoSize, photoSize, "");
+    }
+    doc.restore();
   }
 
-  doc.font("Helvetica").fontSize(9).fillColor(termText);
-  doc.text(opts.termLine, PDF_MARGIN, headerTop + (opts.motto?.trim() ? 70 : 58), {
-    width: PDF_CONTENT_WIDTH,
+  const name = opts.schoolName.trim() || "School Report";
+  doc.fillColor(headerText).font("Helvetica-Bold").fontSize(15);
+  doc.text(name, centerX, headerTop + 12, { width: centerW, align: "center" });
+
+  doc.fillColor(subText).font("Helvetica").fontSize(9);
+  const ruleY = headerTop + 34;
+  const ruleW = 36;
+  doc.moveTo(centerX + centerW / 2 - ruleW - 48, ruleY).lineTo(centerX + centerW / 2 - ruleW - 8, ruleY).strokeColor(subText).lineWidth(0.5).stroke();
+  doc.fillColor(headerText).font("Helvetica-Bold").fontSize(9);
+  doc.text(opts.subtitle.toUpperCase(), centerX, ruleY - 5, { width: centerW, align: "center" });
+  doc.moveTo(centerX + centerW / 2 + ruleW + 8, ruleY).lineTo(centerX + centerW / 2 + ruleW + 48, ruleY).strokeColor(subText).lineWidth(0.5).stroke();
+
+  if (opts.motto?.trim()) {
+    doc.fillColor(subText).font("Helvetica-Oblique").fontSize(7.5);
+    doc.text(opts.motto.trim(), centerX, headerTop + 48, { width: centerW, align: "center" });
+  }
+
+  doc.fillColor(subText).font("Helvetica-Bold").fontSize(8);
+  doc.text(opts.termLine.toUpperCase(), PDF_MARGIN + 12, headerTop + (opts.motto?.trim() ? 66 : 56), {
+    width: PDF_CONTENT_WIDTH - 24,
     align: "center",
   });
 
-  return headerTop + headerHeight + 14;
+  doc.fillColor(secondary).roundedRect(PDF_MARGIN + 12, headerTop + headerHeight - 14, PDF_CONTENT_WIDTH - 24, 1.5, 0).fill();
+
+  drawPageWatermark(doc, name);
+
+  return headerTop + headerHeight + 10;
 }
 
 export function drawStudentIdentityBlock(
@@ -171,72 +247,75 @@ export function drawStudentIdentityBlock(
     rows: Array<{ label: string; value: string }>;
     photoUrl?: string | null;
     layout?: ReportLayoutOptions;
+    summaryStats?: Array<{ label: string; value: string; emphasis?: boolean }>;
   },
 ): number {
+  void opts.photoUrl;
+  void opts.layout?.showStudentPhoto;
+
   const panelTop = startY;
-  const panelHeight = 108;
-  const showPhoto = opts.layout?.showStudentPhoto !== false;
-  const photoW = showPhoto ? 76 : 0;
-  const photoH = 96;
-  const photoX = showPhoto ? PDF_MARGIN + PDF_CONTENT_WIDTH - photoW - 12 : PDF_MARGIN + PDF_CONTENT_WIDTH;
-  const textWidth = photoX - PDF_MARGIN - 20;
+  const hasSummary = (opts.summaryStats?.length ?? 0) > 0;
+  const metaRows = Math.ceil(opts.rows.length / 2);
+  const panelHeight = hasSummary ? Math.max(78, 42 + metaRows * 14 + 8) : Math.max(64, 42 + metaRows * 14);
 
   doc.save();
-  doc.roundedRect(PDF_MARGIN, panelTop, PDF_CONTENT_WIDTH, panelHeight, 4).fill("#F8FAFC");
-  doc.roundedRect(PDF_MARGIN, panelTop, PDF_CONTENT_WIDTH, panelHeight, 4).lineWidth(0.75).strokeColor(BORDER_COLOR).stroke();
+  doc.roundedRect(PDF_MARGIN, panelTop, PDF_CONTENT_WIDTH, panelHeight, 4).fill(PANEL_BG);
+  doc.roundedRect(PDF_MARGIN, panelTop, PDF_CONTENT_WIDTH, panelHeight, 4).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
   doc.restore();
 
-  doc.fillColor(BRAND_GREEN_DARK).font("Helvetica-Bold").fontSize(11);
-  doc.text(opts.studentName, PDF_MARGIN + 14, panelTop + 12, { width: textWidth });
+  doc.fillColor(BRAND_GREEN_DARK).font("Helvetica-Bold").fontSize(12);
+  doc.text(opts.studentName, PDF_MARGIN + 14, panelTop + 10, { width: PDF_CONTENT_WIDTH * 0.55 });
 
   doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(8);
-  doc.text(`Student No. ${opts.studentNumber}`, PDF_MARGIN + 14, panelTop + 28, { width: textWidth });
+  doc.text(`Student No. ${opts.studentNumber}`, PDF_MARGIN + 14, panelTop + 26, {
+    width: PDF_CONTENT_WIDTH * 0.55,
+  });
 
-  let rowY = panelTop + 44;
-  doc.font("Helvetica").fontSize(9);
+  const metaCols = 2;
+  const metaColW = (PDF_CONTENT_WIDTH * 0.55 - 14) / metaCols;
+  let metaY = panelTop + 42;
+  let col = 0;
+  doc.font("Helvetica").fontSize(8);
   for (const row of opts.rows) {
-    doc.fillColor(MUTED_TEXT).text(`${row.label}:`, PDF_MARGIN + 14, rowY, { width: 72, continued: false });
-    doc.fillColor("#0F172A").font("Helvetica-Bold").text(row.value || "—", PDF_MARGIN + 88, rowY, {
-      width: textWidth - 74,
+    const x = PDF_MARGIN + 14 + col * metaColW;
+    doc.fillColor(MUTED_TEXT).text(`${row.label}:`, x, metaY, { width: metaColW - 4 });
+    doc.fillColor(BODY_TEXT).font("Helvetica-Bold").text(row.value || "—", x + 52, metaY, {
+      width: metaColW - 56,
     });
     doc.font("Helvetica");
-    rowY += 16;
-  }
-
-  if (showPhoto) {
-    const photoPath = resolveUploadFilePath(opts.photoUrl);
-    const boxX = photoX;
-    const boxY = panelTop + 6;
-
-    doc.roundedRect(boxX, boxY, photoW, photoH, 4).lineWidth(0.75).strokeColor(BORDER_COLOR).stroke();
-    if (photoPath) {
-      try {
-        doc.save();
-        doc.roundedRect(boxX, boxY, photoW, photoH, 4).clip();
-        doc.image(photoPath, boxX, boxY, { width: photoW, height: photoH });
-        doc.restore();
-      } catch {
-        drawPhotoPlaceholder(doc, boxX, boxY, photoW, photoH, opts.studentName);
-      }
-    } else {
-      drawPhotoPlaceholder(doc, boxX, boxY, photoW, photoH, opts.studentName);
+    col += 1;
+    if (col >= metaCols) {
+      col = 0;
+      metaY += 14;
     }
-
-    doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(7);
-    doc.text("Passport photo", boxX, boxY + photoH + 2, { width: photoW, align: "center" });
   }
 
-  return panelTop + panelHeight + 14;
+  if (hasSummary && opts.summaryStats) {
+    const statsX = PDF_MARGIN + PDF_CONTENT_WIDTH * 0.58;
+    const statsW = PDF_CONTENT_WIDTH * 0.38;
+    const statCount = opts.summaryStats.length;
+    const statColW = statsW / statCount;
+
+    opts.summaryStats.forEach((stat, i) => {
+      const x = statsX + i * statColW;
+      doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(7);
+      doc.text(stat.label.toUpperCase(), x, panelTop + 14, { width: statColW, align: "center" });
+      doc
+        .fillColor(stat.emphasis ? BRAND_GREEN_DARK : BODY_TEXT)
+        .font("Helvetica-Bold")
+        .fontSize(stat.emphasis ? 13 : 11);
+      doc.text(stat.value, x, panelTop + 28, { width: statColW, align: "center" });
+    });
+
+    doc.save();
+    doc.moveTo(statsX - 6, panelTop + 8).lineTo(statsX - 6, panelTop + panelHeight - 8).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
+    doc.restore();
+  }
+
+  return panelTop + panelHeight + 12;
 }
 
-function drawPhotoPlaceholder(
-  doc: PdfDoc,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  name: string,
-) {
+function drawPhotoPlaceholder(doc: PdfDoc, x: number, y: number, w: number, h: number, name: string) {
   doc.rect(x, y, w, h).fill("#E2E8F0");
   const initials = name
     .split(/\s+/)
@@ -245,64 +324,84 @@ function drawPhotoPlaceholder(
     .join("")
     .slice(0, 2)
     .toUpperCase();
-  doc.fillColor("#94A3B8").font("Helvetica-Bold").fontSize(22);
-  doc.text(initials || "?", x, y + h / 2 - 14, { width: w, align: "center" });
+  if (initials) {
+    doc.fillColor("#94A3B8").font("Helvetica-Bold").fontSize(Math.min(18, w / 2.5));
+    doc.text(initials, x, y + h / 2 - 8, { width: w, align: "center" });
+  }
 }
 
 export function drawSectionTitle(doc: PdfDoc, y: number, title: string): number {
   return drawSectionTitleWithBranding(doc, y, title);
 }
 
-export function drawSectionTitleWithBranding(doc: PdfDoc, y: number, title: string, branding?: ReportBranding): number {
-  const primary = normalizeColor(branding?.primaryColor, BRAND_GREEN);
+export function drawSectionTitleWithBranding(
+  doc: PdfDoc,
+  y: number,
+  title: string,
+  branding?: ReportBranding,
+): number {
   const secondary = normalizeColor(branding?.secondaryColor, BRAND_GREEN_DARK);
-  y = ensurePageSpace(doc, y, 28);
-  doc.fillColor(secondary).font("Helvetica-Bold").fontSize(10);
+  y = ensurePageSpace(doc, y, 24);
+  doc.fillColor(secondary).font("Helvetica-Bold").fontSize(9);
   doc.text(title.toUpperCase(), PDF_MARGIN, y, { width: PDF_CONTENT_WIDTH });
   doc
-    .moveTo(PDF_MARGIN, y + 14)
-    .lineTo(PDF_MARGIN + PDF_CONTENT_WIDTH, y + 14)
-    .lineWidth(1)
-    .strokeColor(primary)
+    .moveTo(PDF_MARGIN, y + 12)
+    .lineTo(PDF_MARGIN + 72, y + 12)
+    .lineWidth(2)
+    .strokeColor(secondary)
     .stroke();
-  return y + 20;
+  return y + 18;
 }
 
-export type TableColumn = {
-  header: string;
-  width: number;
-  align?: "left" | "center" | "right";
-};
+function measureCellHeight(
+  doc: PdfDoc,
+  text: string,
+  colWidth: number,
+  fontSize: number,
+  font: string,
+): number {
+  doc.font(font).fontSize(fontSize);
+  const innerW = Math.max(12, colWidth - CELL_PAD_X * 2);
+  const h = doc.heightOfString(text || "—", { width: innerW });
+  return Math.ceil(h + CELL_PAD_Y * 2);
+}
 
 export function drawDataTable(
   doc: PdfDoc,
   startY: number,
   columns: TableColumn[],
   rows: string[][],
-  options?: { rowHeight?: number; fontSize?: number; branding?: ReportBranding; layout?: ReportLayoutOptions },
+  options?: {
+    rowHeight?: number;
+    fontSize?: number;
+    branding?: ReportBranding;
+    layout?: ReportLayoutOptions;
+  },
 ): number {
-  const primary = normalizeColor(options?.branding?.primaryColor, BRAND_GREEN);
+  const primary = normalizeColor(options?.branding?.primaryColor, BRAND_NAVY);
   const secondary = normalizeColor(options?.branding?.secondaryColor, BRAND_GREEN_DARK);
-  const tint = `${primary}22`;
-
   const density = options?.layout?.density ?? "comfortable";
-  const rowHeight = options?.rowHeight ?? (density === "compact" ? 14 : 17);
-  const fontSize = options?.fontSize ?? Number(options?.layout?.baseFontSize ?? 8);
-  const headerHeight = 20;
-  let y = ensurePageSpace(doc, startY, headerHeight + Math.min(rows.length, 1) * rowHeight + 8);
-
+  const fontSize = options?.fontSize ?? Number(options?.layout?.baseFontSize ?? 7.5);
+  const minRowHeight = options?.rowHeight ?? (density === "compact" ? 15 : 17);
+  const headerHeight = 22;
   const tableX = PDF_MARGIN;
-  const tableW = columns.reduce((s, c) => s + c.width, 0);
-  const offsetX = tableX + (PDF_CONTENT_WIDTH - tableW) / 2;
+  const fitted = fitTableColumns(columns, PDF_CONTENT_WIDTH);
+  const tableW = fitted.reduce((s, c) => s + c.width, 0);
+
+  let y = ensurePageSpace(doc, startY, headerHeight + minRowHeight + 8);
+  const tableStartY = y;
 
   const drawHeader = () => {
     doc.save();
-    doc.rect(offsetX, y, tableW, headerHeight).fill(tint);
+    doc.rect(tableX, y, tableW, headerHeight).fill(primary);
     doc.restore();
-    let x = offsetX;
-    doc.fillColor(secondary).font("Helvetica-Bold").fontSize(fontSize);
-    for (const col of columns) {
-      doc.text(col.header, x + 5, y + 6, { width: col.width - 10, align: col.align ?? "left" });
+    let x = tableX;
+    doc.fillColor(HEADER_TEXT).font("Helvetica-Bold").fontSize(fontSize);
+    for (const col of fitted) {
+      doc.text(col.header, x + CELL_PAD_X, y + 7, {
+        width: col.width - CELL_PAD_X * 2,
+        align: col.align ?? "left",
+      });
       x += col.width;
     }
     y += headerHeight;
@@ -310,37 +409,67 @@ export function drawDataTable(
 
   drawHeader();
 
-  doc.font("Helvetica").fontSize(fontSize);
   for (let i = 0; i < rows.length; i++) {
-    y = ensurePageSpace(doc, y, rowHeight + 4);
+    const row = rows[i] ?? [];
+    let rowHeight = minRowHeight;
+    for (let c = 0; c < fitted.length; c++) {
+      const cell = row[c] ?? "—";
+      const isRemark = fitted[c]!.header.toLowerCase().includes("remark") || fitted[c]!.header.toLowerCase().includes("comment");
+      const font = isRemark ? "Helvetica-Oblique" : "Helvetica";
+      rowHeight = Math.max(rowHeight, measureCellHeight(doc, cell, fitted[c]!.width, fontSize, font));
+    }
+    rowHeight = Math.min(rowHeight, 48);
+
+    y = ensurePageSpace(doc, y, rowHeight + 2);
     if (y === PDF_MARGIN) drawHeader();
 
     if (options?.layout?.showTableStripes !== false && i % 2 === 1) {
       doc.save();
-      doc.rect(offsetX, y, tableW, rowHeight).fill("#F8FAFC");
+      doc.rect(tableX, y, tableW, rowHeight).fill("#F8FAFC");
       doc.restore();
     }
 
-    let x = offsetX;
-    const row = rows[i] ?? [];
-    for (let c = 0; c < columns.length; c++) {
-      doc.fillColor("#0F172A").text(row[c] ?? "—", x + 5, y + 5, {
-        width: columns[c]!.width - 10,
-        align: columns[c]!.align ?? "left",
-        lineBreak: false,
+    let x = tableX;
+    for (let c = 0; c < fitted.length; c++) {
+      const col = fitted[c]!;
+      const cell = row[c] ?? "—";
+      const isGrade = col.header.toLowerCase() === "grade";
+      const isRemark = col.header.toLowerCase().includes("remark") || col.header.toLowerCase().includes("comment");
+      const isPct = col.header.includes("%") || col.header === "AVG";
+
+      if (isGrade) {
+        doc.fillColor(secondary).font("Helvetica-Bold").fontSize(fontSize);
+      } else if (isRemark) {
+        doc.fillColor(MUTED_TEXT).font("Helvetica-Oblique").fontSize(fontSize - 0.5);
+      } else if (isPct) {
+        doc.fillColor(primary).font("Helvetica-Bold").fontSize(fontSize);
+      } else {
+        doc.fillColor(BODY_TEXT).font("Helvetica").fontSize(fontSize);
+      }
+
+      const textY = y + CELL_PAD_Y;
+      doc.text(cell, x + CELL_PAD_X, textY, {
+        width: col.width - CELL_PAD_X * 2,
+        align: col.align ?? "left",
+        lineGap: 1,
       });
-      x += columns[c]!.width;
+
+      x += col.width;
     }
+
+    doc
+      .moveTo(tableX, y + rowHeight)
+      .lineTo(tableX + tableW, y + rowHeight)
+      .lineWidth(0.25)
+      .strokeColor("#E2E8F0")
+      .stroke();
+
     y += rowHeight;
   }
 
-  doc
-    .rect(offsetX, startY, tableW, y - startY)
-    .lineWidth(0.5)
-    .strokeColor(BORDER_COLOR)
-    .stroke();
+  doc.rect(tableX, tableStartY, tableW, y - tableStartY).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
 
-  return y + 12;
+  return y + 10;
 }
 
 export function drawSummaryStrip(
@@ -349,29 +478,65 @@ export function drawSummaryStrip(
   items: Array<{ label: string; value: string }>,
   branding?: ReportBranding,
 ): number {
-  y = ensurePageSpace(doc, y, 36);
-  const primary = normalizeColor(branding?.primaryColor, BRAND_GREEN);
+  y = ensurePageSpace(doc, y, 34);
   const secondary = normalizeColor(branding?.secondaryColor, BRAND_GREEN_DARK);
-  const tint = `${primary}22`;
-  const stripH = 32;
+  const stripH = 30;
   doc.save();
-  doc.roundedRect(PDF_MARGIN, y, PDF_CONTENT_WIDTH, stripH, 3).fill(tint);
+  doc.roundedRect(PDF_MARGIN, y, PDF_CONTENT_WIDTH, stripH, 3).fill(PANEL_BG);
+  doc.roundedRect(PDF_MARGIN, y, PDF_CONTENT_WIDTH, stripH, 3).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
   doc.restore();
 
   const colW = PDF_CONTENT_WIDTH / items.length;
   items.forEach((item, i) => {
     const x = PDF_MARGIN + i * colW;
-    doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(7).text(item.label, x, y + 6, {
+    doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(7).text(item.label, x, y + 5, {
       width: colW,
       align: "center",
     });
-    doc.fillColor(secondary).font("Helvetica-Bold").fontSize(10).text(item.value, x, y + 17, {
+    doc.fillColor(secondary).font("Helvetica-Bold").fontSize(10).text(item.value, x, y + 16, {
       width: colW,
       align: "center",
     });
   });
 
-  return y + stripH + 12;
+  return y + stripH + 10;
+}
+
+export function drawCompactGradingLegend(
+  doc: PdfDoc,
+  y: number,
+  legend: Array<{ minScore: number; maxScore: number; grade: string; descriptor: string }>,
+  branding?: ReportBranding,
+): number {
+  if (legend.length === 0) return y;
+  y = ensurePageSpace(doc, y, 36);
+  const primary = normalizeColor(branding?.primaryColor, BRAND_NAVY);
+  const cellW = PDF_CONTENT_WIDTH / legend.length;
+  const rowH = 28;
+
+  doc.fillColor(MUTED_TEXT).font("Helvetica-Bold").fontSize(7);
+  doc.text("GRADING SCALE", PDF_MARGIN, y);
+  y += 10;
+
+  doc.save();
+  doc.rect(PDF_MARGIN, y, PDF_CONTENT_WIDTH, rowH).fill(`${primary}12`);
+  doc.rect(PDF_MARGIN, y, PDF_CONTENT_WIDTH, rowH).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
+  doc.restore();
+
+  legend.forEach((g, i) => {
+    const x = PDF_MARGIN + i * cellW;
+    doc.fillColor(primary).font("Helvetica-Bold").fontSize(9);
+    doc.text(g.grade, x, y + 4, { width: cellW, align: "center" });
+    doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(6.5);
+    doc.text(`${g.minScore}–${g.maxScore}`, x, y + 14, { width: cellW, align: "center" });
+    doc.font("Helvetica-Oblique").fontSize(6);
+    doc.text(formatDescriptorForPrint(g.descriptor).slice(0, 18), x + 2, y + 21, {
+      width: cellW - 4,
+      align: "center",
+    });
+  });
+
+  return y + rowH + 10;
 }
 
 export function drawCommentBlocks(
@@ -380,42 +545,57 @@ export function drawCommentBlocks(
   blocks: Array<{ title: string; text: string }>,
   branding?: ReportBranding,
 ): number {
-  y = ensurePageSpace(doc, y, 90);
-  const gap = 12;
+  const secondary = normalizeColor(branding?.secondaryColor, BRAND_GREEN_DARK);
+  const gap = 14;
   const blockW = (PDF_CONTENT_WIDTH - gap) / blocks.length;
-  const blockH = 72;
+  const fontSize = 8;
+
+  let maxBlockH = 64;
+  for (const block of blocks) {
+    doc.font("Helvetica").fontSize(fontSize);
+    const textH = doc.heightOfString(block.text?.trim() || "—", { width: blockW - 20 });
+    maxBlockH = Math.max(maxBlockH, textH + 44);
+  }
+  maxBlockH = Math.min(maxBlockH, 110);
+
+  y = ensurePageSpace(doc, y, maxBlockH + 20);
 
   blocks.forEach((block, i) => {
     const x = PDF_MARGIN + i * (blockW + gap);
-    const secondary = normalizeColor(branding?.secondaryColor, BRAND_GREEN_DARK);
     doc.fillColor(secondary).font("Helvetica-Bold").fontSize(8);
     doc.text(block.title, x, y, { width: blockW });
 
     doc.save();
-    doc.roundedRect(x, y + 14, blockW, blockH, 3).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
+    doc.roundedRect(x, y + 12, blockW, maxBlockH - 20, 3).fill("#FFFFFF");
+    doc.roundedRect(x, y + 12, blockW, maxBlockH - 20, 3).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
     doc.restore();
 
-    doc.fillColor("#0F172A").font("Helvetica").fontSize(8);
-    doc.text(block.text?.trim() || "—", x + 8, y + 22, {
-      width: blockW - 16,
-      height: blockH - 16,
+    doc.fillColor(BODY_TEXT).font("Helvetica").fontSize(fontSize);
+    doc.text(block.text?.trim() || "—", x + 10, y + 20, {
+      width: blockW - 20,
       align: "left",
+      lineGap: 2,
     });
+
+    const sigY = y + maxBlockH - 2;
+    doc.moveTo(x + 10, sigY).lineTo(x + blockW - 10, sigY).lineWidth(0.5).strokeColor(BORDER_COLOR).stroke();
+    doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(6.5);
+    doc.text("Signature", x + 10, sigY + 2, { width: blockW - 20 });
   });
 
-  return y + blockH + 28;
+  return y + maxBlockH + 16;
 }
 
 export function drawReportFooter(doc: PdfDoc, y: number, line: string, branding?: ReportBranding) {
   const footerLine = branding?.footerText?.trim() ? `${branding.footerText.trim()} · ${line}` : line;
-  const footerY = Math.max(y, PDF_PAGE_HEIGHT - PDF_MARGIN - 24);
+  const footerY = Math.max(y + 8, PDF_PAGE_HEIGHT - PDF_MARGIN - 20);
   doc
-    .moveTo(PDF_MARGIN, footerY - 8)
-    .lineTo(PDF_MARGIN + PDF_CONTENT_WIDTH, footerY - 8)
+    .moveTo(PDF_MARGIN, footerY - 6)
+    .lineTo(PDF_MARGIN + PDF_CONTENT_WIDTH, footerY - 6)
     .lineWidth(0.5)
     .strokeColor(BORDER_COLOR)
     .stroke();
-  doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(7);
+  doc.fillColor(MUTED_TEXT).font("Helvetica").fontSize(6.5);
   doc.text(footerLine, PDF_MARGIN, footerY, { width: PDF_CONTENT_WIDTH, align: "center" });
 }
 
@@ -423,3 +603,23 @@ export function formatPercent(part: number, total: number): string {
   if (total <= 0) return "—";
   return `${Math.round((part / total) * 100)}%`;
 }
+
+function overallGradeFromRows(
+  rows: Array<{ finalGrade: string | null }>,
+): string {
+  const grades = rows.map((r) => r.finalGrade).filter((g): g is string => Boolean(g));
+  if (grades.length === 0) return "—";
+  const counts = new Map<string, number>();
+  for (const g of grades) counts.set(g, (counts.get(g) ?? 0) + 1);
+  let best = grades[0]!;
+  let bestCount = 0;
+  for (const [g, c] of counts) {
+    if (c > bestCount) {
+      best = g;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
+export { overallGradeFromRows };

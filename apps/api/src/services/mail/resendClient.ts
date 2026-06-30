@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { loadEnv } from "../../config/env.js";
+import { getResolvedFromOverride } from "./verifyMailConfig.js";
 
 export type SendEmailInput = {
   to: string | string[];
@@ -39,6 +40,9 @@ function getResendClient(): Resend | null {
 }
 
 function getEmailFrom(): string | null {
+  const override = getResolvedFromOverride();
+  if (override) return override;
+
   const from = loadEnv().EMAIL_FROM?.trim() ?? process.env.EMAIL_FROM?.trim();
   if (!from) {
     if (!warnedMissingFrom) {
@@ -58,11 +62,11 @@ function getEmailFrom(): string | null {
  */
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const resend = getResendClient();
+  const from = getEmailFrom();
   if (!resend) {
     return { sent: false, skipped: true, error: "RESEND_API_KEY not configured" };
   }
 
-  const from = getEmailFrom();
   if (!from) {
     return { sent: false, skipped: true, error: "EMAIL_FROM not configured" };
   }
