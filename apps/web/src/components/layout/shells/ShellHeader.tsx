@@ -247,7 +247,19 @@ export function ShellHeader({ config, onToggleMobileNav }: Props) {
                       router.push("/profile/notifications");
                     }}
                   >
-                    Notification preferences
+                    Notifications
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full rounded-md px-3 py-2 text-left text-sm text-foreground transition-ui hover:bg-accent/50"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      startNavigation();
+                      router.push("/profile/notifications/settings");
+                    }}
+                  >
+                    Notification settings
                   </button>
                   <button
                     type="button"

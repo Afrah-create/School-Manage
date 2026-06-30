@@ -39,9 +39,12 @@ export default function ProfilePage() {
           ← Back to dashboard
         </Link>
       </div>
-      <div className="mb-6">
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:gap-4">
         <Link href="/profile/notifications" className="text-sm font-medium text-brand hover:underline">
-          Notification preferences →
+          Notifications →
+        </Link>
+        <Link href="/profile/notifications/settings" className="text-sm font-medium text-brand hover:underline">
+          Notification settings →
         </Link>
       </div>
       <AsyncContent

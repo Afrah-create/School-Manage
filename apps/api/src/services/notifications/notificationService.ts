@@ -175,6 +175,77 @@ export async function listActiveHeadteacherIds(tenantId: string): Promise<string
   return rows.map((r) => r.id);
 }
 
+export async function listActiveExamManagerRecipients(
+  tenantId: string,
+): Promise<Array<{ userId: string; role: string }>> {
+  const { rows } = await tenantQuery<{ id: string; role: string }>(
+    tenantId,
+    `SELECT id, role FROM users
+     WHERE tenant_id = $1
+       AND role IN ('admin', 'headteacher')
+       AND is_active = true
+       AND deleted_at IS NULL`,
+    [tenantId],
+  );
+  return rows.map((r) => ({ userId: r.id, role: r.role }));
+}
+
+export async function listExamPaperTeachers(
+  tenantId: string,
+  examId: string,
+  classId: string,
+  academicYearId: string,
+): Promise<Array<{ userId: string; role: string; subjectCodes: string[] }>> {
+  const { rows } = await tenantQuery<{
+    user_id: string;
+    role: string;
+    subject_codes: string[];
+  }>(
+    tenantId,
+    `SELECT u.id AS user_id, u.role, ARRAY_AGG(DISTINCT s.code ORDER BY s.code) AS subject_codes
+     FROM exam_subjects es
+     JOIN subjects s ON s.id = es.subject_id
+     JOIN class_subjects cs
+       ON cs.subject_id = es.subject_id
+      AND cs.class_id = $2
+      AND cs.academic_year_id = $3
+     JOIN users u ON u.id = cs.teacher_id
+     WHERE es.exam_id = $1
+       AND cs.teacher_id IS NOT NULL
+       AND u.is_active = true
+       AND u.deleted_at IS NULL
+       AND u.role IN ('subject_teacher', 'class_teacher')
+     GROUP BY u.id, u.role`,
+    [examId, classId, academicYearId],
+  );
+  return rows.map((r) => ({
+    userId: r.user_id,
+    role: r.role,
+    subjectCodes: r.subject_codes ?? [],
+  }));
+}
+
+export async function countPendingExamPapersWithEntrants(
+  tenantId: string,
+  examId: string,
+): Promise<number> {
+  const { rows } = await tenantQuery<{ c: number }>(
+    tenantId,
+    `SELECT COUNT(*)::int AS c
+     FROM exam_subjects es
+     LEFT JOIN exam_subject_submissions ess
+       ON ess.exam_id = es.exam_id AND ess.subject_id = es.subject_id
+     WHERE es.exam_id = $1
+       AND COALESCE(ess.is_submitted, false) = false
+       AND EXISTS (
+         SELECT 1 FROM exam_student_entries ese
+         WHERE ese.exam_id = es.exam_id AND ese.subject_id = es.subject_id
+       )`,
+    [examId],
+  );
+  return rows[0]?.c ?? 0;
+}
+
 export async function notifyUsers(
   userIds: string[],
   tenantId: string,

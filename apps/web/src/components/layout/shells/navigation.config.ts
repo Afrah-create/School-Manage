@@ -107,6 +107,12 @@ export const SHELL_NAV_CONFIG: Record<RoleKey, RoleShellConfig> = {
             activePrefix: "/admin/assessment/rules",
           },
           {
+            href: "/admin/assessment/project-work",
+            label: "Project work tracker",
+            icon: "clipboardCheck",
+            activePrefix: "/admin/assessment/project-work",
+          },
+          {
             href: "/admin/academic/grading-scales",
             label: "Grading scales",
             icon: "barChart3",

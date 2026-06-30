@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { PageWrapper } from "@/components/layout/PageWrapper";
-import { NotificationPreferencesForm } from "@/components/notifications/NotificationPreferencesForm";
+import { NotificationInbox } from "@/components/notifications/NotificationInbox";
 import { useAuthStore } from "@/store/authStore";
 
-export default function NotificationPreferencesPage() {
+export default function NotificationsInboxPage() {
   const authUser = useAuthStore((s) => s.user);
   const rolePrefixes: Record<string, string> = {
     admin: "/admin",
@@ -18,19 +17,10 @@ export default function NotificationPreferencesPage() {
 
   return (
     <PageWrapper
-      title="Notification preferences"
-      description="Control in-app and email alerts for assessment and exam activity."
+      title="Notifications"
+      description="Exam workflow updates, mark submissions, and other school alerts."
     >
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
-        <Link href={`${rolePrefix}/dashboard`} className="font-medium text-brand hover:underline">
-          ← Back to dashboard
-        </Link>
-        <span className="text-muted-foreground">·</span>
-        <Link href="/profile" className="font-medium text-brand hover:underline">
-          My profile
-        </Link>
-      </div>
-      <NotificationPreferencesForm />
+      <NotificationInbox rolePrefix={rolePrefix} />
     </PageWrapper>
   );
 }

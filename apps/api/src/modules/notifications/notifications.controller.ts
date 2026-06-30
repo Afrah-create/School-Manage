@@ -10,6 +10,11 @@ const listQuerySchema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((v) => v === "true"),
+  view: z.enum(["active", "archived", "all"]).default("active"),
+});
+
+const bulkIdsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
 const patchPreferencesSchema = z.object({
@@ -30,6 +35,7 @@ export async function list(req: Request, res: Response): Promise<void> {
     page: query.page,
     limit: query.limit,
     unreadOnly: query.unread,
+    view: query.view,
   });
   res.json({ success: true, data });
 }
@@ -41,6 +47,33 @@ export async function markRead(req: Request, res: Response): Promise<void> {
 
 export async function markAllRead(req: Request, res: Response): Promise<void> {
   const data = await svc.markAllNotificationsRead(req.user!.id);
+  res.json({ success: true, data });
+}
+
+export async function archive(req: Request, res: Response): Promise<void> {
+  const row = await svc.archiveNotification(req.user!.id, req.params["id"]!);
+  res.json({ success: true, data: row });
+}
+
+export async function unarchive(req: Request, res: Response): Promise<void> {
+  const row = await svc.unarchiveNotification(req.user!.id, req.params["id"]!);
+  res.json({ success: true, data: row });
+}
+
+export async function archiveBulk(req: Request, res: Response): Promise<void> {
+  const body = bulkIdsSchema.parse(req.body);
+  const data = await svc.archiveNotifications(req.user!.id, body.ids);
+  res.json({ success: true, data });
+}
+
+export async function remove(req: Request, res: Response): Promise<void> {
+  const data = await svc.deleteNotification(req.user!.id, req.params["id"]!);
+  res.json({ success: true, data });
+}
+
+export async function removeBulk(req: Request, res: Response): Promise<void> {
+  const body = bulkIdsSchema.parse(req.body);
+  const data = await svc.deleteNotifications(req.user!.id, body.ids);
   res.json({ success: true, data });
 }
 

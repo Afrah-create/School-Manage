@@ -102,6 +102,16 @@ export default function AdminAssessmentRulesPage() {
             />
             Include project work in term final grade
           </label>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={config.allowIncompleteCaOverride}
+              onChange={(e) =>
+                setConfig((c) => ({ ...c, allowIncompleteCaOverride: e.target.checked }))
+              }
+            />
+            Allow report release when project work slots are incomplete
+          </label>
           <Button className="mt-4" onClick={() => void save()} disabled={saving}>
             {saving ? "Saving…" : "Save policy"}
           </Button>

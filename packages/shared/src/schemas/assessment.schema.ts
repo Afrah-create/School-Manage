@@ -115,6 +115,8 @@ export const updateClassSubjectSchema = z
   .object({
     teacherId: z.string().uuid().nullable().optional(),
     termId: z.string().uuid().nullable().optional(),
+    includeOnReports: z.boolean().optional(),
+    projectWorkRequired: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 

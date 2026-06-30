@@ -61,6 +61,7 @@ export async function listExamsForReportOptions(classId: string, termId: string)
              LEFT JOIN exam_subject_submissions ess
                ON ess.exam_id = es.exam_id AND ess.subject_id = es.subject_id
              WHERE es.exam_id = e.id
+               AND es.is_compulsory = true
                AND COALESCE(ess.is_submitted, false) = false
                AND EXISTS (
                  SELECT 1 FROM exam_student_entries ese
@@ -173,9 +174,10 @@ export async function listExamSubjectTracking(
   return rows.map((r) => {
     const entrantsCount = Number(r.entrants_count ?? 0);
     const studentsWithMarks = Number(r.students_with_marks ?? 0);
+    const isCompulsory = Boolean(r.is_compulsory);
     const isSubmitted = Boolean(r.is_submitted);
     let status: ExamSubjectTrack["status"] = "not_started";
-    if (entrantsCount === 0) status = "not_applicable";
+    if (entrantsCount === 0 || !isCompulsory) status = "not_applicable";
     else if (isSubmitted) status = "submitted";
     else if (studentsWithMarks > 0) status = "in_progress";
 
@@ -183,11 +185,11 @@ export async function listExamSubjectTracking(
       subjectId: r.subject_id,
       subjectName: r.subject_name,
       subjectCode: r.subject_code,
-      isCompulsory: Boolean(r.is_compulsory),
+      isCompulsory,
       entrantsCount,
       studentsWithMarks,
       activeStudents: entrantsCount,
-      isSubmitted: entrantsCount === 0 ? true : isSubmitted,
+      isSubmitted: entrantsCount === 0 || !isCompulsory ? true : isSubmitted,
       status,
     };
   });
@@ -212,7 +214,9 @@ export async function assertExamReadyForReports(examId: string, activeStudents: 
   if (tracking.length === 0) {
     throw new HttpError(400, "This exam has no subjects. Edit the exam and add subjects before generating reports.");
   }
-  const pending = tracking.filter((t) => t.status !== "not_applicable" && !t.isSubmitted);
+  const pending = tracking.filter(
+    (t) => t.isCompulsory && t.status !== "not_applicable" && !t.isSubmitted,
+  );
   if (pending.length > 0) {
     const codes = pending.map((t) => t.subjectCode).join(", ");
     throw new HttpError(

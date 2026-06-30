@@ -21,7 +21,7 @@ import {
   levelShortLabel,
   pickDefaultAcademicYear,
 } from "@/lib/academicLevel";
-import { apiDelete, apiGet, apiPost } from "@/lib/api";
+import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 
 type Assignment = {
   id: string;
@@ -31,6 +31,8 @@ type Assignment = {
   subjectName: string;
   subjectCode: string;
   teacherName: string | null;
+  includeOnReports: boolean;
+  projectWorkRequired: boolean;
 };
 type Row = Assignment & Record<string, unknown>;
 
@@ -169,6 +171,26 @@ export default function AdminAcademicClassSubjectsPage() {
     }
   };
 
+  const patchAssignment = async (
+    row: Assignment,
+    patch: Partial<Pick<Assignment, "includeOnReports" | "projectWorkRequired">>,
+  ) => {
+    setBusyId(row.id);
+    setErr(null);
+    const payload = { ...patch };
+    if (payload.includeOnReports === false) payload.projectWorkRequired = false;
+    try {
+      await apiPut(`/academic/class-subjects/${encodeURIComponent(row.id)}`, payload);
+      setAssignments((prev) =>
+        prev.map((a) => (a.id === row.id ? { ...a, ...payload } : a)),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to update");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const columns: Column<Row>[] = [
     { key: "subjectName", header: "Subject" },
     { key: "subjectCode", header: "Code" },
@@ -181,6 +203,34 @@ export default function AdminAcademicClassSubjectsPage() {
         ) : (
           <span className="text-amber-700 dark:text-amber-300">Unassigned</span>
         ),
+    },
+    {
+      key: "includeOnReports",
+      header: "On reports",
+      render: (r) => (
+        <input
+          type="checkbox"
+          className={CHECK}
+          checked={r.includeOnReports}
+          disabled={busyId === r.id}
+          onChange={(e) => void patchAssignment(r, { includeOnReports: e.target.checked })}
+          aria-label={`Include ${r.subjectCode} on reports`}
+        />
+      ),
+    },
+    {
+      key: "projectWorkRequired",
+      header: "Project work",
+      render: (r) => (
+        <input
+          type="checkbox"
+          className={CHECK}
+          checked={r.projectWorkRequired}
+          disabled={busyId === r.id || !r.includeOnReports}
+          onChange={(e) => void patchAssignment(r, { projectWorkRequired: e.target.checked })}
+          aria-label={`Require project work for ${r.subjectCode}`}
+        />
+      ),
     },
     {
       key: "actions",
@@ -274,7 +324,9 @@ export default function AdminAcademicClassSubjectsPage() {
       <div className="mt-4">
         <Card title={`Assigned subjects (${assignments.length})`}>
           <p className="mb-3 text-sm text-muted-foreground">
-            Add or remove subjects on the class timetable here. To assign or change teachers, use{" "}
+            Add or remove subjects on the class timetable here. Use <strong>On reports</strong> to exclude a subject
+            from report readiness. Use <strong>Project work</strong> when teachers must enter CA scores for that
+            subject. To assign teachers, use{" "}
             <Link
               href={academicHref("/teacher-assignments", {
                 academicYearId,

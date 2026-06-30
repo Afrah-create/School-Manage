@@ -29,7 +29,7 @@ async function resolveSchoolName(tenantId?: string): Promise<string> {
   }
 }
 
-async function schoolDaysInRange(start: string, end: string): Promise<number> {
+export async function schoolDaysInRange(start: string, end: string): Promise<number> {
   const s = new Date(start);
   const e = new Date(end);
   let n = 0;
@@ -76,7 +76,7 @@ async function loadStudentContext(studentId: string, termId: string) {
   return rows[0]!;
 }
 
-async function loadGradingLegend(): Promise<GradingScaleLegendRow[]> {
+export async function loadGradingLegend(): Promise<GradingScaleLegendRow[]> {
   const bands = await loadActiveGradingBands("O_LEVEL");
   return bands
     .filter((b) => b.isActive)
@@ -92,6 +92,7 @@ export async function compileCbcReportPayload(
   studentId: string,
   termId: string,
   _academicYearId: string,
+  options?: { skipRecompute?: boolean },
 ): Promise<CbcReportPayload> {
   const st = await loadStudentContext(studentId, termId);
   const schoolName = await resolveSchoolName();
@@ -100,7 +101,9 @@ export async function compileCbcReportPayload(
     throw new HttpError(400, "Student is not assigned to a class.");
   }
 
-  await recomputeTermSubjectResults(studentId, termId);
+  if (!options?.skipRecompute) {
+    await recomputeTermSubjectResults(studentId, termId);
+  }
 
   const examOptions = await listExamsForReportOptions(st.class_id, termId);
   const examColumns = examOptions.map((e) => ({
@@ -116,16 +119,28 @@ export async function compileCbcReportPayload(
     subject_code: string;
     subject_name: string;
     composite_score: string | null;
+    exam_average: string | null;
+    project_average: string | null;
+    projects_completed: number | null;
+    projects_expected: number | null;
+    include_project_work: boolean;
     final_grade: string | null;
     exam_breakdown: unknown;
   }>(
     `SELECT sub.code AS subject_code, sub.name AS subject_name,
-            tsr.composite_score::text, tsr.final_grade, tsr.exam_breakdown
+            tsr.composite_score::text, tsr.exam_average::text, tsr.project_average::text,
+            tsr.projects_completed, tsr.projects_expected, tsr.include_project_work,
+            tsr.final_grade, tsr.exam_breakdown
      FROM term_subject_results tsr
      JOIN subjects sub ON sub.id = tsr.subject_id
+     JOIN class_subjects cs
+       ON cs.subject_id = tsr.subject_id
+      AND cs.class_id = $3
+      AND cs.academic_year_id = (SELECT academic_year_id FROM terms WHERE id = $2)
+      AND cs.include_on_reports = true
      WHERE tsr.student_id = $1 AND tsr.term_id = $2
      ORDER BY sub.code`,
-    [studentId, termId],
+    [studentId, termId, st.class_id],
   );
 
   const termSubjectRows = termRows.map((r) => {
@@ -152,6 +167,11 @@ export async function compileCbcReportPayload(
       code: r.subject_code,
       name: r.subject_name,
       examScores,
+      examAverage: r.exam_average != null ? Number(r.exam_average) : null,
+      projectAverage: r.project_average != null ? Number(r.project_average) : null,
+      projectsCompleted: r.projects_completed,
+      projectsExpected: r.projects_expected,
+      includeProjectWork: Boolean(r.include_project_work),
       average: r.composite_score != null ? Number(r.composite_score) : null,
       finalGrade: grade,
       descriptor,

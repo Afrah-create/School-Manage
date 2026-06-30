@@ -18,6 +18,7 @@ export type NotificationRow = {
   link: string | null;
   metadata: Record<string, unknown> | null;
   readAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
 };
 
@@ -27,6 +28,8 @@ export type NotificationPreferenceRow = {
   emailEnabled: boolean;
   inAppEnabled: boolean;
 };
+
+export type NotificationListView = "active" | "archived" | "all";
 
 function mapNotification(row: Record<string, unknown>): NotificationRow {
   return {
@@ -39,26 +42,44 @@ function mapNotification(row: Record<string, unknown>): NotificationRow {
     link: row["link"] != null ? String(row["link"]) : null,
     metadata: (row["metadata"] as Record<string, unknown> | null) ?? null,
     readAt: row["read_at"] != null ? new Date(String(row["read_at"])).toISOString() : null,
+    archivedAt: row["archived_at"] != null ? new Date(String(row["archived_at"])).toISOString() : null,
     createdAt: new Date(String(row["created_at"])).toISOString(),
   };
 }
 
-export async function listNotifications(
+const NOTIFICATION_COLUMNS =
+  "id, user_id, tenant_id, type, title, body, link, metadata, read_at, archived_at, created_at";
+
+function buildListWhere(
   userId: string,
-  params: { page: number; limit: number; unreadOnly?: boolean },
-): Promise<{ items: NotificationRow[]; total: number; unreadCount: number }> {
-  const offset = (params.page - 1) * params.limit;
+  params: { unreadOnly?: boolean; view?: NotificationListView },
+): { whereSql: string; values: unknown[] } {
   const where = ["user_id = $1"];
   const values: unknown[] = [userId];
+
+  const view = params.view ?? "active";
+  if (view === "active") {
+    where.push("archived_at IS NULL");
+  } else if (view === "archived") {
+    where.push("archived_at IS NOT NULL");
+  }
 
   if (params.unreadOnly) {
     where.push("read_at IS NULL");
   }
 
-  const whereSql = where.join(" AND ");
+  return { whereSql: where.join(" AND "), values };
+}
+
+export async function listNotifications(
+  userId: string,
+  params: { page: number; limit: number; unreadOnly?: boolean; view?: NotificationListView },
+): Promise<{ items: NotificationRow[]; total: number; unreadCount: number }> {
+  const offset = (params.page - 1) * params.limit;
+  const { whereSql, values } = buildListWhere(userId, params);
 
   const { rows } = await query(
-    `SELECT id, user_id, tenant_id, type, title, body, link, metadata, read_at, created_at
+    `SELECT ${NOTIFICATION_COLUMNS}
      FROM notifications
      WHERE ${whereSql}
      ORDER BY created_at DESC
@@ -73,7 +94,9 @@ export async function listNotifications(
   );
 
   const unreadResult = await query<{ total: string }>(
-    `SELECT COUNT(*)::text AS total FROM notifications WHERE user_id = $1 AND read_at IS NULL`,
+    `SELECT COUNT(*)::text AS total
+     FROM notifications
+     WHERE user_id = $1 AND read_at IS NULL AND archived_at IS NULL`,
     [userId],
   );
 
@@ -88,8 +111,8 @@ export async function markNotificationRead(userId: string, notificationId: strin
   const { rows } = await query(
     `UPDATE notifications
      SET read_at = COALESCE(read_at, NOW())
-     WHERE id = $1 AND user_id = $2
-     RETURNING id, user_id, tenant_id, type, title, body, link, metadata, read_at, created_at`,
+     WHERE id = $1 AND user_id = $2 AND archived_at IS NULL
+     RETURNING ${NOTIFICATION_COLUMNS}`,
     [notificationId, userId],
   );
   if (!rows[0]) {
@@ -100,10 +123,75 @@ export async function markNotificationRead(userId: string, notificationId: strin
 
 export async function markAllNotificationsRead(userId: string): Promise<{ updated: number }> {
   const { rowCount } = await query(
-    `UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`,
+    `UPDATE notifications
+     SET read_at = NOW()
+     WHERE user_id = $1 AND read_at IS NULL AND archived_at IS NULL`,
     [userId],
   );
   return { updated: rowCount ?? 0 };
+}
+
+export async function archiveNotification(userId: string, notificationId: string): Promise<NotificationRow> {
+  const { rows } = await query(
+    `UPDATE notifications
+     SET archived_at = COALESCE(archived_at, NOW()), read_at = COALESCE(read_at, NOW())
+     WHERE id = $1 AND user_id = $2
+     RETURNING ${NOTIFICATION_COLUMNS}`,
+    [notificationId, userId],
+  );
+  if (!rows[0]) {
+    throw new HttpError(404, "Notification not found.");
+  }
+  return mapNotification(rows[0] as Record<string, unknown>);
+}
+
+export async function unarchiveNotification(userId: string, notificationId: string): Promise<NotificationRow> {
+  const { rows } = await query(
+    `UPDATE notifications
+     SET archived_at = NULL
+     WHERE id = $1 AND user_id = $2 AND archived_at IS NOT NULL
+     RETURNING ${NOTIFICATION_COLUMNS}`,
+    [notificationId, userId],
+  );
+  if (!rows[0]) {
+    throw new HttpError(404, "Archived notification not found.");
+  }
+  return mapNotification(rows[0] as Record<string, unknown>);
+}
+
+export async function archiveNotifications(userId: string, ids: string[]): Promise<{ archived: number }> {
+  if (ids.length === 0) {
+    return { archived: 0 };
+  }
+  const { rowCount } = await query(
+    `UPDATE notifications
+     SET archived_at = COALESCE(archived_at, NOW()), read_at = COALESCE(read_at, NOW())
+     WHERE user_id = $1 AND id = ANY($2::uuid[]) AND archived_at IS NULL`,
+    [userId, ids],
+  );
+  return { archived: rowCount ?? 0 };
+}
+
+export async function deleteNotification(userId: string, notificationId: string): Promise<{ deleted: boolean }> {
+  const { rowCount } = await query(
+    `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
+    [notificationId, userId],
+  );
+  if (!rowCount) {
+    throw new HttpError(404, "Notification not found.");
+  }
+  return { deleted: true };
+}
+
+export async function deleteNotifications(userId: string, ids: string[]): Promise<{ deleted: number }> {
+  if (ids.length === 0) {
+    return { deleted: 0 };
+  }
+  const { rowCount } = await query(
+    `DELETE FROM notifications WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+    [userId, ids],
+  );
+  return { deleted: rowCount ?? 0 };
 }
 
 export async function getNotificationPreferences(userId: string): Promise<NotificationPreferenceRow[]> {

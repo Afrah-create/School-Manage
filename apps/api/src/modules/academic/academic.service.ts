@@ -606,6 +606,8 @@ export async function getClassSubjects(filters: { classId?: string; academicYear
       academicYearName: String(x["academic_year_name"]),
       termNumber: (x["term_number"] as number | null) ?? null,
       teacherName: (x["teacher_name"] as string | null) ?? null,
+      includeOnReports: Boolean(x["include_on_reports"] ?? true),
+      projectWorkRequired: Boolean(x["project_work_required"] ?? false),
     };
   });
 }
@@ -646,6 +648,8 @@ export async function getClassSubjectById(id: string) {
     academicYearName: String(row["academic_year_name"]),
     termNumber: (row["term_number"] as number | null) ?? null,
     teacherName: (row["teacher_name"] as string | null) ?? null,
+    includeOnReports: Boolean(row["include_on_reports"] ?? true),
+    projectWorkRequired: Boolean(row["project_work_required"] ?? false),
   };
 }
 
@@ -664,6 +668,14 @@ export async function updateClassSubject(id: string, input: ClassSubjectUpdateIn
   if (input.termId !== undefined) {
     sets.push(`term_id = $${i++}`);
     values.push(input.termId);
+  }
+  if (input.includeOnReports !== undefined) {
+    sets.push(`include_on_reports = $${i++}`);
+    values.push(input.includeOnReports);
+  }
+  if (input.projectWorkRequired !== undefined) {
+    sets.push(`project_work_required = $${i++}`);
+    values.push(input.projectWorkRequired);
   }
   sets.push(`updated_at = NOW()`);
   values.push(id);

@@ -4,33 +4,28 @@ import { activeTenantIdFromContext } from "../../utils/activeTenant.js";
 import { HttpError } from "../../utils/httpError";
 import { invalidateReportPdfCache, withReportPdfCache } from "../../utils/reportPdfCache.js";
 import { streamAlevelReportCard, streamCbcReportCard } from "../../utils/pdf";
+import { loadAssessmentConfig } from "../../utils/assessmentConfig";
 import { recalculateExamMarkGrades } from "../exams/exams.service";
 import {
-  compileAlevelReportPayload,
-  compileCbcReportPayload,
-} from "./reportCompiler";
+  assertExamReadyForReports,
+  listExamSubjectTracking,
+  listExamsForReportOptions,
+  tryResolveExamForReports,
+} from "./reportExamLinkage";
 import {
   assertReportReadiness,
-  listExamPaperSubjectIds,
+  listCompulsoryExamPaperSubjectIds,
+  listProjectWorkSubmissionTracking,
   termTrackingExcludingExamPapers,
   getClassContext,
   listSubjectReadiness,
   listSubjectSubmissionTracking,
 } from "./reportReadiness";
 import type { AlevelReportPayload, CbcReportPayload, ReportTrack } from "./reportTypes";
-import {
-  attachClassRankings,
-  type CompiledReportEntry,
-} from "./classReportRanking";
-import {
-  assertExamReadyForReports,
-  compileAlevelReportFromExam,
-  compileCbcReportWithExam,
-  listExamSubjectTracking,
-  listExamsForReportOptions,
-  tryResolveExamForReports,
-} from "./reportExamLinkage";
+import { attachClassRankings, type CompiledReportEntry } from "./classReportRanking";
 import { applyReportSourceMeta, reportSourceFromPayload } from "./reportSourceMeta";
+import { compileReportsForClassBulk } from "./reportBulkCompile";
+import { bulkPersistCompiledReports } from "./reportBulkPersist";
 
 type PdfBrandingSettings = {
   motto: string | null;
@@ -134,7 +129,10 @@ export async function getReportReadiness(classId: string, termId: string, examId
   );
   const activeStudents = rows[0]?.c ?? 0;
 
-  const [subjects, subjectTracking] = await Promise.all([
+  const assessmentConfig = await loadAssessmentConfig(activeTenantIdFromContext());
+  const projectsExpected = Math.max(1, assessmentConfig.projectWork.expectedPerTerm);
+
+  const [subjects, subjectTracking, projectWorkTracking] = await Promise.all([
     listSubjectReadiness(classId, termId, ctx.academicYearId, ctx.track),
     listSubjectSubmissionTracking(
       classId,
@@ -143,6 +141,16 @@ export async function getReportReadiness(classId: string, termId: string, examId
       ctx.track,
       activeStudents,
     ),
+    ctx.track === "cbc"
+      ? listProjectWorkSubmissionTracking(
+          classId,
+          termId,
+          ctx.academicYearId,
+          activeStudents,
+          projectsExpected,
+          assessmentConfig.allowIncompleteCaOverride,
+        )
+      : Promise.resolve([]),
   ]);
 
   const [examOptions, termDefault] = await Promise.all([
@@ -159,11 +167,12 @@ export async function getReportReadiness(classId: string, termId: string, examId
   let examPaperSubjectIds: string[] = [];
   if (activeLinkedExamId) {
     examTracking = await listExamSubjectTracking(activeLinkedExamId, activeStudents);
-    const subjectsSubmitted =
-      examTracking.length > 0 && examTracking.every((t) => t.status === "submitted");
-    examReady = subjectsSubmitted && !examNotClosed;
+    const blockingExam = examTracking.filter(
+      (t) => t.isCompulsory && t.status !== "not_applicable" && t.status !== "submitted",
+    );
+    examReady = blockingExam.length === 0 && !examNotClosed;
     if (ctx.track === "cbc") {
-      examPaperSubjectIds = await listExamPaperSubjectIds(activeLinkedExamId);
+      examPaperSubjectIds = await listCompulsoryExamPaperSubjectIds(activeLinkedExamId);
     }
   }
 
@@ -171,6 +180,15 @@ export async function getReportReadiness(classId: string, termId: string, examId
     examPaperSubjectIds.length > 0
       ? termTrackingExcludingExamPapers(subjectTracking, examPaperSubjectIds)
       : subjectTracking;
+
+  const projectWorkPending = projectWorkTracking.filter(
+    (row) =>
+      assessmentConfig.includeProjectWorkInTermGrade &&
+      row.projectWorkRequired &&
+      row.status !== "submitted" &&
+      row.status !== "not_required",
+  );
+  const projectWorkReady = projectWorkPending.length === 0;
 
   const pending = termSubjectTracking.filter((s) => s.status !== "submitted");
   const submitted = termSubjectTracking.filter((s) => s.status === "submitted");
@@ -182,7 +200,7 @@ export async function getReportReadiness(classId: string, termId: string, examId
       ? termSubjectTracking.length > 0 || examPaperSubjectIds.length > 0
       : subjectTracking.length > 0);
 
-  let ready = termReady;
+  let ready = termReady && (ctx.track !== "cbc" || projectWorkReady);
   if (examLinkInvalid) {
     examTracking = undefined;
     examReady = false;
@@ -240,6 +258,9 @@ export async function getReportReadiness(classId: string, termId: string, examId
     examLinkInvalid,
     examNotClosed,
     termReady,
+    projectWorkTracking: ctx.track === "cbc" ? projectWorkTracking : undefined,
+    projectWorkPendingCount: projectWorkPending.length,
+    projectWorkReady: ctx.track === "cbc" ? projectWorkReady : undefined,
     defaultExamId: termDefault.examId,
     defaultExamName: termDefault.examName,
     clearedStaleDefault: termDefault.clearedStaleDefault ?? false,
@@ -419,14 +440,13 @@ export async function generateReportsForClass(
     throw new HttpError(400, "This class has no active students to include on report cards.");
   }
 
-  const reportIds: string[] = [];
-  const warnings: string[] = [];
+  const earlyWarnings: string[] = [];
 
   let exam: Awaited<ReturnType<typeof tryResolveExamForReports>> | undefined;
   if (examId) {
     exam = await tryResolveExamForReports(examId, classId, termId);
     if (!exam) {
-      warnings.push(
+      earlyWarnings.push(
         "The selected exam was deleted or is no longer available. Report cards will use term assessment marks only.",
       );
     } else {
@@ -443,69 +463,37 @@ export async function generateReportsForClass(
     // A-Level from active exam only — term assessment scores not required
   }
 
-  const compiled: CompiledReportEntry[] = [];
+  const tenantId = activeTenantIdFromContext();
+  const sourceMeta = exam
+    ? ({ type: "exam" as const, examId: exam.id, examName: exam.name })
+    : ({ type: "term" as const });
 
-  for (const student of students) {
-    try {
-      if (ctx.track === "cbc") {
-        let payload = exam
-          ? await compileCbcReportWithExam(student.id, termId, ctx.academicYearId, exam)
-          : await compileCbcReportPayload(student.id, termId, ctx.academicYearId);
-        payload = applyReportSourceMeta(
-          payload,
-          exam ? { type: "exam", examId: exam.id, examName: exam.name } : { type: "term" },
-        );
-        const hasTermSubjects = (payload.termSubjectRows?.length ?? 0) > 0;
-        if (!hasTermSubjects) {
-          warnings.push(
-            `${student.full_name}: no term subject grades on file — enter compulsory exam marks (and project work if enabled).`,
-          );
-          continue;
-        }
-        compiled.push({ studentId: student.id, track: "cbc", payload });
-      } else {
-        let payload = exam
-          ? await compileAlevelReportFromExam(student.id, termId, ctx.academicYearId, exam)
-          : await compileAlevelReportPayload(student.id, termId, ctx.academicYearId);
-        payload = applyReportSourceMeta(
-          payload,
-          exam ? { type: "exam", examId: exam.id, examName: exam.name } : { type: "term" },
-        );
-        if (payload.subjects.length === 0) {
-          warnings.push(
-            exam
-              ? `${student.full_name}: no exam marks on "${exam.name}" for this student.`
-              : `${student.full_name}: no A-Level scores found for this term.`,
-          );
-          continue;
-        }
-        if (payload.division === "Incomplete") {
-          warnings.push(
-            `${student.full_name}: fewer than three subjects with points — division marked Incomplete.`,
-          );
-        }
-        compiled.push({ studentId: student.id, track: "alevel", payload });
-      }
-    } catch (e) {
-      if (e instanceof HttpError) throw e;
-      throw new HttpError(
-        500,
-        `Could not compile a report for ${student.full_name}. ${e instanceof Error ? e.message : "Please try again."}`,
-      );
+  const { entries: compiledRaw, warnings: compileWarnings } = await compileReportsForClassBulk({
+    classId,
+    termId,
+    academicYearId: ctx.academicYearId,
+    track: ctx.track,
+    students,
+    exam: exam ?? null,
+    tenantId,
+  });
+  const warnings = [...earlyWarnings, ...compileWarnings];
+
+  const compiled: CompiledReportEntry[] = compiledRaw.map((entry) => {
+    if (entry.track === "cbc") {
+      return {
+        ...entry,
+        payload: applyReportSourceMeta(entry.payload, sourceMeta),
+      };
     }
-  }
+    return {
+      ...entry,
+      payload: applyReportSourceMeta(entry.payload, sourceMeta),
+    };
+  });
 
   const ranked = attachClassRankings(compiled);
-
-  for (const entry of ranked) {
-    if (entry.track === "cbc") {
-      const id = await upsertCbcReport(entry.studentId, termId, ctx.academicYearId, entry.payload);
-      reportIds.push(id);
-    } else {
-      const id = await upsertAlevelReport(entry.studentId, termId, ctx.academicYearId, entry.payload);
-      reportIds.push(id);
-    }
-  }
+  const reportIds = await bulkPersistCompiledReports(termId, ctx.academicYearId, ranked);
 
   if (reportIds.length === 0) {
     throw new HttpError(

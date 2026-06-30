@@ -42,6 +42,21 @@ export type ExamSubjectTrack = {
   status: "not_started" | "in_progress" | "submitted" | "not_applicable";
 };
 
+export type ProjectWorkSubmissionTrack = {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  teacherId: string | null;
+  teacherName: string | null;
+  teacherEmail: string | null;
+  projectWorkRequired: boolean;
+  projectsExpected: number;
+  activeStudents: number;
+  studentsWithProjects: number;
+  studentsMeetingExpected: number;
+  status: "not_required" | "not_started" | "in_progress" | "submitted";
+};
+
 export type ReportReadiness = {
   track: "cbc" | "alevel";
   classLevel: string;
@@ -80,6 +95,9 @@ export type ReportReadiness = {
   defaultExamId?: string | null;
   defaultExamName?: string | null;
   clearedStaleDefault?: boolean;
+  projectWorkTracking?: ProjectWorkSubmissionTrack[];
+  projectWorkPendingCount?: number;
+  projectWorkReady?: boolean;
 };
 
 export type ClassReportRow = {

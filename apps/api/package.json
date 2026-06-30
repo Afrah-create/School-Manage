@@ -23,7 +23,7 @@
     "billing:overdue": "tsx scripts/billing-overdue.ts",
     "typecheck": "tsc --noEmit",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:notifications": "tsx --test tests/notifications/notificationService.test.ts",
+    "test:notifications": "tsx --test tests/notifications/notificationService.test.ts tests/notifications/examNotificationLinks.test.ts",
     "test:security": "NODE_OPTIONS=--experimental-vm-modules jest tests/security",
     "generate:jwt-keys": "tsx scripts/generate-jwt-keys.ts"
   },

@@ -33,12 +33,17 @@ describe("notification categories", () => {
   it("defines v1 hook categories", () => {
     assert.deepEqual(NOTIFICATION_CATEGORIES, [
       "assessment_submitted",
+      "exam_opened",
       "exam_marks_submitted",
+      "exam_ready_to_close",
+      "exam_closed",
     ]);
   });
 
   it("validates category strings", () => {
     assert.equal(isNotificationCategory("assessment_submitted"), true);
+    assert.equal(isNotificationCategory("exam_opened"), true);
+    assert.equal(isNotificationCategory("exam_marks_submitted"), true);
     assert.equal(isNotificationCategory("fee_invoice"), false);
   });
 });

@@ -6,6 +6,7 @@ import { AsyncContent } from "@/components/feedback/AsyncContent";
 import { ErrorState } from "@/components/feedback/ErrorState";
 import { FormSkeleton } from "@/components/feedback/FormSkeleton";
 import { MarksSubmissionTracker } from "@/components/reports/MarksSubmissionTracker";
+import { ProjectWorkSubmissionTracker } from "@/components/reports/ProjectWorkSubmissionTracker";
 import { ReportCardPreview } from "@/components/reports/ReportCardPreview";
 import { ClassRankingLeaderboard } from "@/components/reports/ClassRankingLeaderboard";
 import { ReportReleaseSteps } from "@/components/reports/ReportReleaseSteps";
@@ -489,7 +490,7 @@ export function ReportGeneratePanel({
               <strong>Assessment</strong> for S1 B / Term 1.
             </>
           ) : marksSource === "exam" && isCbc
-              ? "Subjects not on the linked formal exam still need exam marks entered on their term exams."
+              ? "Reportable class subjects not covered by compulsory papers on the linked exam still need submitted term exam marks."
               : marksSource === "exam" && isAlevel
                 ? "Not used for scores when releasing from an exam (comments only)."
                 : "Track which teachers have submitted term marks before you release report cards."}
@@ -524,8 +525,8 @@ export function ReportGeneratePanel({
             <div className="space-y-4">
               {(readinessQ.data.examPaperSubjectCount ?? 0) > 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  <strong>{readinessQ.data.examPaperSubjectCount}</strong> subject
-                  {readinessQ.data.examPaperSubjectCount === 1 ? "" : "s"} on the formal exam use exam marks
+                  <strong>{readinessQ.data.examPaperSubjectCount}</strong> compulsory exam paper
+                  {readinessQ.data.examPaperSubjectCount === 1 ? "" : "s"} on the formal exam use marks from that exam
                   only
                   {readinessQ.data.totalSubjects > 0
                     ? `; ${readinessQ.data.totalSubjects} still need submitted exam marks below.`
@@ -555,6 +556,29 @@ export function ReportGeneratePanel({
         </AsyncContent>
       </Card>
 
+      {isCbc && readinessQ.data?.projectWorkTracking ? (
+        <Card title="Project work submission">
+          <p className="mb-3 text-sm text-muted-foreground">
+            Only subjects marked <strong>Project work required</strong> on Class subjects need CA scores before
+            reports are released (when project work is enabled in Assessment → Rules).
+          </p>
+          <AsyncContent status={readinessStatus} loading={<FormSkeleton fields={4} />} error={null}>
+            {readinessQ.data.projectWorkReady === false ? (
+              <Alert tone="info">
+                {readinessQ.data.projectWorkPendingCount ?? 0} subject
+                {(readinessQ.data.projectWorkPendingCount ?? 0) === 1 ? "" : "s"} still need project work
+                scores.
+              </Alert>
+            ) : (
+              <Alert tone="success">Project work requirements are satisfied.</Alert>
+            )}
+            <div className="mt-4">
+              <ProjectWorkSubmissionTracker rows={readinessQ.data.projectWorkTracking} />
+            </div>
+          </AsyncContent>
+        </Card>
+      ) : null}
+
       {marksSource === "exam" && selectedExamValid && !useTermOnly ? (
         <Card title="Formal exam submission">
           <AsyncContent
@@ -566,7 +590,8 @@ export function ReportGeneratePanel({
               <div className="space-y-4">
                 {!readinessQ.data?.examReady ? (
                   <Alert tone="info">
-                    Every exam paper with registered students must be submitted before generating reports.
+                    Every <strong>compulsory</strong> exam paper with registered students must be submitted before
+                    generating reports. Optional papers do not block release.
                   </Alert>
                 ) : (
                   <Alert tone="success">Exam marks are submitted — ready for report generation.</Alert>

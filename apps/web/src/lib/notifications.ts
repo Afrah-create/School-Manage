@@ -8,8 +8,11 @@ export type NotificationItem = {
   link: string | null;
   metadata: Record<string, unknown> | null;
   readAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
 };
+
+export type NotificationListView = "active" | "archived" | "all";
 
 export type NotificationsListData = {
   items: NotificationItem[];

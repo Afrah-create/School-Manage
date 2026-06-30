@@ -40,6 +40,11 @@ export function streamCbcReportCard(data: {
     code: string;
     name: string;
     examScores: Array<number | null>;
+    examAverage?: number | null;
+    projectAverage?: number | null;
+    projectsCompleted?: number | null;
+    projectsExpected?: number | null;
+    includeProjectWork?: boolean;
     average: number | null;
     finalGrade: string | null;
     descriptor: string;
@@ -105,27 +110,40 @@ export function streamCbcReportCard(data: {
 
   const termRows = data.termSubjectRows ?? [];
   const examCols = data.examColumns ?? [];
+  const showProjectWork = termRows.some((r) => r.includeProjectWork);
 
   if (termRows.length > 0) {
     y = drawSectionTitle(doc, y, "Academic performance");
     const colWidth = Math.min(42, Math.floor(320 / Math.max(examCols.length, 1)));
     const tableCols = [
       { header: "Code", width: 40, align: "center" as const },
-      { header: "Subject", width: 100 },
+      { header: "Subject", width: showProjectWork ? 88 : 100 },
       ...examCols.map((_, i) => ({
         header: `C${i + 1}`,
         width: colWidth,
         align: "center" as const,
       })),
+      ...(showProjectWork
+        ? [
+            { header: "CA%", width: 36, align: "center" as const },
+            { header: "EOC%", width: 36, align: "center" as const },
+          ]
+        : []),
       { header: "AVG", width: 42, align: "center" as const },
       { header: "Grade", width: 38, align: "center" as const },
-      { header: "Comment", width: 72 },
+      { header: "Comment", width: showProjectWork ? 60 : 72 },
       { header: "Init.", width: 32, align: "center" as const },
     ];
     const tableRows = termRows.map((s) => [
       s.code,
       s.name,
       ...s.examScores.map((sc) => (sc != null ? String(sc) : "—")),
+      ...(showProjectWork
+        ? [
+            s.projectAverage != null ? String(s.projectAverage) : "—",
+            s.examAverage != null ? String(s.examAverage) : "—",
+          ]
+        : []),
       s.average != null ? String(s.average) : "—",
       s.finalGrade ?? "—",
       s.descriptor,

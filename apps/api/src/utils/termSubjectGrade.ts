@@ -104,6 +104,39 @@ async function subjectIdsWithTermData(
   return rows.map((r) => r.subject_id);
 }
 
+async function loadClassSubjectProjectWorkRequired(
+  classId: string,
+  subjectId: string,
+  academicYearId: string,
+): Promise<boolean> {
+  const { rows } = await query<{ project_work_required: boolean }>(
+    `SELECT project_work_required
+     FROM class_subjects
+     WHERE class_id = $1 AND subject_id = $2 AND academic_year_id = $3
+     LIMIT 1`,
+    [classId, subjectId, academicYearId],
+  );
+  return Boolean(rows[0]?.project_work_required);
+}
+
+async function loadStudentClassAndYear(
+  studentId: string,
+  termId: string,
+): Promise<{ classId: string; academicYearId: string } | null> {
+  const { rows } = await query<{ class_id: string; academic_year_id: string }>(
+    `SELECT st.class_id, t.academic_year_id
+     FROM students st
+     JOIN terms t ON t.id = $2
+     JOIN classes c ON c.id = st.class_id AND c.academic_year_id = t.academic_year_id
+     WHERE st.id = $1
+     LIMIT 1`,
+    [studentId, termId],
+  );
+  const row = rows[0];
+  if (!row?.class_id) return null;
+  return { classId: row.class_id, academicYearId: row.academic_year_id };
+}
+
 export async function recomputeTermSubjectResults(
   studentId: string,
   termId: string,
@@ -111,6 +144,7 @@ export async function recomputeTermSubjectResults(
 ): Promise<{ updated: number }> {
   const tid = tenantId ?? activeTenantIdFromContext();
   const config = await loadAssessmentConfig(tid);
+  const studentCtx = await loadStudentClassAndYear(studentId, termId);
   const bands = await loadActiveGradingBands("O_LEVEL");
   const scaleRows =
     bands.length > 0
@@ -138,8 +172,21 @@ export async function recomputeTermSubjectResults(
   for (const subjectId of subjectIds) {
     const examMarks = marksBySubject.get(subjectId) ?? [];
     const projectScores = await loadTermProjectScoresForStudent(studentId, subjectId, termId);
+    const projectWorkRequired =
+      studentCtx != null
+        ? await loadClassSubjectProjectWorkRequired(
+            studentCtx.classId,
+            subjectId,
+            studentCtx.academicYearId,
+          )
+        : false;
+    const effectiveConfig = {
+      ...config,
+      includeProjectWorkInTermGrade:
+        config.includeProjectWorkInTermGrade && projectWorkRequired,
+    };
     const result = computeTermSubjectGrade(
-      { examMarks, projectScores, config },
+      { examMarks, projectScores, config: effectiveConfig },
       scaleRows,
     );
 
@@ -190,16 +237,8 @@ export async function recomputeTermForClass(
   termId: string,
   tenantId?: string,
 ): Promise<{ students: number; updated: number }> {
-  const { rows } = await query<{ id: string }>(
-    `SELECT id FROM students WHERE class_id = $1 AND status = 'active'`,
-    [classId],
-  );
-  let updated = 0;
-  for (const st of rows) {
-    const r = await recomputeTermSubjectResults(st.id, termId, tenantId);
-    updated += r.updated;
-  }
-  return { students: rows.length, updated };
+  const { recomputeTermSubjectResultsForClass } = await import("./termSubjectGradeBulk.js");
+  return recomputeTermSubjectResultsForClass(classId, termId, tenantId);
 }
 
 export async function recalculateTermGrades(options: {

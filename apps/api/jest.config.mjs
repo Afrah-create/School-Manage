@@ -8,6 +8,7 @@ export default {
   testPathIgnorePatterns: [
     "/node_modules/",
     "notifications/notificationService.test.ts",
+    "notifications/examNotificationLinks.test.ts",
   ],
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",

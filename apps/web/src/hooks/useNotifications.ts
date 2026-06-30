@@ -1,13 +1,29 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPatch } from "@/lib/api";
-import type { NotificationItem, NotificationPreference, NotificationsListData } from "@/lib/notifications";
+import { apiDelete, apiGet, apiPatch } from "@/lib/api";
+import type {
+  NotificationItem,
+  NotificationListView,
+  NotificationPreference,
+  NotificationsListData,
+} from "@/lib/notifications";
 import { NOTIFICATIONS_POLL_MS, NOTIFICATIONS_STALE_MS, queryKeys } from "@/lib/queryKeys";
 import { useAuthStore } from "@/store/authStore";
 
 function tenantSlugFromAuth(): string {
   return useAuthStore.getState().tenantSlug ?? "default";
+}
+
+function notificationsListKey(tenantSlug: string, view: NotificationListView, page: number, unreadOnly?: boolean) {
+  return [...queryKeys.notificationsList(tenantSlug), view, page, unreadOnly ?? false] as const;
+}
+
+function invalidateNotificationQueries(qc: ReturnType<typeof useQueryClient>) {
+  const slug = tenantSlugFromAuth();
+  void qc.invalidateQueries({ queryKey: ["notifications", slug] });
+  void qc.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount(slug) });
+  void qc.invalidateQueries({ queryKey: queryKeys.notificationsList(slug) });
 }
 
 export function useNotificationUnreadCount() {
@@ -17,7 +33,7 @@ export function useNotificationUnreadCount() {
   return useQuery({
     queryKey: queryKeys.notificationUnreadCount(tenantSlug),
     queryFn: async () => {
-      const data = await apiGet<NotificationsListData>("/notifications?unread=true&limit=1");
+      const data = await apiGet<NotificationsListData>("/notifications?unread=true&limit=1&view=active");
       return data.unreadCount;
     },
     enabled: isAuthenticated,
@@ -31,11 +47,38 @@ export function useNotificationsList(open: boolean) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   return useQuery({
-    queryKey: queryKeys.notificationsList(tenantSlug),
-    queryFn: () => apiGet<NotificationsListData>("/notifications?limit=20"),
+    queryKey: notificationsListKey(tenantSlug, "active", 1, false),
+    queryFn: () => apiGet<NotificationsListData>("/notifications?limit=20&view=active"),
     enabled: isAuthenticated && open,
     staleTime: NOTIFICATIONS_STALE_MS,
     refetchInterval: open ? NOTIFICATIONS_POLL_MS : false,
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useNotificationsInbox(params: {
+  view: NotificationListView;
+  page: number;
+  limit?: number;
+  unreadOnly?: boolean;
+}) {
+  const tenantSlug = useAuthStore((s) => s.tenantSlug) ?? "default";
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const limit = params.limit ?? 25;
+
+  return useQuery({
+    queryKey: notificationsListKey(tenantSlug, params.view, params.page, params.unreadOnly),
+    queryFn: () => {
+      const qs = new URLSearchParams({
+        page: String(params.page),
+        limit: String(limit),
+        view: params.view,
+      });
+      if (params.unreadOnly) qs.set("unread", "true");
+      return apiGet<NotificationsListData>(`/notifications?${qs.toString()}`);
+    },
+    enabled: isAuthenticated,
+    staleTime: NOTIFICATIONS_STALE_MS,
     placeholderData: (prev) => prev,
   });
 }
@@ -52,13 +95,6 @@ export function useNotificationPreferences() {
   });
 }
 
-function invalidateNotificationQueries(qc: ReturnType<typeof useQueryClient>) {
-  const slug = tenantSlugFromAuth();
-  void qc.invalidateQueries({ queryKey: ["notifications", slug] });
-  void qc.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount(slug) });
-  void qc.invalidateQueries({ queryKey: queryKeys.notificationsList(slug) });
-}
-
 export function useMarkNotificationRead() {
   const qc = useQueryClient();
 
@@ -73,6 +109,51 @@ export function useMarkAllNotificationsRead() {
 
   return useMutation({
     mutationFn: () => apiPatch<{ updated: number }>("/notifications/read-all"),
+    onSuccess: () => invalidateNotificationQueries(qc),
+  });
+}
+
+export function useArchiveNotification() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiPatch<NotificationItem>(`/notifications/${id}/archive`),
+    onSuccess: () => invalidateNotificationQueries(qc),
+  });
+}
+
+export function useUnarchiveNotification() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiPatch<NotificationItem>(`/notifications/${id}/unarchive`),
+    onSuccess: () => invalidateNotificationQueries(qc),
+  });
+}
+
+export function useArchiveNotificationsBulk() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => apiPatch<{ archived: number }>("/notifications/archive", { ids }),
+    onSuccess: () => invalidateNotificationQueries(qc),
+  });
+}
+
+export function useDeleteNotification() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiDelete<{ deleted: boolean }>(`/notifications/${id}`),
+    onSuccess: () => invalidateNotificationQueries(qc),
+  });
+}
+
+export function useDeleteNotificationsBulk() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (ids: string[]) => apiDelete<{ deleted: number }>("/notifications/bulk", { ids }),
     onSuccess: () => invalidateNotificationQueries(qc),
   });
 }

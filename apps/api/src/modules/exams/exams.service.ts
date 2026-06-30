@@ -34,7 +34,7 @@ import {
 } from "./examEntriesBulk";
 import { BULK_CHUNK_SIZE } from "../../utils/bulkConstants";
 import { validateActiveClassStudents } from "../../utils/rosterValidation";
-import { fireExamMarksSubmittedNotification } from "../../services/notifications/notificationHooks";
+import { fireExamClosedNotification, fireExamMarksSubmittedNotification, fireExamOpenedNotification } from "../../services/notifications/notificationHooks";
 import { scheduleTermRecompute } from "../../utils/termRecomputeSchedule";
 
 type ExamRow = {
@@ -402,6 +402,10 @@ export async function openExam(id: string) {
     `UPDATE exams SET status = 'open', opened_at = NOW(), updated_at = NOW() WHERE id = $1`,
     [id],
   );
+  const tenantId = tenantContext.getStore();
+  if (tenantId) {
+    fireExamOpenedNotification({ tenantId, examId: id });
+  }
   return getExamById(id);
 }
 
@@ -439,6 +443,10 @@ export async function closeExam(id: string, options?: { force?: boolean }) {
   );
   await recalculateExamMarkGrades(id);
   scheduleTermRecompute(exam.class_id, exam.term_id);
+  const tenantId = tenantContext.getStore();
+  if (tenantId) {
+    fireExamClosedNotification({ tenantId, examId: id });
+  }
   return getExamById(id);
 }
 
@@ -493,6 +501,10 @@ export async function reopenExam(id: string) {
     `UPDATE exams SET status = 'open', closed_at = NULL, updated_at = NOW() WHERE id = $1`,
     [id],
   );
+  const tenantId = tenantContext.getStore();
+  if (tenantId) {
+    fireExamOpenedNotification({ tenantId, examId: id });
+  }
   return getExamById(id);
 }
 

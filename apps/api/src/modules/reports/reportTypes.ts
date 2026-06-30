@@ -32,6 +32,11 @@ export type TermReportSubjectRow = {
   code: string;
   name: string;
   examScores: Array<number | null>;
+  examAverage: number | null;
+  projectAverage: number | null;
+  projectsCompleted: number | null;
+  projectsExpected: number | null;
+  includeProjectWork: boolean;
   average: number | null;
   finalGrade: string | null;
   descriptor: string;
