@@ -11,7 +11,11 @@ export type SubjectReadinessRow = {
   status: string;
 };
 
-export type SubjectSubmissionStatus = "not_started" | "in_progress" | "submitted";
+export type SubjectSubmissionStatus =
+  | "not_started"
+  | "in_progress"
+  | "submitted"
+  | "not_applicable";
 
 export type SubjectSubmissionTrack = {
   subjectId: string;
@@ -64,6 +68,13 @@ function deriveSubmissionStatus(
   if (studentsWithMarks === 0) return "not_started";
   if (activeStudents > 0 && studentsSubmitted >= activeStudents) return "submitted";
   return "in_progress";
+}
+
+/** Subjects without compulsory exam papers do not block report release. */
+export function applicableSubjectTracking(
+  tracks: SubjectSubmissionTrack[],
+): SubjectSubmissionTrack[] {
+  return tracks.filter((s) => s.status !== "not_applicable");
 }
 
 export async function getClassContext(classId: string, termId: string) {
@@ -123,7 +134,7 @@ export async function listSubjectReadiness(
               FROM exams e
               JOIN exam_subjects es ON es.exam_id = e.id AND es.subject_id = cs.subject_id
               WHERE e.class_id = $1 AND e.term_id = $2 AND es.is_compulsory = true
-            ) = 0 THEN 'Draft'
+            ) = 0 THEN 'N/A'
             WHEN (
               SELECT COUNT(*)::int
               FROM exams e
@@ -218,6 +229,7 @@ export async function listSubjectSubmissionTracking(
       students_with_marks: number;
       students_submitted: number;
       last_submitted_at: Date | null;
+      compulsory_paper_count: number;
     }>(
       `SELECT
           s.id AS subject_id,
@@ -226,6 +238,12 @@ export async function listSubjectSubmissionTracking(
           u.id AS teacher_id,
           u.full_name AS teacher_name,
           u.email AS teacher_email,
+          (
+            SELECT COUNT(*)::int
+            FROM exams e
+            JOIN exam_subjects es ON es.exam_id = e.id AND es.subject_id = cs.subject_id
+            WHERE e.class_id = $1 AND e.term_id = $2 AND es.is_compulsory = true
+          ) AS compulsory_paper_count,
           (
             SELECT COUNT(DISTINCT em.student_id)::int
             FROM exams e
@@ -280,6 +298,23 @@ export async function listSubjectSubmissionTracking(
     );
 
     return rows.map((r) => {
+      const compulsoryPaperCount = Number(r.compulsory_paper_count);
+      if (compulsoryPaperCount === 0) {
+        return {
+          subjectId: r.subject_id,
+          subjectName: r.subject_name,
+          subjectCode: r.subject_code,
+          teacherId: r.teacher_id,
+          teacherName: r.teacher_name,
+          teacherEmail: r.teacher_email,
+          activeStudents,
+          studentsWithMarks: 0,
+          studentsSubmitted: 0,
+          status: "not_applicable" as SubjectSubmissionStatus,
+          lastSubmittedAt: null,
+        };
+      }
+
       const studentsWithMarks = Number(r.students_with_marks);
       const studentsSubmitted = Number(r.students_submitted);
       const status = deriveSubmissionStatus(activeStudents, studentsWithMarks, studentsSubmitted);
@@ -498,6 +533,7 @@ export async function assertReportReadiness(
     const examPaperIds = await listCompulsoryExamPaperSubjectIds(options.linkedExamId);
     requiredTracking = termTrackingExcludingExamPapers(subjectTracking, examPaperIds);
   }
+  requiredTracking = applicableSubjectTracking(requiredTracking);
 
   const pending = requiredTracking.filter((s) => s.status !== "submitted");
   if (pending.length > 0 && !options?.allowPartial) {

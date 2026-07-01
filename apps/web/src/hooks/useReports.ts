@@ -14,7 +14,7 @@ export type SubjectSubmissionTrack = {
   activeStudents: number;
   studentsWithMarks: number;
   studentsSubmitted: number;
-  status: "not_started" | "in_progress" | "submitted";
+  status: "not_started" | "in_progress" | "submitted" | "not_applicable";
   lastSubmittedAt: string | null;
 };
 

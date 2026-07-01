@@ -513,11 +513,13 @@ export function ReportGeneratePanel({
             <div className="space-y-4">
               {!termReady ? (
                 <Alert tone="info">
-                  {readinessQ.data.pendingCount} subject
-                  {readinessQ.data.pendingCount === 1 ? "" : "s"} still need submitted term marks.
+                  {readinessQ.data.pendingCount} compulsory exam subject
+                  {readinessQ.data.pendingCount === 1 ? "" : "s"} still need submitted marks.
                 </Alert>
               ) : (
-                <Alert tone="success">All term subjects submitted — ready to release report cards.</Alert>
+                <Alert tone="success">
+                  All compulsory exam subjects submitted — ready to release report cards.
+                </Alert>
               )}
               <MarksSubmissionTracker data={readinessQ.data} />
             </div>

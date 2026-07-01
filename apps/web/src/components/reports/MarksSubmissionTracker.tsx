@@ -9,6 +9,7 @@ const STATUS_LABEL: Record<SubjectSubmissionTrack["status"], string> = {
   submitted: "Submitted",
   in_progress: "In progress",
   not_started: "Not started",
+  not_applicable: "Not required",
 };
 
 const STATUS_TONE: Record<
@@ -18,6 +19,7 @@ const STATUS_TONE: Record<
   submitted: "success",
   in_progress: "warning",
   not_started: "neutral",
+  not_applicable: "neutral",
 };
 
 type Filter = "all" | "pending" | "submitted";
@@ -27,8 +29,12 @@ export function MarksSubmissionTracker({ data }: { data: ReportReadiness }) {
 
   const rows = useMemo(() => {
     const list = data.subjectTracking ?? [];
-    if (filter === "pending") return list.filter((r) => r.status !== "submitted");
-    if (filter === "submitted") return list.filter((r) => r.status === "submitted");
+    if (filter === "pending") {
+      return list.filter((r) => r.status !== "submitted" && r.status !== "not_applicable");
+    }
+    if (filter === "submitted") {
+      return list.filter((r) => r.status === "submitted" || r.status === "not_applicable");
+    }
     return list;
   }, [data.subjectTracking, filter]);
 

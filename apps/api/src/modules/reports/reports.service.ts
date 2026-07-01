@@ -14,6 +14,7 @@ import {
 } from "./reportExamLinkage";
 import {
   assertReportReadiness,
+  applicableSubjectTracking,
   listCompulsoryExamPaperSubjectIds,
   listProjectWorkSubmissionTracking,
   termTrackingExcludingExamPapers,
@@ -176,10 +177,11 @@ export async function getReportReadiness(classId: string, termId: string, examId
     }
   }
 
-  const termSubjectTracking =
+  const termSubjectTrackingNarrowed =
     examPaperSubjectIds.length > 0
       ? termTrackingExcludingExamPapers(subjectTracking, examPaperSubjectIds)
       : subjectTracking;
+  const termSubjectTracking = applicableSubjectTracking(termSubjectTrackingNarrowed);
 
   const projectWorkPending = projectWorkTracking.filter(
     (row) =>
@@ -198,7 +200,9 @@ export async function getReportReadiness(classId: string, termId: string, examId
     pending.length === 0 &&
     (ctx.track === "cbc" && activeLinkedExamId
       ? termSubjectTracking.length > 0 || examPaperSubjectIds.length > 0
-      : subjectTracking.length > 0);
+      : ctx.track === "cbc"
+        ? termSubjectTracking.length > 0
+        : subjectTracking.length > 0);
 
   let ready = termReady && (ctx.track !== "cbc" || projectWorkReady);
   if (examLinkInvalid) {
